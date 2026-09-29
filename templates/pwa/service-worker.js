@@ -1,5 +1,5 @@
 {% load static %}
-const VERSION = 'v1'; // bump this number when you want everyone to drop old caches
+const VERSION = 'v2'; // bump this number when you want everyone to drop old caches
 const STATIC_CACHE = 'mp-static-' + VERSION;
 const PAGES_CACHE = 'mp-pages-' + VERSION;
 const OFFLINE_URL = '/offline/';

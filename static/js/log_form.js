@@ -99,7 +99,7 @@ document.addEventListener('alpine:init', () => {
       },
 
       // ----- Saving -----
-            validate() {
+      validate() {
         if (!this.form.date) return 'Pick a date.';
         if (this.form.date < cfg.start_date || this.form.date > cfg.end_date) {
           return 'That date is outside your attachment period (' + cfg.start_date + ' to ' + cfg.end_date + ').';
@@ -126,7 +126,7 @@ document.addEventListener('alpine:init', () => {
           skills_acquired: this.form.skills_acquired.trim(),
           challenges_faced: this.form.challenges_faced.trim(),
           solutions_applied: this.form.solutions_applied.trim(),
-          tags: this.form.tags,
+          tags: [...this.form.tags],
           numeric_tallies: tallies,
           department_details: details,
         };
@@ -169,7 +169,7 @@ document.addEventListener('alpine:init', () => {
           this.setMessage('Saved ✓', 'success');
           setTimeout(() => { window.location.href = cfg.dashboard_url; }, 700);
         } catch (e) {
-          this.setMessage('Could not save: ' + e.message, 'error');
+          this.setMessage('Could not save on this device: ' + (e && e.message ? e.message : e), 'error');
         } finally {
           this.saving = false;
         }

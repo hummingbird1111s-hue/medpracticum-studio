@@ -7,6 +7,10 @@
 
   function openDB() {
     return new Promise((resolve, reject) => {
+      if (!window.indexedDB) {
+        reject(new Error('This browser cannot store data on the device.'));
+        return;
+      }
       const req = indexedDB.open(DB_NAME, 1);
       req.onupgradeneeded = () => req.result.createObjectStore(STORE, { keyPath: 'key' });
       req.onsuccess = () => resolve(req.result);
@@ -48,7 +52,9 @@
     return res.json();
   }
 
-  async function queueLog(payload) {
+  async function queueLog(original) {
+    // Copy into plain data first: Alpine's proxy objects can't be stored in IndexedDB
+    const payload = JSON.parse(JSON.stringify(original));
     payload.key = payload.attachment_id + '-' + payload.date; // same day = overwrite
     payload.created_offline = true;
     await tx('readwrite', (s) => s.put(payload));
