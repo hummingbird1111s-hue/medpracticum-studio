@@ -30,6 +30,26 @@
     </a>
   </div>
 
+  <div class="bg-white rounded-2xl shadow p-5 mb-4">
+    <h2 class="font-semibold mb-1">Practicum report</h2>
+    <p class="text-sm text-gray-600 mb-3">Builds your APA-style report from your daily logs.</p>
+    <div class="flex flex-wrap gap-2">
+      <form method="post" action="{% url 'generate_report' %}">
+        {% csrf_token %}
+        <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-4 py-2 text-sm">
+          {% if session.report.pdf_file %}Regenerate PDF{% else %}Generate PDF report{% endif %}
+        </button>
+      </form>
+      {% if session.report.pdf_file %}
+        <a href="{% url 'download_report' %}" class="border border-emerald-600 text-emerald-700 rounded-lg px-4 py-2 text-sm font-medium">Download PDF</a>
+      {% endif %}
+      <a href="{% url 'preview_report' %}" target="_blank" class="border border-gray-300 text-gray-700 rounded-lg px-4 py-2 text-sm">Quick preview</a>
+    </div>
+    {% if session.report.generated_at %}
+      <p class="text-xs text-gray-500 mt-2">Last generated {{ session.report.generated_at|date:"j M Y, H:i" }}</p>
+    {% endif %}
+  </div>
+
   <div class="bg-white rounded-2xl shadow p-5">
     <h2 class="font-semibold mb-3">Recent logs</h2>
     {% for log in recent_logs %}

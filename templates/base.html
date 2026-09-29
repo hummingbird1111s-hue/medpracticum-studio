@@ -40,6 +40,15 @@
   </nav>
 
   <div id="mp-banner" class="hidden bg-amber-100 text-amber-900 text-sm text-center px-4 py-2"></div>
+    {% if messages %}
+    <div class="max-w-3xl mx-auto px-4 pt-4 space-y-2">
+      {% for message in messages %}
+        <div class="rounded-lg px-4 py-2 text-sm {% if message.tags == 'error' %}bg-red-50 text-red-700 border border-red-200{% else %}bg-emerald-50 text-emerald-800 border border-emerald-200{% endif %}">
+          {{ message }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
 
   <main class="max-w-3xl mx-auto px-4 py-6">
     {% block content %}{% endblock %}

@@ -2,7 +2,13 @@
 Django settings for config project (MedPracticum Studio).
 """
 
+import os
 from pathlib import Path
+
+# Lets WeasyPrint find the Pango/GTK libraries installed with MSYS2 on Windows
+_MSYS_BIN = r'C:\msys64\mingw64\bin'
+if os.name == 'nt' and os.path.isdir(_MSYS_BIN):
+    os.environ.setdefault('WEASYPRINT_DLL_DIRECTORIES', _MSYS_BIN)
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -121,3 +127,5 @@ LOGOUT_REDIRECT_URL = 'login'
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+# Used inside the QR code so supervisors can open the verification page
+SITE_URL = 'http://127.0.0.1:8000'
