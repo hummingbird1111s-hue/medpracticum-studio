@@ -1,10 +1,15 @@
 from django.urls import path
 
-from . import views
+from . import pwa, views
 
 urlpatterns = [
     path('', views.dashboard, name='dashboard'),
     path('attachment/new/', views.start_attachment, name='start_attachment'),
     path('logs/new/', views.new_log, name='new_log'),
     path('api/logs/sync/', views.sync_logs, name='sync_logs'),
+
+    # PWA
+    path('manifest.webmanifest', pwa.manifest, name='manifest'),
+    path('service-worker.js', pwa.service_worker, name='service_worker'),
+    path('offline/', pwa.offline, name='offline'),
 ]

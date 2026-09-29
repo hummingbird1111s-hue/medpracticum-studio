@@ -26,7 +26,9 @@ document.addEventListener('alpine:init', () => {
         cfg.tallies.forEach((t) => { this.form.tallies[t.key] = ''; });
         cfg.details.forEach((d) => { this.form.details[d.key] = ''; });
 
-        let date = cfg.existing ? cfg.existing.date : cfg.today;
+        const now = new Date();
+        const localToday = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+        let date = cfg.existing ? cfg.existing.date : localToday;
         if (date < cfg.start_date) date = cfg.start_date;
         if (date > cfg.end_date) date = cfg.end_date;
         this.form.date = date;

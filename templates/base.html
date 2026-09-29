@@ -6,24 +6,35 @@
   <meta name="theme-color" content="#059669">
   <title>{% block title %}MedPracticum Studio{% endblock %}</title>
 
-  <!-- Dev-only CDNs. We'll self-host these in Part C so they work offline. -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  <link rel="manifest" href="{% url 'manifest' %}">
+  <link rel="icon" href="{% static 'icons/icon-192.png' %}">
+  <link rel="apple-touch-icon" href="{% static 'icons/apple-touch-icon.png' %}">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="MedPracticum">
+
+  <link rel="stylesheet" href="{% static 'css/tailwind.css' %}">
+  <script defer src="{% static 'vendor/alpine.min.js' %}"></script>
+  <script src="{% static 'vendor/htmx.min.js' %}"></script>
 </head>
 <body class="bg-gray-50 text-gray-900 min-h-screen">
 
   <nav class="bg-emerald-700 text-white">
-    <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
+    <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-2">
       <a href="{% url 'dashboard' %}" class="font-bold text-lg">MedPracticum Studio</a>
-      {% if user.is_authenticated %}
-        <form method="post" action="{% url 'logout' %}">
-          {% csrf_token %}
-          <button type="submit" class="text-sm bg-emerald-800 hover:bg-emerald-900 rounded-lg px-3 py-1.5">
-            Log out
-          </button>
-        </form>
-      {% endif %}
+      <div class="flex items-center gap-2">
+        <button id="install-btn" type="button"
+                class="hidden text-sm bg-white text-emerald-800 rounded-lg px-3 py-1.5 font-medium">
+          Install app
+        </button>
+        {% if user.is_authenticated %}
+          <form method="post" action="{% url 'logout' %}" data-logout>
+            {% csrf_token %}
+            <button type="submit" class="text-sm bg-emerald-800 hover:bg-emerald-900 rounded-lg px-3 py-1.5">
+              Log out
+            </button>
+          </form>
+        {% endif %}
+      </div>
     </div>
   </nav>
 
@@ -34,6 +45,7 @@
   </main>
 
   <script src="{% static 'js/offline-sync.js' %}"></script>
+  <script src="{% static 'js/pwa.js' %}"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>
