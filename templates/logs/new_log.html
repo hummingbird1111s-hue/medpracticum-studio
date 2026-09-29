@@ -1,0 +1,119 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Daily log · MedPracticum Studio{% endblock %}
+
+{% block content %}
+{{ config|json_script:"log-config" }}
+
+<div x-data="logForm(JSON.parse(document.getElementById('log-config').textContent))">
+
+  <h1 class="text-2xl font-bold mb-1">Daily log</h1>
+  <p class="text-sm text-gray-600 mb-4">{{ session.facility.name }} · {{ user.get_department_display }}</p>
+
+  <div class="rounded-lg bg-blue-50 border border-blue-200 text-blue-800 text-xs p-3 mb-4">
+    Never write patient names, phone numbers or folder numbers.
+    {% if dept.note %}{{ dept.note }}{% endif %}
+  </div>
+
+  <form @submit.prevent="submit()" class="bg-white rounded-2xl shadow p-5">
+
+    <!-- Date + unit -->
+    <div class="grid grid-cols-2 gap-3 mb-4">
+            <div>
+        <label class="block text-sm font-medium mb-1">Date</label>
+        <input type="date" x-model="form.date"
+               class="w-full rounded-lg border border-gray-300 px-3 py-2">
+        <p class="text-xs text-gray-500 mt-1">
+          Week <span x-text="weekNumber"></span> · Allowed: {{ session.start_date|date:"j M Y" }} to {{ session.end_date|date:"j M Y" }}
+        </p>
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1">Unit</label>
+        <input type="text" list="unit-options" x-model="form.unit_sub_department" placeholder="Pick or type"
+               class="w-full rounded-lg border border-gray-300 px-3 py-2">
+        <datalist id="unit-options">
+          {% for unit in dept.units %}<option value="{{ unit }}">{% endfor %}
+        </datalist>
+      </div>
+    </div>
+
+    <!-- Text areas with dictation -->
+    {% for f in text_fields %}
+    <div class="mb-4">
+      <div class="flex items-center justify-between mb-1">
+        <label class="text-sm font-medium">{{ f.label }}{% if f.required %} *{% endif %}</label>
+        <button type="button" x-show="speechSupported" @click="dictate('{{ f.name }}')"
+                class="text-xs rounded-full px-3 py-1"
+                :class="listening === '{{ f.name }}' ? 'bg-red-600 text-white animate-pulse' : 'bg-emerald-100 text-emerald-800'"
+                x-text="listening === '{{ f.name }}' ? '● Stop' : '🎤 Dictate'"></button>
+      </div>
+      <textarea x-model="form.{{ f.name }}" rows="{{ f.rows }}"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2"></textarea>
+    </div>
+    {% endfor %}
+
+    <!-- Tallies -->
+    {% if dept.tallies %}
+    <h2 class="font-semibold mt-6 mb-2">Today's numbers</h2>
+    <div class="grid grid-cols-2 gap-3 mb-4">
+      {% for t in dept.tallies %}
+      <div>
+        <label class="block text-xs font-medium mb-1">{{ t.label }}</label>
+        <input type="number" min="0" inputmode="numeric" x-model.number="form.tallies.{{ t.key }}"
+               class="w-full rounded-lg border border-gray-300 px-3 py-2">
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Department details -->
+    {% for d in dept.details %}
+    <div class="mb-4">
+      <label class="block text-sm font-medium mb-1">{{ d.label }}</label>
+      {% if d.type == 'textarea' %}
+        <textarea x-model="form.details.{{ d.key }}" rows="2"
+                  class="w-full rounded-lg border border-gray-300 px-3 py-2"></textarea>
+      {% else %}
+        <input type="text" x-model="form.details.{{ d.key }}"
+               class="w-full rounded-lg border border-gray-300 px-3 py-2">
+      {% endif %}
+    </div>
+    {% endfor %}
+
+    <!-- Tags -->
+    <div class="mb-6">
+      <label class="block text-sm font-medium mb-1">Tags</label>
+      <div class="flex flex-wrap gap-2 mb-2">
+        <template x-for="tag in form.tags" :key="tag">
+          <span class="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 text-xs rounded-full px-2.5 py-1">
+            <span x-text="tag"></span>
+            <button type="button" @click="removeTag(tag)" class="font-bold">×</button>
+          </span>
+        </template>
+      </div>
+      <input type="text" x-model="tagInput" @keydown.enter.prevent="addTag()" @keydown.comma.prevent="addTag()"
+             placeholder="Type a tag, press Enter"
+             class="w-full rounded-lg border border-gray-300 px-3 py-2">
+      <div class="flex flex-wrap gap-2 mt-2">
+        <template x-for="s in cfg.suggested_tags" :key="s">
+          <button type="button" @click="addTag(s)"
+                  class="text-xs border border-gray-300 rounded-full px-2.5 py-1 hover:bg-gray-100" x-text="s"></button>
+        </template>
+      </div>
+    </div>
+
+    <!-- Status + save -->
+    <p x-show="message" x-text="message" class="text-sm mb-3"
+       :class="messageType === 'error' ? 'text-red-600' : 'text-emerald-700'"></p>
+
+    <button type="submit" :disabled="saving"
+            class="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-semibold rounded-lg py-3">
+      <span x-text="saving ? 'Saving…' : 'Save log'"></span>
+    </button>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/log_form.js' %}"></script>
+{% endblock %}

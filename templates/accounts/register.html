@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block title %}Register · MedPracticum Studio{% endblock %}
+
+{% block content %}
+<div class="bg-white rounded-2xl shadow p-6 max-w-md mx-auto">
+  <h1 class="text-2xl font-bold mb-1">Create your account</h1>
+  <p class="text-sm text-gray-600 mb-6">Yamfo College of Health students only.</p>
+
+  <form method="post">
+    {% csrf_token %}
+    {% include 'partials/form_fields.html' %}
+    <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg py-2.5">
+      Register
+    </button>
+  </form>
+
+  <p class="text-sm text-center mt-4">
+    Already registered? <a href="{% url 'login' %}" class="text-emerald-700 font-medium underline">Log in</a>
+  </p>
+</div>
+{% endblock %}

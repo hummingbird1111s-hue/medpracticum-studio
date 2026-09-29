@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block title %}Log in · MedPracticum Studio{% endblock %}
+
+{% block content %}
+<div class="bg-white rounded-2xl shadow p-6 max-w-md mx-auto">
+  <h1 class="text-2xl font-bold mb-1">Welcome back</h1>
+  <p class="text-sm text-gray-600 mb-6">Log in to continue your practicum log.</p>
+
+  <form method="post">
+    {% csrf_token %}
+    {% include 'partials/form_fields.html' %}
+    <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg py-2.5">
+      Log in
+    </button>
+  </form>
+
+  <p class="text-sm text-center mt-4">
+    New here? <a href="{% url 'register' %}" class="text-emerald-700 font-medium underline">Create an account</a>
+  </p>
+</div>
+{% endblock %}

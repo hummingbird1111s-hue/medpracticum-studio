@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard · MedPracticum Studio{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold mb-1">Hello, {{ user.first_name|default:user.username }}</h1>
+<p class="text-sm text-gray-600 mb-6">
+  {{ user.get_department_display }} · Level {{ user.level }} · {{ user.index_number }}
+</p>
+
+{% if not session %}
+  <div class="bg-white rounded-2xl shadow p-6 text-center">
+    <h2 class="text-lg font-semibold mb-2">No attachment yet</h2>
+    <p class="text-sm text-gray-600 mb-4">Add your facility and dates to begin logging.</p>
+    <a href="{% url 'start_attachment' %}"
+       class="inline-block bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-5 py-2.5">
+      Start attachment
+    </a>
+  </div>
+{% else %}
+  <div class="bg-white rounded-2xl shadow p-5 mb-4">
+    <p class="text-xs uppercase tracking-wide text-gray-500">Current attachment</p>
+    <h2 class="text-lg font-semibold">{{ session.facility.name|default:"Facility not set" }}</h2>
+    <p class="text-sm text-gray-600">
+      {{ session.academic_year }} · {{ session.start_date }} to {{ session.end_date }}
+    </p>
+    <p class="text-sm mt-2"><span class="font-semibold">{{ total_logs }}</span> daily log{{ total_logs|pluralize }} recorded</p>
+    <a href="{% url 'new_log' %}"
+       class="mt-4 block text-center bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg py-3">
+      + New daily log
+    </a>
+  </div>
+
+  <div class="bg-white rounded-2xl shadow p-5">
+    <h2 class="font-semibold mb-3">Recent logs</h2>
+    {% for log in recent_logs %}
+      <a href="{% url 'new_log' %}?date={{ log.date|date:'Y-m-d' }}" class="block border-b last:border-b-0 py-2">
+        <p class="text-sm font-medium">{{ log.date }} · Week {{ log.week_number }} · {{ log.unit_sub_department }}</p>
+        <p class="text-sm text-gray-600 line-clamp-2">{{ log.activity_summary }}</p>
+      </a>
+    {% empty %}
+      <p class="text-sm text-gray-500">No logs yet. Tap "New daily log" to add your first one.</p>
+    {% endfor %}
+  </div>
+{% endif %}
+{% endblock %}

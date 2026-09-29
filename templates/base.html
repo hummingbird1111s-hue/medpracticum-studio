@@ -1,0 +1,39 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#059669">
+  <title>{% block title %}MedPracticum Studio{% endblock %}</title>
+
+  <!-- Dev-only CDNs. We'll self-host these in Part C so they work offline. -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+</head>
+<body class="bg-gray-50 text-gray-900 min-h-screen">
+
+  <nav class="bg-emerald-700 text-white">
+    <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
+      <a href="{% url 'dashboard' %}" class="font-bold text-lg">MedPracticum Studio</a>
+      {% if user.is_authenticated %}
+        <form method="post" action="{% url 'logout' %}">
+          {% csrf_token %}
+          <button type="submit" class="text-sm bg-emerald-800 hover:bg-emerald-900 rounded-lg px-3 py-1.5">
+            Log out
+          </button>
+        </form>
+      {% endif %}
+    </div>
+  </nav>
+
+  <div id="mp-banner" class="hidden bg-amber-100 text-amber-900 text-sm text-center px-4 py-2"></div>
+
+  <main class="max-w-3xl mx-auto px-4 py-6">
+    {% block content %}{% endblock %}
+  </main>
+
+  <script src="{% static 'js/offline-sync.js' %}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

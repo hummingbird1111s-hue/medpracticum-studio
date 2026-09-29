@@ -115,7 +115,8 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 # Login redirects
 LOGIN_URL = 'login'
-LOGIN_REDIRECT_URL = '/'
+LOGIN_REDIRECT_URL = 'dashboard'
+LOGOUT_REDIRECT_URL = 'login'
 
 
 # Default primary key field type
