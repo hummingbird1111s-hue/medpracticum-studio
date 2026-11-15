@@ -5,6 +5,7 @@ Django settings for config project (MedPracticum Studio).
 import logging
 import os
 from pathlib import Path
+import dj_database_url
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -33,7 +34,6 @@ def _load_key_from_env_or_file(env_name):
 GEMINI_API_KEY = _load_key_from_env_or_file('GEMINI_API_KEY')
 GROQ_API_KEY = _load_key_from_env_or_file('GROQ_API_KEY')
 OPENROUTER_API_KEY = _load_key_from_env_or_file('OPENROUTER_API_KEY')
-
 
 if not GEMINI_API_KEY:
     logging.getLogger(__name__).warning(
@@ -70,16 +70,28 @@ if os.name == 'nt' and os.path.isdir(_MSYS_BIN):
     os.environ.setdefault('WEASYPRINT_DLL_DIRECTORIES', _MSYS_BIN)
 
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-e+%5l=_a=tv=bq$6qjwp=vf@!7g8h$9f)4n6j^lw3obzs8vy_f'
+# ===== SECURITY =====
+# Read SECRET_KEY from environment on Render, fallback to insecure for local dev
+SECRET_KEY = os.environ.get(
+    'SECRET_KEY', 
+    'django-insecure-e+%5l=_a=tv=bq$6qjwp=vf@!7g8h$9f)4n6j^lw3obzs8vy_f'
+)
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# DEBUG is False if we are running on Render
+DEBUG = 'RENDER' not in os.environ
 
-ALLOWED_HOSTS = []
+# Render provides RENDER_EXTERNAL_HOSTNAME automatically
+RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+
+ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+if RENDER_EXTERNAL_HOSTNAME:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+
+# Required for Django 4+ to allow form submissions on Render's HTTPS domain
+CSRF_TRUSTED_ORIGINS = [f'https://{host}' for host in ALLOWED_HOSTS if host not in ('localhost', '127.0.0.1')]
 
 
-# Application definition
+# ===== Application definition =====
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -97,6 +109,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # <--- ADDED FOR RENDER
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -125,12 +138,15 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 
 
-# Database
+# ===== Database =====
+# If DATABASE_URL exists (on Render), use it (Supabase).
+# Otherwise, fallback to SQLite for local development.
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': dj_database_url.config(
+        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        conn_max_age=600,
+        ssl_require=True
+    )
 }
 
 
@@ -138,7 +154,7 @@ DATABASES = {
 AUTH_USER_MODEL = 'accounts.User'
 
 
-# Password validation
+# ===== Password validation =====
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
@@ -155,26 +171,29 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
-# Internationalization
+# ===== Internationalization =====
 LANGUAGE_CODE = 'en-us'
-
 TIME_ZONE = 'Africa/Accra'
-
 USE_I18N = True
-
 USE_TZ = True
 
 
-# Static files (CSS, JavaScript, Images)
-STATIC_URL = 'static/'
+# ===== Static and Media files =====
+STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles') # Destination for collectstatic
 STATICFILES_DIRS = [BASE_DIR / 'static']
 
-# Media files (uploaded and generated reports)
+# WhiteNoise compression for production
+if not DEBUG:
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+else:
+    STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
+
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 
-# Login redirects
+# ===== Login redirects =====
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'dashboard'
 LOGOUT_REDIRECT_URL = 'login'
@@ -185,7 +204,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
 # Used inside the QR code so supervisors can open the verification page
-SITE_URL = 'http://127.0.0.1:8000'
+# On Render, you must set SITE_URL in the Environment Variables (e.g., https://your-app.onrender.com)
+SITE_URL = os.environ.get('SITE_URL', 'http://127.0.0.1:8000')
 
 
 # Set to False to force every report into the official COHY format
