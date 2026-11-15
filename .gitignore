@@ -7,3 +7,12 @@ media/
 .vscode/
 staticfiles/
 tools/
+
+.env
+.env.*
+!.env.example
+venv/
+.env
+db.sqlite3
+__pycache__/
+staticfiles/

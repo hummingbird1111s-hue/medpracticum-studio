@@ -1,0 +1,273 @@
+{% extends 'base.html' %}
+{% block title %}Edit report manually · MedPracticum Studio{% endblock %}
+
+{% block content %}
+<style>
+  /* ===== Saving / regenerating overlay (spinner) ===== */
+  #edit-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 9998;
+    background: rgba(17, 24, 39, 0.72);
+    backdrop-filter: blur(2px);
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  #edit-overlay.show { display: flex; }
+
+  #edit-overlay .edit-card {
+    background: #ffffff;
+    border-radius: 20px;
+    padding: 32px 28px 28px;
+    max-width: 420px;
+    width: 100%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+    text-align: center;
+    animation: edit-card-in 0.25s ease-out;
+  }
+  @keyframes edit-card-in {
+    from { opacity: 0; transform: translateY(8px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  #edit-overlay .edit-spinner {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 20px;
+    border: 5px solid #d1fae5;
+    border-top-color: #059669;
+    border-right-color: #10b981;
+    border-radius: 50%;
+    animation: edit-spin 0.9s linear infinite;
+  }
+  @keyframes edit-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  #edit-overlay h3 {
+    margin: 0 0 8px;
+    font-size: 18px;
+    font-weight: 700;
+    color: #065f46;
+  }
+  #edit-overlay .edit-status {
+    margin: 0 0 20px;
+    font-size: 14px;
+    color: #6b7280;
+    line-height: 1.5;
+    min-height: 42px;
+  }
+  #edit-overlay .edit-dots::after {
+    content: '';
+    display: inline-block;
+    width: 1.2em;
+    text-align: left;
+    animation: edit-dots 1.4s steps(4, end) infinite;
+  }
+  @keyframes edit-dots {
+    0%, 20%   { content: ''; }
+    40%       { content: '.'; }
+    60%       { content: '..'; }
+    80%, 100% { content: '...'; }
+  }
+  #edit-overlay .edit-hint {
+    font-size: 12px;
+    color: #9ca3af;
+    margin: 0;
+    line-height: 1.4;
+  }
+</style>
+
+<div class="max-w-3xl mx-auto">
+
+  <!-- Header with Back Link -->
+  <div class="mb-6 flex flex-col md:flex-row md:items-start justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold mb-1">Edit Report Manually</h1>
+      <p class="text-sm text-gray-600">
+        Last generated: {{ report.generated_at|date:"j M Y, H:i" }} ·
+        <a href="{% url 'view_report' %}?attachment_id={{ session.id }}" target="_blank"
+           class="text-emerald-700 underline">View current PDF</a>
+      </p>
+    </div>
+    <a href="{% url 'report_options' %}?attachment_id={{ session.id }}"
+       class="text-sm text-emerald-700 font-medium underline hover:text-emerald-900 mt-1 md:mt-0 whitespace-nowrap">
+      &larr; Back to settings
+    </a>
+  </div>
+
+  <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 mb-6">
+    <p class="text-sm text-emerald-800">
+      <strong>How this works:</strong> the fields below show the AI draft built
+      from your logs and format samples. Edit any section, then hit
+      <strong>Regenerate Report</strong> to rebuild the PDF with your changes.
+      Sections you don't touch stay exactly as the AI drafted them.
+    </p>
+  </div>
+
+  <!-- Main Edit Form -->
+  <form method="post" id="edit-form" class="bg-white rounded-2xl shadow p-6 mb-4 border border-gray-100">
+    {% csrf_token %}
+    <input type="hidden" name="attachment_id" value="{{ session.id }}">
+
+    {% include 'partials/form_fields.html' %}
+
+    <div class="pt-4 border-t border-gray-100 mt-6 flex flex-col md:flex-row gap-2">
+      <button type="submit" name="action" value="regenerate" id="edit-regenerate-btn"
+              class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg py-2.5 transition-colors shadow-sm disabled:opacity-70 disabled:cursor-wait">
+        Regenerate Report
+      </button>
+      <button type="submit" name="action" value="save" id="edit-save-btn"
+              class="flex-1 bg-white border border-emerald-600 text-emerald-700 font-semibold rounded-lg py-2.5 hover:bg-emerald-50 transition-colors disabled:opacity-70 disabled:cursor-wait">
+        Save without regenerating
+      </button>
+      <a href="{% url 'report_options' %}?attachment_id={{ session.id }}"
+         class="flex-1 text-center bg-gray-100 text-gray-700 font-semibold rounded-lg py-2.5 hover:bg-gray-200 transition-colors">
+        Cancel
+      </a>
+    </div>
+  </form>
+
+  <!-- Reset to fresh AI draft -->
+  <form method="post" id="edit-reset-form" class="text-center mb-10">
+    {% csrf_token %}
+    <input type="hidden" name="attachment_id" value="{{ session.id }}">
+    <button type="submit" name="action" value="reset_ai" id="edit-reset-btn"
+            onclick="return confirm('This will discard every edit and re-draft all sections from scratch using AI. Continue?');"
+            class="text-xs text-red-600 hover:text-red-800 underline font-medium transition-colors">
+      Reset everything to a fresh AI draft
+    </button>
+  </form>
+
+</div>
+
+<!-- ============================================================ -->
+<!-- Saving / regenerating overlay                                -->
+<!-- ============================================================ -->
+<div id="edit-overlay" aria-hidden="true" role="status" aria-live="polite">
+  <div class="edit-card">
+    <div class="edit-spinner"></div>
+    <h3 id="edit-overlay-heading">Regenerating your report<span class="edit-dots"></span></h3>
+    <p class="edit-status" id="edit-status-text">
+      Applying your edits and rebuilding the PDF.
+    </p>
+    <p class="edit-hint">This can take 1&ndash;3 minutes. Keep this page open.</p>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var overlay = document.getElementById('edit-overlay');
+    var heading = document.getElementById('edit-overlay-heading');
+    var statusText = document.getElementById('edit-status-text');
+    if (!overlay) return;
+
+    // Context-specific copy per action
+    var MODES = {
+      regenerate: {
+        heading: 'Regenerating your report',
+        steps: [
+          'Applying your edits',
+          'Rebuilding chapters and formatting',
+          'Rendering the PDF',
+          'Preparing the Word document',
+        ],
+        hint: 'This can take 1\u20133 minutes. Keep this page open.',
+      },
+      save: {
+        heading: 'Saving your edits',
+        steps: [
+          'Saving your text',
+          'Returning to the edit page',
+        ],
+        hint: 'This will be quick.',
+      },
+      reset_ai: {
+        heading: 'Resetting to fresh AI draft',
+        steps: [
+          'Clearing your edits',
+          'Re-drafting all sections with AI',
+          'Rebuilding the report',
+        ],
+        hint: 'This can take 1\u20133 minutes. Keep this page open.',
+      },
+    };
+
+    var currentMode = null;
+    var stepIndex = 0;
+    var stepTimer = null;
+
+    function advanceStatus() {
+      if (!currentMode) return;
+      var steps = MODES[currentMode].steps;
+      stepIndex = (stepIndex + 1) % steps.length;
+      if (statusText) statusText.textContent = steps[stepIndex] + '\u2026';
+    }
+
+    function showOverlay(mode) {
+      currentMode = mode;
+      var cfg = MODES[mode] || MODES.regenerate;
+      if (heading) heading.innerHTML = cfg.heading + '<span class="edit-dots"></span>';
+      if (statusText) statusText.textContent = cfg.steps[0] + '\u2026';
+      stepIndex = 0;
+      overlay.classList.add('show');
+      overlay.setAttribute('aria-hidden', 'false');
+      if (stepTimer) clearInterval(stepTimer);
+      stepTimer = setInterval(advanceStatus, 6000);
+    }
+
+    function hideOverlay() {
+      overlay.classList.remove('show');
+      overlay.setAttribute('aria-hidden', 'true');
+      if (stepTimer) { clearInterval(stepTimer); stepTimer = null; }
+    }
+
+    // Wire the main edit form — check which submit button was clicked
+    var editForm = document.getElementById('edit-form');
+    var regenBtn = document.getElementById('edit-regenerate-btn');
+    var saveBtn = document.getElementById('edit-save-btn');
+
+    if (editForm) {
+      editForm.addEventListener('submit', function (e) {
+        if (overlay.classList.contains('show')) {
+          e.preventDefault();
+          return;
+        }
+        // Detect which button triggered the submit
+        var submitter = e.submitter || document.activeElement;
+        var mode = 'regenerate';
+        if (submitter && submitter.value === 'save') mode = 'save';
+
+        // Disable the buttons so double-clicks can't fire twice
+        if (regenBtn) regenBtn.disabled = true;
+        if (saveBtn) saveBtn.disabled = true;
+
+        showOverlay(mode);
+      });
+    }
+
+    // Wire the reset form
+    var resetForm = document.getElementById('edit-reset-form');
+    var resetBtn = document.getElementById('edit-reset-btn');
+    if (resetForm) {
+      resetForm.addEventListener('submit', function (e) {
+        // onclick confirm() runs first — if user cancels, no submit event fires
+        if (overlay.classList.contains('show')) {
+          e.preventDefault();
+          return;
+        }
+        if (resetBtn) resetBtn.disabled = true;
+        showOverlay('reset_ai');
+      });
+    }
+
+    // bfcache guard
+    window.addEventListener('pageshow', function (e) {
+      if (e.persisted) hideOverlay();
+    });
+  })();
+</script>
+
+{% endblock %}

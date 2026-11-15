@@ -1,0 +1,19 @@
+<p>The clinical supervisor confirms that the student named below completed the attachment described in this report. Scan the QR code to review a summary of the logs and approve this report online.</p>
+
+<div class="qr">
+  <img src="{{ qr_uri }}" alt="Verification QR code">
+  <p>{{ verify_url }}</p>
+</div>
+
+<div class="signoff-box">
+  <p class="plain"><b>Student:</b> {{ student_name }} ({{ student.index_number }})</p>
+  <p class="plain"><b>Facility:</b> {{ facility_name }}</p>
+  <p class="plain"><b>Supervisor:</b> {{ s.assigned_supervisor_name|default:"____________________________" }}</p>
+  {% if signed_off %}
+    <div class="verified">VERIFIED &amp; APPROVED{% if signed_date %} on {{ signed_date|date:"j F Y, H:i" }}{% endif %}</div>
+  {% else %}
+    <p class="plain" style="margin-top:12pt;">Designation:</p><div class="line"></div>
+    <p class="plain">Signature and date:</p><div class="line"></div>
+    <div class="stamp-area">Official stamp</div>
+  {% endif %}
+</div>

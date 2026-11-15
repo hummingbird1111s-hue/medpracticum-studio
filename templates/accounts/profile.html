@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+{% block title %}Your profile · MedPracticum Studio{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+
+  <h1 class="text-2xl font-bold mb-1">Your profile</h1>
+  <p class="text-sm text-gray-600 mb-6">Update your details. Changes are saved immediately.</p>
+
+  <!-- Avatar + summary -->
+  <div class="bg-white rounded-2xl shadow p-6 mb-4 flex items-center gap-4">
+    <div style="width:64px;height:64px;border-radius:50%;background:#059669;color:#fff;
+                font-weight:700;font-size:24px;display:flex;align-items:center;
+                justify-content:center;flex-shrink:0;">
+      {% if user.first_name or user.last_name %}
+        {{ user.first_name|first|upper }}{{ user.last_name|first|upper }}
+      {% else %}
+        {{ user.username|first|upper }}
+      {% endif %}
+    </div>
+    <div class="min-w-0">
+      <div class="font-bold text-gray-900 truncate">
+        {{ user.get_full_name|default:user.username }}
+      </div>
+      <div class="text-sm text-gray-600 truncate">
+        {{ user.username }}{% if user.index_number %} · {{ user.index_number }}{% endif %}
+      </div>
+      <div class="text-xs text-gray-500 mt-0.5">
+        {{ user.get_department_display }} · Level {{ user.level }}
+      </div>
+    </div>
+  </div>
+
+  <!-- Editable fields -->
+  <form method="post" class="bg-white rounded-2xl shadow p-6 mb-4">
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+        {{ form.non_field_errors }}
+      </div>
+    {% endif %}
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {% for field in form %}
+        <div class="{% if field.name == 'email' %}md:col-span-2{% endif %}">
+          <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">
+            {{ field.label }}{% if field.field.required %} <span class="text-red-500">*</span>{% endif %}
+          </label>
+          {{ field }}
+          {% if field.help_text %}
+            <p class="text-xs text-gray-500 mt-1">{{ field.help_text }}</p>
+          {% endif %}
+          {% for error in field.errors %}
+            <p class="text-xs text-red-600 mt-1">{{ error }}</p>
+          {% endfor %}
+        </div>
+      {% endfor %}
+    </div>
+
+    <div class="pt-4 border-t border-gray-100 mt-6 flex flex-col md:flex-row gap-2">
+      <button type="submit"
+              class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg py-2.5 transition">
+        Save changes
+      </button>
+      <a href="{% url 'dashboard' %}"
+         class="flex-1 text-center bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-lg py-2.5 transition">
+        Cancel
+      </a>
+    </div>
+  </form>
+
+  <!-- Password section -->
+  <div class="bg-white rounded-2xl shadow p-6 mb-4">
+    <h2 class="font-semibold text-gray-900 mb-1">Password</h2>
+    <p class="text-sm text-gray-600 mb-3">You can change your password at any time.</p>
+    <a href="{% url 'password_change' %}"
+       class="inline-block bg-white border border-emerald-600 text-emerald-700 font-semibold rounded-lg px-4 py-2 text-sm hover:bg-emerald-50 transition">
+      Change password
+    </a>
+  </div>
+
+  <!-- Read-only info -->
+  <div class="bg-gray-50 rounded-2xl border border-gray-200 p-6 mb-8">
+    <h2 class="font-semibold text-gray-700 mb-3 text-sm uppercase tracking-wide">Account information</h2>
+    <dl class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+      <div>
+        <dt class="text-gray-500">Username</dt>
+        <dd class="font-medium text-gray-900">{{ user.username }}</dd>
+      </div>
+      <div>
+        <dt class="text-gray-500">Index number</dt>
+        <dd class="font-medium text-gray-900">{{ user.index_number }}</dd>
+      </div>
+      <div>
+        <dt class="text-gray-500">Joined</dt>
+        <dd class="font-medium text-gray-900">{{ user.date_joined|date:"j F Y" }}</dd>
+      </div>
+      <div>
+        <dt class="text-gray-500">Last login</dt>
+        <dd class="font-medium text-gray-900">{{ user.last_login|date:"j F Y, H:i"|default:"—" }}</dd>
+      </div>
+    </dl>
+  </div>
+
+</div>
+{% endblock %}

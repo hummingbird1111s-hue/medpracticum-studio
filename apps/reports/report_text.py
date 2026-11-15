@@ -117,3 +117,45 @@ RECOMMENDATIONS = {
         ],
     },
 }
+
+# ============================================================
+# HIM-format sections
+# These are used by the linear (non-thesis) report layout that
+# matches the COHY log book guidelines for Vacation Practicum
+# reports. Students can edit every one of them via the
+# "Write report text" page. Leave a list empty if the section
+# should not appear by default.
+# ============================================================
+
+INTRODUCTION_EXTRA = [
+    "The attachment was carried out in fulfilment of the practicum requirement for the award "
+    "of the Higher National Diploma. It provided an opportunity to apply classroom knowledge "
+    "in a real health facility, and to develop professional competence under the supervision "
+    "of experienced staff.",
+    "This report describes the activities I performed, the skills I acquired, the challenges "
+    "I faced and the lessons I learnt during the period of attachment. It also offers "
+    "recommendations to the facility and to the College based on my observations.",
+]
+
+LESSONS_LEARNT = [
+    "The practicum taught me the importance of accuracy and confidentiality when handling "
+    "patient records. Even small errors in filing or coding can have downstream effects on "
+    "patient care, insurance claims and facility reporting.",
+    "I learnt to work as part of a team and to communicate clearly with colleagues across "
+    "different units. Supervisors and staff were patient and willing to explain processes.",
+    "Time management and attention to detail are essential. Recording daily activities and "
+    "reflecting on them helped me see my own progress over the attachment period.",
+]
+
+OBSERVATION = [
+    "During the attachment I observed that the facility relies heavily on manual registers "
+    "in some units while using digital systems in others. Staff were generally cooperative "
+    "and willing to teach, though workloads often limited the time available for one-on-one "
+    "instruction.",
+    "I also observed the challenge of maintaining complete and accurate records when patient "
+    "volumes are high. This highlighted why a well-organised health information system is "
+    "central to quality care, and reinforced the value of the skills being taught in the "
+    "classroom.",
+]
+
+WORKSHOPS = []  # Default empty. Students add entries if they attended any workshops.

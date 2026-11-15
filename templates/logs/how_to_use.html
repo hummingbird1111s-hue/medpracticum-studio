@@ -1,0 +1,221 @@
+{% extends 'base.html' %}
+{% block title %}How to Use the System · MedPracticum Studio{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto pb-16">
+  
+  <!-- Header -->
+  <div class="mb-10 text-center mt-4">
+    <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 mb-4 shadow-sm">
+      <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+    </div>
+    <h1 class="text-3xl font-bold text-gray-900 mb-2">Welcome to Your User Guide</h1>
+    <p class="text-sm text-gray-500 font-medium max-w-2xl mx-auto">
+      Everything you need to know about navigating MedPracticum Studio, from logging your first day to downloading your final report and presentation.
+    </p>
+  </div>
+
+  <!-- Quick Navigation -->
+  <div class="flex flex-wrap justify-center gap-2 mb-10">
+    <a href="#step-1" class="px-4 py-2 bg-white border border-gray-200 rounded-full text-sm font-semibold text-emerald-700 hover:bg-emerald-50 hover:border-emerald-200 transition-colors shadow-sm">1. Setup</a>
+    <a href="#step-2" class="px-4 py-2 bg-white border border-gray-200 rounded-full text-sm font-semibold text-emerald-700 hover:bg-emerald-50 hover:border-emerald-200 transition-colors shadow-sm">2. Daily Logs</a>
+    <a href="#step-3" class="px-4 py-2 bg-white border border-gray-200 rounded-full text-sm font-semibold text-emerald-700 hover:bg-emerald-50 hover:border-emerald-200 transition-colors shadow-sm">3. Reports & PPT</a>
+    <a href="#step-4" class="px-4 py-2 bg-white border border-gray-200 rounded-full text-sm font-semibold text-emerald-700 hover:bg-emerald-50 hover:border-emerald-200 transition-colors shadow-sm">4. AI Assistant</a>
+  </div>
+
+  <!-- Guide Content -->
+  <div class="space-y-12">
+
+    <!-- STEP 1: Setup -->
+    <section id="step-1" class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+      <div class="bg-emerald-600 px-6 py-4 border-b border-emerald-700">
+        <h2 class="text-xl font-bold text-white flex items-center gap-3">
+          <span class="bg-white text-emerald-800 w-8 h-8 rounded-full flex items-center justify-center text-sm flex-shrink-0">1</span>
+          Setting Up Your Attachment
+        </h2>
+      </div>
+      <div class="p-6 md:p-8 space-y-6">
+        <div class="flex flex-col md:flex-row gap-6">
+          <div class="flex-1">
+            <h3 class="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2">
+              <svg class="text-emerald-500" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+              Start / Edit Attachment
+            </h3>
+            <p class="text-sm text-gray-600 mb-3">
+              Before you can add logs, you must create an attachment session. This tells the system where you are working and when.
+            </p>
+            <ul class="list-disc pl-5 space-y-1 text-sm text-gray-600">
+              <li>Enter the facility name, district, and type (e.g., District Hospital).</li>
+              <li>Set your exact start and end dates.</li>
+              <li>Add your clinical supervisor's name.</li>
+              <li><em>Optional:</em> You can add specific "Competency Areas" so the AI knows exactly what skills you want to focus on.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- STEP 2: Daily Logs -->
+    <section id="step-2" class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+      <div class="bg-emerald-600 px-6 py-4 border-b border-emerald-700">
+        <h2 class="text-xl font-bold text-white flex items-center gap-3">
+          <span class="bg-white text-emerald-800 w-8 h-8 rounded-full flex items-center justify-center text-sm flex-shrink-0">2</span>
+          Recording Your Daily Logs
+        </h2>
+      </div>
+      <div class="p-6 md:p-8 space-y-6">
+        <div class="flex flex-col md:flex-row gap-6">
+          <div class="flex-1">
+            <h3 class="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2">
+              <svg class="text-emerald-500" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+              New Daily Log
+            </h3>
+            <p class="text-sm text-gray-600 mb-3">
+              This is where you record what you did each day. The more detail you provide here, the better your final report will be.
+            </p>
+            <ul class="list-disc pl-5 space-y-1 text-sm text-gray-600">
+              <li>Select the date and the specific hospital unit (e.g., OPD, RCH).</li>
+              <li><strong>Activity Summary:</strong> Briefly describe what you did (e.g., "Registered 15 new patients into the LHIMS system").</li>
+              <li><strong>Skills & Challenges:</strong> Note any new skills learned or problems encountered (and how you solved them).</li>
+              <li>Use the <strong>Tags</strong> and <strong>Tallies</strong> to quickly count things like "NHIS Claims Processed".</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- STEP 3: Reports & Presentations -->
+    <section id="step-3" class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+      <div class="bg-emerald-600 px-6 py-4 border-b border-emerald-700">
+        <h2 class="text-xl font-bold text-white flex items-center gap-3">
+          <span class="bg-white text-emerald-800 w-8 h-8 rounded-full flex items-center justify-center text-sm flex-shrink-0">3</span>
+          Generating Your Outputs
+        </h2>
+      </div>
+      <div class="p-6 md:p-8 space-y-8">
+        
+        <!-- Reports -->
+        <div>
+          <h3 class="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2">
+            <svg class="text-emerald-500" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            Reports Page
+          </h3>
+          <p class="text-sm text-gray-600 mb-3">
+            This page compiles all your logs into a full academic report (PDF & Word).
+          </p>
+          <ul class="list-disc pl-5 space-y-1 text-sm text-gray-600">
+            <li>Click <strong>Generate Official Report</strong> to let the AI read all your logs and draft the chapters.</li>
+            <li>You can edit the generated text manually, change the cover logo, and even adjust the font size and spacing.</li>
+            <li>Download the final result as a PDF or a Word Document.</li>
+          </ul>
+        </div>
+
+        <hr class="border-gray-100">
+
+        <!-- Presentations -->
+        <div>
+          <h3 class="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2">
+            <svg class="text-emerald-500" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            Presentations Page
+          </h3>
+          <p class="text-sm text-gray-600 mb-3">
+            Creates a PowerPoint presentation from your logs, perfect for your final defense.
+          </p>
+          <ul class="list-disc pl-5 space-y-1 text-sm text-gray-600">
+            <li>Choose from <strong>16 different templates</strong> (including the official HIM template).</li>
+            <li>Preview your cover slide live before building.</li>
+            <li>The AI writes short bullet points and even adds <strong>Speaker Notes</strong> to help you present.</li>
+            <li>Download the `.pptx` file or a PDF version of the slides.</li>
+          </ul>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- STEP 4: AI Assistant -->
+    <section id="step-4" class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+      <div class="bg-emerald-600 px-6 py-4 border-b border-emerald-700">
+        <h2 class="text-xl font-bold text-white flex items-center gap-3">
+          <span class="bg-white text-emerald-800 w-8 h-8 rounded-full flex items-center justify-center text-sm flex-shrink-0">4</span>
+          Your AI Assistant (🩺)
+        </h2>
+      </div>
+      <div class="p-6 md:p-8 space-y-6">
+        <div class="flex flex-col md:flex-row gap-6">
+          <div class="flex-1">
+            <h3 class="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2">
+              <svg class="text-emerald-500" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              The Floating Doctor Icon
+            </h3>
+            <p class="text-sm text-gray-600 mb-3">
+              Look for the floating 🩺 icon at the bottom right of your screen. You can drag it anywhere. Click it to open a conversation with the AI.
+            </p>
+            <ul class="list-disc pl-5 space-y-1 text-sm text-gray-600">
+              <li><strong>Ask for help:</strong> "Write an introduction paragraph for my report."</li>
+              <li><strong>Analyze data:</strong> "How many logs have I recorded so far?"</li>
+              <li><strong>Vision (Images):</strong> Click the 📎 paperclip to upload a photo of a document or whiteboard, and ask the AI to "Transcribe this" or "Explain this".</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- STEP 5: Other Tools -->
+    <section id="step-5" class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+      <div class="bg-gray-800 px-6 py-4 border-b border-gray-900">
+        <h2 class="text-xl font-bold text-white flex items-center gap-3">
+          <span class="bg-white text-gray-800 w-8 h-8 rounded-full flex items-center justify-center text-sm flex-shrink-0">5</span>
+          Other Important Tools
+        </h2>
+      </div>
+      <div class="p-6 md:p-8">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          
+          <div class="bg-gray-50 rounded-xl p-5 border border-gray-100">
+            <h4 class="font-bold text-gray-900 mb-2 flex items-center gap-2">
+              <svg class="text-gray-500" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+              All Attachments
+            </h4>
+            <p class="text-xs text-gray-600">If you do multiple rotations (e.g., one at a District Hospital, another at a Teaching Hospital), you can manage them all here.</p>
+          </div>
+
+          <div class="bg-gray-50 rounded-xl p-5 border border-gray-100">
+            <h4 class="font-bold text-gray-900 mb-2 flex items-center gap-2">
+              <svg class="text-gray-500" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+              View Logs
+            </h4>
+            <p class="text-xs text-gray-600">A full timeline of every daily log you've submitted. You can edit or delete specific entries here.</p>
+          </div>
+
+          <div class="bg-gray-50 rounded-xl p-5 border border-gray-100">
+            <h4 class="font-bold text-gray-900 mb-2 flex items-center gap-2">
+              <svg class="text-gray-500" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+              Workshops
+            </h4>
+            <p class="text-xs text-gray-600">Record any official training, orientations, or continuing education sessions you attended.</p>
+          </div>
+
+          <div class="bg-gray-50 rounded-xl p-5 border border-gray-100">
+            <h4 class="font-bold text-gray-900 mb-2 flex items-center gap-2">
+              <svg class="text-gray-500" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
+              Archive
+            </h4>
+            <p class="text-xs text-gray-600">Accidentally deleted a log or an attachment? Don't worry. Deleted items go here, and you can restore them with one click.</p>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- Support Footer -->
+    <div class="text-center bg-emerald-50 rounded-2xl p-8 border border-emerald-100">
+      <h3 class="text-lg font-bold text-emerald-900 mb-2">Need more help?</h3>
+      <p class="text-sm text-emerald-800 mb-4">If you get stuck or find a bug, don't hesitate to reach out to the ICT support team.</p>
+      <a href="{% url 'contact' %}" class="inline-flex items-center justify-center bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-6 py-2.5 transition-colors shadow-sm">
+        Contact Support
+      </a>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

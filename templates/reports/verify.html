@@ -1,0 +1,158 @@
+{% extends 'base.html' %}
+{% block title %}Verify report · MedPracticum Studio{% endblock %}
+
+{% block content %}
+<style>
+  /* ===== Approve button inline spinner ===== */
+  #approve-btn {
+    position: relative;
+    transition: opacity 0.15s;
+  }
+  #approve-btn.is-loading {
+    opacity: 0.8;
+    cursor: wait;
+  }
+  #approve-btn .btn-spinner {
+    display: none;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-top-color: #ffffff;
+    border-radius: 50%;
+    animation: approve-spin 0.8s linear infinite;
+    vertical-align: -3px;
+    margin-right: 8px;
+  }
+  #approve-btn.is-loading .btn-spinner {
+    display: inline-block;
+  }
+  @keyframes approve-spin {
+    to { transform: rotate(360deg); }
+  }
+</style>
+
+<div class="max-w-2xl mx-auto">
+
+  <h1 class="text-2xl font-bold mb-1">Practicum report verification</h1>
+  <p class="text-sm text-gray-600 mb-6">{{ student_name }} — {{ facility_name }}</p>
+
+  {% if report.is_signed_off %}
+    <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 mb-4 text-emerald-800">
+      <div class="font-semibold mb-1">✓ Verified &amp; approved</div>
+      {% if report.supervisor_signature_date %}
+        <p class="text-sm">Signed off on {{ report.supervisor_signature_date|date:"j F Y, H:i" }}</p>
+      {% endif %}
+    </div>
+  {% else %}
+    <div class="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-4 text-amber-800">
+      <div class="font-semibold mb-1">Pending your approval</div>
+      <p class="text-sm">Review the details and log summary below. If the report is accurate, approve it to sign off.</p>
+    </div>
+  {% endif %}
+
+  <div class="bg-white rounded-2xl shadow p-6 mb-4">
+    <h2 class="font-semibold text-gray-900 mb-3">Report details</h2>
+    <dl class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+      <div>
+        <dt class="text-gray-500">Student</dt>
+        <dd class="font-medium text-gray-900">{{ student_name }}{% if session.user.index_number %} ({{ session.user.index_number }}){% endif %}</dd>
+      </div>
+      <div>
+        <dt class="text-gray-500">Facility</dt>
+        <dd class="font-medium text-gray-900">{{ facility_name }}</dd>
+      </div>
+      <div>
+        <dt class="text-gray-500">Period</dt>
+        <dd class="font-medium text-gray-900">{{ session.start_date|date:"j M Y" }} – {{ session.end_date|date:"j M Y" }}</dd>
+      </div>
+      <div>
+        <dt class="text-gray-500">Generated</dt>
+        <dd class="font-medium text-gray-900">{{ report.generated_at|date:"j M Y, H:i" }}</dd>
+      </div>
+    </dl>
+  </div>
+
+  <div class="bg-white rounded-2xl shadow p-6 mb-4">
+    <h2 class="font-semibold text-gray-900 mb-3">
+      Log summary <span class="text-xs font-normal text-gray-500">({{ logs|length }} entries)</span>
+    </h2>
+    {% if logs %}
+      <ul class="space-y-3 text-sm">
+        {% for log in logs %}
+          <li class="border-l-2 border-emerald-200 pl-3">
+            <div class="text-xs text-gray-500 mb-0.5">
+              {{ log.date|date:"j F Y" }}
+              {% if log.unit_sub_department %} · {{ log.unit_sub_department }}{% endif %}
+            </div>
+            <div class="text-gray-800">
+              {% if log.activity_summary %}{{ log.activity_summary|truncatewords:40 }}
+              {% elif log.activities %}{{ log.activities|truncatewords:40 }}
+              {% elif log.activity %}{{ log.activity|truncatewords:40 }}
+              {% elif log.description %}{{ log.description|truncatewords:40 }}
+              {% else %}<span class="text-gray-400">No activity text recorded.</span>{% endif %}
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="text-sm text-gray-500">No logs recorded for this attachment.</p>
+    {% endif %}
+  </div>
+
+  {% if not report.is_signed_off %}
+    <form method="post" id="approve-form" class="bg-white rounded-2xl shadow p-6 mb-4">
+      {% csrf_token %}
+      <p class="text-sm text-gray-600 mb-4">
+        By approving, you confirm that the student named above completed the attachment
+        described in this report.
+      </p>
+      <button type="submit" name="action" value="approve" id="approve-btn"
+              onclick="return confirm('Approve and sign off this report?');"
+              class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg py-2.5 transition">
+        <span class="btn-spinner"></span>
+        <span class="btn-label">Approve &amp; sign off</span>
+      </button>
+    </form>
+  {% endif %}
+
+  <div class="text-center mb-8">
+    <a href="{% url 'view_report' %}?attachment_id={{ session.id }}" target="_blank"
+       class="text-sm text-emerald-700 underline hover:text-emerald-900">
+      View the full report PDF
+    </a>
+  </div>
+
+</div>
+
+<script>
+  (function () {
+    var form = document.getElementById('approve-form');
+    var btn = document.getElementById('approve-btn');
+    if (!form || !btn) return;
+
+    var label = btn.querySelector('.btn-label');
+    var originalLabel = label ? label.textContent : '';
+
+    form.addEventListener('submit', function (e) {
+      // The onclick confirm() has already run at this point (browser fires it
+      // before 'submit' listeners) — if user cancelled, submit won't fire.
+      if (btn.classList.contains('is-loading')) {
+        e.preventDefault();
+        return;
+      }
+      btn.classList.add('is-loading');
+      btn.disabled = true;
+      if (label) label.textContent = 'Approving\u2026';
+    });
+
+    // If browser restores the page from bfcache (back button), reset state
+    window.addEventListener('pageshow', function (e) {
+      if (e.persisted) {
+        btn.classList.remove('is-loading');
+        btn.disabled = false;
+        if (label) label.textContent = originalLabel;
+      }
+    });
+  })();
+</script>
+{% endblock %}

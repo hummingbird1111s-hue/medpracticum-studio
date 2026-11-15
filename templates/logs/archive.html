@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+{% block title %}Archive · MedPracticum Studio{% endblock %}
+
+{% block content %}
+<style>
+  .modern-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
+  .modern-table th { background: #f3f4f6; color: #374151; font-weight: 600; padding: 12px 16px; border-bottom: 2px solid #e5e7eb; text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em; }
+  .modern-table td { padding: 16px; border-bottom: 1px solid #e5e7eb; vertical-align: middle; line-height: 1.5; color: #111827; }
+  .modern-table tr:hover { background: #f9fafb; }
+  
+  /* Restore Button */
+  .btn-restore { color: #047857; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s; display: inline-flex; align-items: center; gap: 4px; }
+  .btn-restore:hover { background: #d1fae5; }
+</style>
+
+<div class="max-w-5xl mx-auto space-y-6">
+  <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">Archive</h1>
+      <p class="text-sm text-gray-500">View deleted attachments and daily logs.</p>
+    </div>
+    
+    <!-- Filter Dropdown -->
+    <form method="get" action="{% url 'archive_list' %}" class="bg-white border border-gray-200 rounded-lg shadow-sm px-4 py-2">
+      <label class="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Show</label>
+      <select name="type" onchange="this.form.submit()" class="w-full bg-transparent border-none text-sm font-semibold text-emerald-700 focus:ring-0 cursor-pointer p-0">
+        <option value="attachments" {% if view_type == 'attachments' %}selected{% endif %}>Deleted Attachments</option>
+        <option value="logs" {% if view_type == 'logs' %}selected{% endif %}>Deleted Logs</option>
+      </select>
+    </form>
+  </div>
+
+  <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800 mb-4">
+    <strong>Note:</strong> Items in the archive are hidden from the main app, but their data is still safely stored in the database.
+  </div>
+
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    
+    {% if view_type == 'attachments' %}
+      <!-- DELETED ATTACHMENTS TABLE -->
+      <table class="modern-table">
+        <thead>
+          <tr>
+            <th>Facility</th>
+            <th>Period</th>
+            <th>Logs Recorded</th>
+            <th>Academic Year</th>
+            <th style="text-align: right;">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for att in deleted_attachments %}
+            <tr>
+              <td class="font-medium text-gray-900">{{ att.facility.name }}</td>
+              <td>{{ att.start_date|date:"j M Y" }} - {{ att.end_date|date:"j M Y" }}</td>
+              <td>{{ att.daily_logs.count }}</td>
+              <td>{{ att.academic_year }}</td>
+              <td style="text-align: right;">
+                <form method="post" action="{% url 'restore_attachment' att.id %}" style="display: inline-block;">
+                  {% csrf_token %}
+                  <button type="submit" class="btn-restore" onclick="return confirm('Restore this attachment and all its logs?');">
+                    <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                    Restore
+                  </button>
+                </form>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5" class="text-center py-8 text-gray-500 italic">No deleted attachments found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+    {% else %}
+      <!-- DELETED LOGS TABLE -->
+      <table class="modern-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Attachment / Facility</th>
+            <th>Unit</th>
+            <th>Activity</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in deleted_logs %}
+            <tr>
+              <td class="whitespace-nowrap font-medium">{{ log.date|date:"j M Y" }}</td>
+              <td class="text-emerald-700 font-medium">{{ log.attachment.facility.name }}</td>
+              <td>{{ log.unit_sub_department }}</td>
+              <td>{{ log.activity_summary|truncatechars:80 }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="4" class="text-center py-8 text-gray-500 italic">No deleted logs found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}

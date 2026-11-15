@@ -1,0 +1,798 @@
+{% extends 'base.html' %}
+{% block title %}Report settings · MedPracticum Studio{% endblock %}
+
+{% block content %}
+<style>
+  /* Custom CSS to fix the layout of the logo uploader on mobile */
+  .logo-upload-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+  .logo-form-side {
+    width: 100%;
+    min-width: 0; /* Prevents text from squishing */
+  }
+  .logo-preview-side {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 16px;
+  }
+
+  /* Side-by-side on desktop screens */
+  @media (min-width: 768px) {
+    .logo-upload-wrapper {
+      flex-direction: row;
+      align-items: flex-start;
+    }
+    .logo-form-side {
+      flex: 1;
+    }
+    .logo-preview-side {
+      width: 240px;
+      flex-shrink: 0;
+    }
+  }
+
+  /* Inline sample gallery */
+  .mp-sample-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+  }
+  .mp-sample-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #fff;
+    transition: box-shadow 0.15s;
+  }
+  .mp-sample-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+  .mp-sample-card img {
+    width: 100%; height: 150px; object-fit: cover; display: block;
+  }
+  .mp-sample-card span {
+    display: block; padding: 8px 10px; font-size: 12px; color: #6b7280;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+
+  /* Generate / Edit action grid */
+  .mp-action-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  @media (min-width: 768px) {
+    .mp-action-grid { grid-template-columns: 1fr 1fr; }
+  }
+
+  /* ===== Generating overlay (progress bar) ===== */
+  #gen-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 999999;
+    background: rgba(17, 24, 39, 0.72);
+    backdrop-filter: blur(2px);
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  #gen-overlay.show { display: flex; }
+
+  #gen-overlay .gen-card {
+    background: #ffffff;
+    border-radius: 20px;
+    padding: 32px 28px 28px;
+    max-width: 480px;
+    width: 100%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+    text-align: center;
+    animation: gen-card-in 0.25s ease-out;
+  }
+  @keyframes gen-card-in {
+    from { opacity: 0; transform: translateY(8px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  #gen-overlay h3 {
+    margin: 0 0 12px;
+    font-size: 18px;
+    font-weight: 700;
+    color: #065f46;
+  }
+  #gen-overlay .gen-status {
+    margin: 0 0 20px;
+    font-size: 14px;
+    color: #6b7280;
+    line-height: 1.5;
+    min-height: 42px;
+  }
+
+  /* Progress Bar */
+  .progress-track {
+    width: 100%;
+    height: 12px;
+    background: #e5e7eb;
+    border-radius: 999px;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+  .progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #059669, #10b981);
+    border-radius: 999px;
+    transition: width 0.5s ease-out;
+  }
+  #gen-overlay .gen-hint {
+    font-size: 12px;
+    color: #9ca3af;
+    margin: 0;
+    line-height: 1.4;
+  }
+
+  /* ===== Switch Overlay ===== */
+  #switch-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 999999;
+    background: rgba(17, 24, 39, 0.8);
+    backdrop-filter: blur(4px);
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    flex-direction: column;
+  }
+  #switch-overlay.show { display: flex; }
+  #switch-overlay .spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid #a7f3d0;
+    border-top-color: #10b981;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 16px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #switch-overlay p {
+    color: #fff;
+    font-size: 16px;
+    font-weight: 500;
+    text-align: center;
+  }
+</style>
+
+<h1 class="text-2xl font-bold mb-1">Report settings</h1>
+<p class="text-sm text-gray-600 mb-4">Review your cover, check the format samples, then generate.</p>
+
+<!-- ===== EXISTING REPORT ACTIONS ===== -->
+{% if session.report.pdf_file %}
+<div class="bg-emerald-600 text-white rounded-2xl shadow-md p-5 mb-4">
+  <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div>
+      <h2 class="text-lg font-bold mb-1">Your report is ready!</h2>
+      <p class="text-sm text-emerald-100">
+        Last generated: {{ session.report.generated_at|date:"j M Y, H:i" }} · {{ session.report.options.last_page_count|default:"?" }} pages
+      </p>
+    </div>
+
+    <!-- BUTTONS -->
+    <div class="flex flex-wrap items-center gap-2">
+      <a href="{% url 'view_report' %}?attachment_id={{ session.id }}" target="_blank" class="bg-white text-emerald-800 font-semibold rounded-lg px-4 py-2 text-sm hover:bg-emerald-50 transition-colors shadow-sm">
+        View / Print PDF
+      </a>
+      <a href="{% url 'download_report' %}?attachment_id={{ session.id }}" class="bg-emerald-800 border border-emerald-700 text-white font-semibold rounded-lg px-4 py-2 text-sm hover:bg-emerald-900 transition-colors shadow-sm">
+        Download PDF
+      </a>
+      {% if session.report.docx_file %}
+      <a href="{% url 'download_docx' %}?attachment_id={{ session.id }}" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg px-4 py-2 text-sm shadow-sm transition-colors">
+        Download Word
+      </a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ===== ATTACHMENT SWITCHER ===== -->
+<div class="bg-white rounded-2xl shadow p-5 mb-4 border border-emerald-100">
+  <form method="get" action="{% url 'report_options' %}" id="switch-att-form">
+    <label for="attachment_id" class="block text-sm font-semibold text-emerald-800 mb-2">
+      Select which Attachment you are generating this report for:
+    </label>
+    <select name="attachment_id" id="attachment_id" onchange="showSwitchOverlay()"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-emerald-500 focus:border-emerald-500 bg-gray-50 font-medium text-gray-800 cursor-pointer">
+      {% for att in all_attachments %}
+        <option value="{{ att.id }}" {% if att.id == session.id %}selected{% endif %}>
+          {{ att.facility.name }} ({{ att.start_date|date:"M Y" }} - {{ att.end_date|date:"M Y" }})
+        </option>
+      {% endfor %}
+    </select>
+    <noscript><button type="submit" class="mt-2 bg-gray-200 px-3 py-1 rounded">Switch</button></noscript>
+  </form>
+</div>
+
+<!-- ===== CUSTOM LOGO UPLOAD & PREVIEW ===== -->
+<div class="bg-white rounded-2xl shadow p-5 mb-4">
+  <div class="logo-upload-wrapper">
+
+    <!-- Left Side: Form -->
+    <div class="logo-form-side">
+      <h2 class="font-semibold text-gray-900 mb-1">Cover Page Logo</h2>
+      <p class="text-sm text-gray-600 mb-4">
+        By default, your report uses the official school logo. You can upload a specific facility logo to appear on your cover page instead.
+      </p>
+
+      <form method="post" enctype="multipart/form-data" action="{% url 'report_options' %}?attachment_id={{ session.id }}">
+        {% csrf_token %}
+        <div class="flex flex-col gap-2 mb-4">
+          <input type="file" name="custom_logo" accept="image/png, image/jpeg" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100">
+        </div>
+        <div class="flex items-center gap-3 flex-wrap">
+          <button type="submit" name="update_logo" value="1" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-4 py-2 text-sm shadow-sm transition-colors">
+            Upload Logo
+          </button>
+          {% if session.report.custom_logo %}
+            <button type="submit" name="remove_logo" value="1" class="text-red-600 hover:text-red-800 text-sm font-medium underline bg-transparent border-0 cursor-pointer">
+              Remove Custom Logo
+            </button>
+          {% endif %}
+        </div>
+      </form>
+    </div>
+
+    <!-- Right Side: Preview Box -->
+    <div class="logo-preview-side">
+      <p style="font-size: 10px; font-weight: bold; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 12px;">Cover Preview</p>
+
+      <div style="background: white; border: 1px solid #d1d5db; box-shadow: 0 1px 3px rgba(0,0,0,0.1); width: 130px; display: flex; flex-direction: column; align-items: center; padding-top: 20px; padding-left: 12px; padding-right: 12px; aspect-ratio: 1/1.414;">
+        <span style="font-size: 6px; font-weight: bold; color: #1f2937; text-align: center; line-height: 1.2; margin-bottom: 4px;">YAMFO COLLEGE OF HEALTH</span>
+        <span style="font-size: 5px; color: #4b5563; text-align: center; margin-bottom: 16px;">DEPT OF {{ user.get_department_display|upper }}</span>
+
+        <div style="width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px;">
+          {% if session.report.custom_logo %}
+            <img src="{{ session.report.custom_logo.url }}" alt="Custom Logo" style="max-width: 100%; max-height: 100%; object-fit: contain;">
+          {% elif school_logo %}
+            <img src="{{ school_logo.url }}" alt="School Logo" style="max-width: 100%; max-height: 100%; object-fit: contain;">
+          {% else %}
+            <div style="width: 40px; height: 40px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+              <span style="font-size: 7px; color: #9ca3af;">Logo</span>
+            </div>
+          {% endif %}
+        </div>
+
+        <span style="font-size: 7px; font-weight: bold; text-align: center; margin-top: 4px; line-height: 1.2;">VACATION PRACTICUM REPORT</span>
+        <span style="font-size: 6px; text-align: center; margin-top: 4px;">LEVEL {{ user.level }}</span>
+      </div>
+
+      <p style="font-size: 10px; color: #6b7280; text-align: center; margin-top: 12px; line-height: 1.3;">Logo appears exactly as shown here on the cover page.</p>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===== INLINE FORMAT SAMPLES ===== -->
+<div class="bg-white rounded-2xl shadow p-5 mb-4">
+  <div class="flex items-start justify-between mb-3 gap-3 flex-wrap">
+    <div>
+      <h2 class="font-semibold text-gray-900 mb-1">Official format samples</h2>
+      <p class="text-sm text-gray-600">
+        These are your department's official report examples. The AI reads their
+        style notes when drafting your sections.
+      </p>
+    </div>
+    {% if user.is_staff %}
+      <button type="button" id="open-samples-modal"
+              class="text-sm text-emerald-700 underline hover:text-emerald-900 font-medium whitespace-nowrap">
+        Manage / upload samples
+      </button>
+    {% endif %}
+  </div>
+
+  {% if school_format_samples %}
+    <div class="mp-sample-grid">
+      {% for sample in school_format_samples %}
+        <a href="{{ sample.image.url }}" target="_blank" rel="noopener" class="mp-sample-card">
+          <img src="{{ sample.image.url }}" alt="{{ sample.caption }}">
+          <span>{{ sample.caption|default:"Untitled sample" }}</span>
+        </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="text-sm text-gray-500 bg-gray-50 border border-dashed border-gray-200 rounded-lg p-4 text-center">
+      No samples uploaded yet for {{ user.department }}.
+      {% if user.is_staff %}Use "Manage / upload samples" to add the official pages.{% endif %}
+    </p>
+  {% endif %}
+</div>
+
+<!-- ===== GENERATE / EDIT ACTION GRID ===== -->
+<div class="mp-action-grid mb-4">
+  <!-- Official Generation -->
+  <form method="post" id="gen-official-form" class="bg-emerald-600 rounded-2xl p-5 text-white shadow-lg">
+    {% csrf_token %}
+    <input type="hidden" name="attachment_id" value="{{ session.id }}">
+    <h2 class="text-lg font-bold mb-1">Generate Official Report</h2>
+    <p class="text-sm text-emerald-100 mb-4">
+      The AI drafts each section using the hardcoded COHY standard (Times New Roman, 12pt, 1.5 spacing, 1-inch margins).
+    </p>
+    <!-- Crucial fix: name="action" value="official" -->
+    <button type="submit" name="action" value="official" id="gen-official-btn"
+            class="w-full bg-white text-emerald-800 font-semibold rounded-lg py-2.5 hover:bg-emerald-50 transition disabled:opacity-70 disabled:cursor-wait">
+      {% if session.report.pdf_file %}Regenerate Official Report{% else %}Generate Official Report{% endif %}
+    </button>
+  </form>
+
+  <div class="bg-white rounded-2xl p-5 shadow border border-gray-100 flex flex-col justify-between">
+    <div>
+      <h2 class="text-lg font-bold mb-1 text-gray-900">Edit Report Manually</h2>
+      <p class="text-sm text-gray-600 mb-4">
+        Review the AI draft, tweak the wording, then rebuild the PDF with your changes.
+      </p>
+    </div>
+    
+    {% if can_edit %}
+      <a href="{% url 'report_content' %}?attachment_id={{ session.id }}"
+         class="block text-center bg-emerald-600 text-white font-semibold rounded-lg py-2.5 hover:bg-emerald-700 transition">
+        Edit Report Manually
+      </a>
+    {% else %}
+      <button type="button" disabled
+              class="w-full bg-gray-200 text-gray-500 font-semibold rounded-lg py-2.5 cursor-not-allowed">
+        Edit Report Manually
+      </button>
+      <p class="text-xs text-gray-500 mt-2 text-center">Generate a report first to unlock this.</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ===== Official format box ===== -->
+<div id="official-box" class="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 mb-4 cursor-pointer hover:bg-emerald-100 transition-colors shadow-sm" onclick="applyOfficialDefaults()">
+  <div class="flex justify-between items-center">
+    <div>
+      <p class="text-xs uppercase tracking-wide text-emerald-700 font-semibold">Official COHY format (recommended)</p>
+      <p class="text-sm mt-1 text-emerald-900">
+        {{ standard.font_family }} · {{ standard.font_size }} pt · {{ standard.line_spacing|floatformat:"-1" }} line spacing ·
+        {{ standard.margin|floatformat:"-1" }}-inch margins · at least {{ min_pages }} pages
+      </p>
+    </div>
+    <button type="button" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm whitespace-nowrap ml-4">
+      Auto-fill Settings ↓
+    </button>
+  </div>
+</div>
+
+<!-- ===== Custom settings form ===== -->
+{% if allow_custom and form %}
+<details class="bg-white rounded-2xl shadow p-5 mb-4 border border-gray-200 group" {% if form.errors %}open{% endif %}>
+  <summary class="font-semibold text-gray-900 cursor-pointer list-none flex justify-between items-center">
+    <span>Or customise your report format (Optional)</span>
+    <span class="text-gray-400 group-open:rotate-180 transition-transform">▼</span>
+  </summary>
+  
+  <p class="text-sm text-gray-600 mt-2 mb-4">If your department or supervisor requires a specific format different from the official standard, change it here.</p>
+
+  <form method="post" id="gen-custom-form">
+    {% csrf_token %}
+    <input type="hidden" name="attachment_id" value="{{ session.id }}">
+
+    {% if form.errors %}
+      <div class="bg-red-50 border-l-4 border-red-500 p-4 mb-4 text-red-700">
+        <p class="font-bold text-sm mb-1">Please correct the errors below:</p>
+        <p class="text-xs">Your custom settings could not be saved. Check the fields marked in red.</p>
+      </div>
+    {% endif %}
+
+    {% if form.non_field_errors %}
+      <div class="bg-red-50 border-l-4 border-red-500 p-4 mb-4 text-red-700">
+        {{ form.non_field_errors }}
+      </div>
+    {% endif %}
+
+    <h3 class="text-sm font-semibold mb-2 mt-4">Text and layout</h3>
+    {% for field in layout_fields %}
+      <div class="mb-4">
+        <label for="{{ field.id_for_label }}" class="block text-sm font-medium mb-1">{{ field.label }}</label>
+        {{ field }}
+        {% if field.help_text %}<div class="text-xs text-gray-500 mt-1">{{ field.help_text }}</div>{% endif %}
+        {% for error in field.errors %}<p class="text-xs text-red-600 mt-1">{{ error }}</p>{% endfor %}
+      </div>
+    {% endfor %}
+
+    <h3 class="text-sm font-semibold mb-2 mt-6">Sections and extras to include</h3>
+    {% if not has_logo %}
+      <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 mb-3">
+        No school logo has been uploaded yet. An administrator can add one under "School profile" in the admin.
+      </p>
+    {% endif %}
+    {% for field in section_fields %}
+      <label class="flex items-center gap-2 text-sm mb-2">
+        {{ field }}
+        <span>{{ field.label }}</span>
+      </label>
+    {% endfor %}
+
+    <button type="submit" name="action" value="generate" id="gen-custom-btn"
+            class="w-full mt-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg py-2.5 transition-colors disabled:opacity-70 disabled:cursor-wait">
+      Save custom settings and generate
+    </button>
+  </form>
+</details>
+{% endif %}
+
+<p class="text-xs text-gray-500">
+  Building a report can take up to a few minutes. The AI reads your logs, analyzes your competencies, and writes the text from scratch. Keep this page open.
+</p>
+
+<!-- ============================================================ -->
+<!-- Log book format samples modal (staff management only)         -->
+<!-- ============================================================ -->
+<div id="samples-modal"
+     style="display:none; position:fixed; inset:0; z-index:100;
+            background:rgba(0,0,0,0.6); align-items:center; justify-content:center; padding:16px;">
+  <div style="background:#fff; border-radius:14px; max-width:760px; width:100%;
+              max-height:90vh; display:flex; flex-direction:column; overflow:hidden;">
+
+    <div style="padding:16px; border-bottom:1px solid #e5e7eb;
+                display:flex; align-items:center; justify-content:space-between;">
+      <h3 style="margin:0; font-size:16px; font-weight:600; color:#065f46;">
+        Log book format samples
+      </h3>
+      <button type="button" id="close-samples-modal"
+              style="background:none; border:0; font-size:24px; line-height:1;
+                     cursor:pointer; color:#6b7280; padding:4px 8px;">&times;</button>
+    </div>
+
+    <div style="flex:1; overflow-y:auto; padding:16px;">
+
+      {% if user.is_staff %}
+      <!-- Staff-only upload form -->
+      <form id="sample-upload-form" enctype="multipart/form-data"
+            style="margin-bottom:20px; padding:12px; background:#f9fafb;
+                   border:1px dashed #d1d5db; border-radius:10px;">
+        {% csrf_token %}
+        <p style="margin:0 0 8px; font-size:13px; color:#374151; font-weight:600;">
+          Upload a sample for your department (staff only)
+        </p>
+        <input type="file" name="image" accept="image/*" required
+               style="display:block; margin-bottom:8px; font-size:14px; width:100%;">
+        <input type="text" name="caption"
+               placeholder="Optional caption (e.g. 'Cover page layout', 'Body sections')"
+               style="width:100%; padding:8px; border:1px solid #d1d5db; border-radius:8px;
+                      font-size:14px; margin-bottom:8px; box-sizing:border-box;">
+        <textarea name="style_notes" rows="3"
+                  placeholder="AI style notes (optional). e.g. 'Abstract: 200-250 words, third person, mention facility and period, end with 4-6 keywords.'"
+                  style="width:100%; padding:8px; border:1px solid #d1d5db; border-radius:8px;
+                         font-size:14px; margin-bottom:8px; box-sizing:border-box; font-family:inherit;"></textarea>
+        <button type="submit"
+                style="background:#059669; color:#fff; border:0; padding:8px 16px;
+                       border-radius:8px; font-weight:500; cursor:pointer; font-size:14px;">
+          Upload sample
+        </button>
+      </form>
+      {% endif %}
+
+      <!-- Sample grid -->
+      <div id="sample-grid"
+           style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:12px;">
+        {% for sample in school_format_samples %}
+          <div class="sample-card" data-id="{{ sample.pk }}"
+               style="border:1px solid #e5e7eb; border-radius:10px; overflow:hidden; background:#fff;">
+            <a href="{{ sample.image.url }}" target="_blank" rel="noopener">
+              <img src="{{ sample.image.url }}" alt="{{ sample.caption }}"
+                   style="width:100%; height:160px; object-fit:cover; display:block;">
+            </a>
+            <div style="padding:8px; font-size:12px; display:flex; justify-content:space-between; align-items:center; gap:8px;">
+              <span style="color:#6b7280; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;">
+                {{ sample.caption|default:"Untitled" }}
+              </span>
+              {% if user.is_staff %}
+                <button type="button" class="delete-sample" data-id="{{ sample.pk }}"
+                        title="Delete sample"
+                        style="background:none; border:0; color:#dc2626; cursor:pointer;
+                               font-size:16px; line-height:1; padding:2px 6px; flex-shrink:0;">&times;</button>
+              {% endif %}
+            </div>
+          </div>
+        {% empty %}
+          <p id="no-samples-msg"
+             style="color:#9ca3af; font-size:14px; grid-column:1/-1; text-align:center; padding:32px 16px;">
+            No samples uploaded yet for {{ user.department }}.
+            {% if user.is_staff %}
+              Use the form above to upload pages from the official log book.
+            {% else %}
+              An administrator will upload the department's report guidelines here.
+            {% endif %}
+          </p>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div style="padding:10px 16px; border-top:1px solid #e5e7eb; background:#f9fafb;
+                font-size:12px; color:#6b7280; text-align:center;">
+      These are the official format guidelines from your log book. Match your report to these.
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Generating overlay (Progress Bar)                             -->
+<!-- ============================================================ -->
+<div id="gen-overlay" aria-hidden="true" role="status" aria-live="polite">
+  <div class="gen-card">
+    <h3>Building your report</h3>
+    <p class="gen-status" id="gen-status-text">Drafting sections with AI...</p>
+    
+    <div class="progress-track">
+      <div class="progress-fill" id="gen-progress-fill"></div>
+    </div>
+    
+    <p class="gen-hint">This takes 1&ndash;3 minutes. Keep this page open.</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Switching Overlay                                             -->
+<!-- ============================================================ -->
+<div id="switch-overlay">
+  <div class="spinner"></div>
+  <p>Setting report engine to read all data from this attachment...</p>
+</div>
+
+<script>
+  // ============================================================
+  // 0) Switch Facility Overlay
+  // ============================================================
+  function showSwitchOverlay() {
+    document.getElementById('switch-overlay').classList.add('show');
+    document.getElementById('switch-att-form').submit();
+  }
+
+  // ============================================================
+  // 1) AUTO-FILL OFFICIAL DEFAULTS (Into the Custom Form)
+  // ============================================================
+  window.applyOfficialDefaults = function () {
+    var form = document.getElementById('gen-custom-form');
+    if (!form) return;
+
+    function trySetField(candidateNames, candidateValues) {
+      for (var i = 0; i < candidateNames.length; i++) {
+        var el = form.querySelector('[name="' + candidateNames[i] + '"]');
+        if (!el) continue;
+        if (el.tagName === 'SELECT') {
+          for (var v = 0; v < candidateValues.length; v++) {
+            for (var o = 0; o < el.options.length; o++) {
+              var optVal  = (el.options[o].value || '').trim();
+              var optText = (el.options[o].text  || '').trim().toLowerCase();
+              var target  = candidateValues[v].toLowerCase();
+              if (optVal === candidateValues[v] || optText === target || optText.indexOf(target) === 0) {
+                el.selectedIndex = o;
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+                return true;
+              }
+            }
+          }
+        } else {
+          el.value = candidateValues[0];
+          el.dispatchEvent(new Event('input',  { bubbles: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+          return true;
+        }
+      }
+      return false;
+    }
+
+    trySetField(['font_family', 'font'], ['Times New Roman', 'times new roman']);
+    trySetField(['font_size', 'fontsize', 'size'], ['12', '12pt', '12 pt']);
+    trySetField(['line_spacing', 'line-spacing', 'spacing'], ['1.5', '1.5 lines']);
+    trySetField(['page_margin', 'page_margins', 'margins', 'margin'], ['1', '1in', '1 in', '1 inch', '1.0', '2.54', '2.54cm']);
+
+    var boxes = form.querySelectorAll('input[type="checkbox"]');
+    boxes.forEach(function (box) {
+      var name = (box.name || '').toLowerCase();
+      var id   = (box.id   || '').toLowerCase();
+      var labelEl = box.closest('label');
+      if (!labelEl && id) labelEl = form.querySelector('label[for="' + CSS.escape(id) + '"]');
+      var labelText = labelEl ? (labelEl.textContent || '').toLowerCase() : '';
+
+      if (name.indexOf('supervisor') !== -1 || id.indexOf('supervisor') !== -1 ||
+          name.indexOf('signoff') !== -1 || labelText.indexOf('supervisor') !== -1) {
+        return;
+      }
+      if (name.indexOf('include_') === 0 || name.indexOf('logo_') === 0 || name === 'page_numbers') {
+        box.checked = true;
+      }
+    });
+  };
+
+  // ============================================================
+  // 2) FORMAT-SAMPLES MODAL
+  // ============================================================
+  (function () {
+    var modal    = document.getElementById('samples-modal');
+    var openBtn  = document.getElementById('open-samples-modal');
+    var closeBtn = document.getElementById('close-samples-modal');
+    var form     = document.getElementById('sample-upload-form');
+    var grid     = document.getElementById('sample-grid');
+    if (!modal) return;
+
+    function openModal()  { modal.style.display = 'flex'; }
+    function closeModal() { modal.style.display = 'none'; }
+
+    if (openBtn)  openBtn.addEventListener('click', openModal);
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+
+    modal.addEventListener('click', function (e) {
+      if (e.target === modal) closeModal();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && modal.style.display === 'flex') closeModal();
+    });
+
+    if (form) {
+      form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var fd = new FormData(form);
+        try {
+          var res = await fetch("{% url 'upload_format_sample' %}", {
+            method: 'POST', body: fd, credentials: 'same-origin',
+            headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+          });
+          if (!res.ok) {
+            var err = await res.json().catch(function () { return {}; });
+            alert(err.error || 'Upload failed.');
+            return;
+          }
+          var data = await res.json();
+          var empty = document.getElementById('no-samples-msg');
+          if (empty) empty.remove();
+
+          var card = document.createElement('div');
+          card.className = 'sample-card';
+          card.dataset.id = data.id;
+          card.style.cssText = 'border:1px solid #e5e7eb; border-radius:10px; overflow:hidden; background:#fff;';
+          card.innerHTML =
+            '<a href="' + data.url + '" target="_blank" rel="noopener">' +
+              '<img src="' + data.url + '" style="width:100%; height:160px; object-fit:cover; display:block;">' +
+            '</a>' +
+            '<div style="padding:8px; font-size:12px; display:flex; justify-content:space-between; align-items:center; gap:8px;">' +
+              '<span style="color:#6b7280; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;">' +
+                (data.caption || 'Untitled') +
+              '</span>' +
+              '<button type="button" class="delete-sample" data-id="' + data.id + '" ' +
+                'style="background:none; border:0; color:#dc2626; cursor:pointer; font-size:16px; line-height:1; padding:2px 6px; flex-shrink:0;">&times;</button>' +
+            '</div>';
+          grid.appendChild(card);
+          form.reset();
+        } catch (err) {
+          alert('Upload failed: ' + (err && err.message ? err.message : err));
+        }
+      });
+    }
+
+    if (grid) grid.addEventListener('click', async function (e) {
+      var btn = e.target.closest('.delete-sample');
+      if (!btn) return;
+      if (!confirm('Delete this sample?')) return;
+      var id = btn.dataset.id;
+      try {
+        var res = await fetch('/reports/format-sample/' + id + '/delete/', {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+        });
+        if (res.ok) {
+          btn.closest('.sample-card').remove();
+          if (!grid.querySelector('.sample-card')) {
+            var p = document.createElement('p');
+            p.id = 'no-samples-msg';
+            p.style.cssText = 'color:#9ca3af; font-size:14px; grid-column:1/-1; text-align:center; padding:32px 16px;';
+            p.textContent = 'No samples uploaded yet.';
+            grid.appendChild(p);
+          }
+        } else {
+          alert('Could not delete sample.');
+        }
+      } catch (err) {
+        alert('Could not delete sample: ' + (err && err.message ? err.message : err));
+      }
+    });
+  })();
+
+  // ============================================================
+  // 3) GENERATING OVERLAY (With Progress Bar)
+  // ============================================================
+  (function () {
+    var overlay    = document.getElementById('gen-overlay');
+    var statusText = document.getElementById('gen-status-text');
+    var progressBar = document.getElementById('gen-progress-fill');
+    if (!overlay) return;
+
+    var STEPS = [
+      'Drafting sections with AI...',
+      'Assembling chapters and formatting...',
+      'Rendering the PDF...',
+      'Preparing the Word document...',
+      'Finalizing...'
+    ];
+    var stepIndex = 0;
+    var progress = 0;
+    var progressTimer = null;
+    var stepTimer = null;
+
+    function startProgress() {
+      overlay.classList.add('show');
+      overlay.setAttribute('aria-hidden', 'false');
+      progress = 0;
+      stepIndex = 0;
+      progressBar.style.width = '0%';
+      statusText.textContent = STEPS[0];
+
+      // Animate progress up to 95% over ~2 minutes
+      progressTimer = setInterval(function() {
+        if (progress < 95) {
+          // Slow down as it gets higher
+          var increment = progress > 80 ? 0.2 : (progress > 50 ? 0.5 : 1);
+          progress += increment;
+          progressBar.style.width = progress + '%';
+        }
+      }, 1000);
+
+      // Cycle text every 10 seconds
+      stepTimer = setInterval(function() {
+        if (stepIndex < STEPS.length - 1) {
+          stepIndex++;
+          statusText.textContent = STEPS[stepIndex];
+        }
+      }, 10000);
+    }
+
+    function finishProgress() {
+      clearInterval(progressTimer);
+      clearInterval(stepTimer);
+      progressBar.style.width = '100%';
+      statusText.textContent = 'Done!';
+      setTimeout(function() {
+        overlay.classList.remove('show');
+        overlay.setAttribute('aria-hidden', 'true');
+      }, 500);
+    }
+
+    var FORM_TO_BTN = {
+      'gen-official-form': 'gen-official-btn',
+      'gen-custom-form':   'gen-custom-btn'
+    };
+
+    window.addEventListener('submit', function (e) {
+      var form = e.target;
+      if (!form || !form.id || !(form.id in FORM_TO_BTN)) return;
+
+      if (overlay.classList.contains('show')) {
+        e.preventDefault();
+        return;
+      }
+
+      var btn = document.getElementById(FORM_TO_BTN[form.id]);
+      if (btn) {
+        btn.disabled = true;
+        if (!btn.dataset.originalText) btn.dataset.originalText = btn.textContent;
+        btn.textContent = 'Generating…';
+      }
+
+      setTimeout(startProgress, 0);
+    }, true);
+
+    window.addEventListener('pageshow', function (e) {
+      if (e.persisted) overlay.classList.remove('show');
+    });
+  })();
+</script>
+
+{% endblock %}

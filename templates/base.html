@@ -16,43 +16,1331 @@
   <link rel="stylesheet" href="{% static 'css/tailwind.css' %}">
   <script defer src="{% static 'vendor/alpine.min.js' %}"></script>
   <script src="{% static 'vendor/htmx.min.js' %}"></script>
+
+  <style>
+    /* ================= BASE ================= */
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      background: #f9fafb;
+      color: #111827;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 15px;
+      line-height: 1.5;
+      overflow: hidden;
+    }
+
+    /* ================= PAGE LOADING OVERLAY ================= */
+    #mp-page-loading {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 999999;
+      background: rgba(249, 250, 251, 0.92);
+      backdrop-filter: blur(3px);
+      -webkit-backdrop-filter: blur(3px);
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+    }
+    #mp-page-loading.show { display: flex; opacity: 1; }
+    #mp-page-loading .mp-loader-ring {
+      width: 56px; height: 56px;
+      border: 4px solid #d1fae5; border-top-color: #059669; border-right-color: #10b981;
+      border-radius: 50%; animation: mp-page-spin 0.85s linear infinite;
+    }
+    @keyframes mp-page-spin { to { transform: rotate(360deg); } }
+    #mp-page-loading .mp-loader-text {
+      margin-top: 18px; color: #047857; font-size: 14px; font-weight: 600; letter-spacing: 0.02em;
+    }
+    #mp-page-loading .mp-loader-dots::after {
+      content: ''; display: inline-block; width: 1.2em; text-align: left;
+      animation: mp-page-dots 1.4s steps(4, end) infinite;
+    }
+    @keyframes mp-page-dots {
+      0%, 20% { content: ''; } 40% { content: '.'; } 60% { content: '..'; } 80%, 100% { content: '...'; }
+    }
+
+    /* ================= SHELL ================= */
+    .mp-shell { display: flex; height: 100vh; width: 100%; overflow: hidden; }
+
+    /* ================= SIDEBAR ================= */
+    .mp-sidebar {
+      width: 240px; flex-shrink: 0; background: #047857; color: #ecfdf5;
+      display: flex; flex-direction: column; height: 100vh; overflow-y: auto; z-index: 50;
+    }
+    .mp-sidebar__brand { padding: 18px 20px; border-bottom: 1px solid rgba(255,255,255,0.12); }
+    .mp-sidebar__brand a { color: #ffffff; text-decoration: none; font-weight: 700; font-size: 17px; display: block; line-height: 1.2; }
+    .mp-sidebar__brand small { display: block; color: #6ee7b7; font-size: 11px; letter-spacing: 1px; margin-top: 2px; font-weight: 500; }
+    .mp-sidebar__user {
+      margin: 12px; padding: 10px 12px; background: rgba(0,0,0,0.18); border-radius: 10px;
+      font-size: 13px; display: block; text-decoration: none; color: inherit; transition: background 0.15s ease;
+    }
+    .mp-sidebar__user:hover { background: rgba(0,0,0,0.32); }
+    .mp-sidebar__user-name { color: #ffffff; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mp-sidebar__user-meta { color: #6ee7b7; font-size: 11px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mp-sidebar__nav { flex: 1; padding: 6px 8px; overflow-y: auto; }
+    .mp-sidebar__nav a {
+      display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px;
+      color: #ecfdf5; text-decoration: none; font-size: 14px; transition: background 0.15s ease;
+    }
+    .mp-sidebar__nav a:hover { background: rgba(255,255,255,0.12); }
+    .mp-sidebar__nav svg { width: 18px; height: 18px; flex-shrink: 0; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .mp-sidebar__footer { padding: 12px; border-top: 1px solid rgba(255,255,255,0.12); flex-shrink: 0; }
+    .mp-logout-btn {
+      width: 100%; padding: 10px 12px; background: rgba(0,0,0,0.22); color: #ffffff; border: 0;
+      border-radius: 8px; font-weight: 500; font-size: 14px; cursor: pointer; transition: background 0.15s ease;
+    }
+    .mp-logout-btn:hover { background: rgba(0,0,0,0.35); }
+
+    /* ================= MAIN COLUMN ================= */
+    .mp-main-column { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+    
+    /* HEADER */
+    .mp-header {
+      background: #ffffff; border-bottom: 1px solid #e5e7eb; padding: 12px 16px;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      flex-shrink: 0; box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+    }
+    .mp-header__left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    
+    /* Modern System Name */
+    .mp-header__brand {
+      display: flex; align-items: center; gap: 8px;
+      text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .mp-header__brand-logo {
+      background: #047857; color: white; width: 30px; height: 30px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800;
+    }
+    .mp-header__brand-text {
+      font-size: 19px; font-weight: 800; letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #047857, #10b981);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+
+    .mp-header__right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    
+    /* Minimized Contact Button */
+    .mp-header__contact {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 34px; height: 34px; border-radius: 50%;
+      color: #047857; border: 1px solid #a7f3d0; background: #ecfdf5;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .mp-header__contact:hover { background: #d1fae5; border-color: #6ee7b7; }
+    .mp-header__contact svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    
+    /* Profile Pill with Label */
+    .mp-profile-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 3px 3px 3px 12px; border-radius: 20px;
+      background: #f9fafb; border: 1px solid #e5e7eb; text-decoration: none;
+      transition: background 0.15s;
+    }
+    .mp-profile-pill:hover { background: #f3f4f6; }
+    .mp-profile-pill span { font-size: 12px; font-weight: 600; color: #4b5563; }
+    .mp-header__avatar {
+      display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px;
+      border-radius: 50%; background: #047857; color: #ffffff; font-weight: 700; font-size: 12px;
+    }
+
+    .mp-hamburger {
+      background: transparent; border: 0; color: #374151; padding: 6px; border-radius: 8px;
+      cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: background 0.15s ease;
+    }
+    .mp-hamburger:hover { background: #f3f4f6; }
+    .mp-hamburger svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    
+    #install-btn { display: none; background: #059669; color: #ffffff; border: 0; border-radius: 8px; padding: 7px 12px; font-size: 13px; font-weight: 500; cursor: pointer; }
+    #install-btn:hover { background: #047857; }
+    #install-btn.show { display: inline-block; }
+    
+    @media (min-width: 768px) { 
+      .mp-hamburger { display: none; } 
+      .mp-header { padding: 10px 20px; } 
+    }
+
+    /* ================= BREADCRUMBS ================= */
+    #mp-breadcrumbs {
+      display: none; /* Hidden by default, JS shows it if needed */
+      background: #ffffff; border-bottom: 1px solid #e5e7eb;
+      padding: 10px 16px; font-size: 13px; color: #6b7280;
+      align-items: center; flex-wrap: wrap; gap: 8px;
+      flex-shrink: 0; box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+    }
+    @media (min-width: 768px) {
+      #mp-breadcrumbs { padding: 10px 20px; }
+    }
+    .mp-breadcrumb-link {
+      color: #6b7280; text-decoration: none; font-weight: 500; transition: color 0.15s;
+    }
+    .mp-breadcrumb-link:hover { color: #059669; }
+    .mp-breadcrumb-sep { color: #d1d5db; font-weight: 300; font-size: 14px; margin: 0 2px; }
+    .mp-breadcrumb-current { color: #111827; font-weight: 600; }
+
+    /* ================= BANNER ================= */
+    #mp-banner { display: none; background: #fef3c7; color: #92400e; text-align: center; padding: 8px 16px; font-size: 14px; flex-shrink: 0; }
+    #mp-banner.show { display: block; }
+
+    /* ================= MESSAGES ================= */
+    .mp-messages { max-width: 768px; width: 100%; margin: 0 auto; padding: 16px 16px 0; flex-shrink: 0; }
+    .mp-message { padding: 8px 16px; border-radius: 8px; font-size: 14px; margin-bottom: 8px; }
+    .mp-message--error   { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+    .mp-message--default { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+
+    /* ================= MAIN CONTENT ================= */
+    .mp-main { flex: 1; overflow-y: auto; min-height: 0; }
+    .mp-main__inner { max-width: 768px; width: 100%; margin: 0 auto; padding: 24px 16px; }
+
+    /* ================= FOOTER ================= */
+    .mp-footer { background: #111827; color: #9ca3af; font-size: 12px; padding: 14px 16px; text-align: center; flex-shrink: 0; }
+    .mp-footer p { margin: 0 0 4px; }
+    .mp-footer p:last-child { margin-bottom: 0; }
+
+    /* ================= MOBILE ================= */
+    .mp-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 40; }
+    .mp-backdrop.show { display: block; }
+    @media (max-width: 767px) {
+      .mp-sidebar { position: fixed; top: 0; left: 0; bottom: 0; height: 100vh; width: 280px; max-width: 85%; z-index: 60; transform: translateX(-100%); transition: transform 0.25s ease; box-shadow: 4px 0 24px rgba(0,0,0,0.25); }
+      .mp-sidebar.open { transform: translateX(0); }
+      .mp-main-column { width: 100%; }
+    }
+
+    /* ================= WELCOME OVERLAY ================= */
+    #mp-welcome-overlay {
+      display: none; position: fixed; inset: 0; z-index: 9999999; 
+      background: rgba(17, 24, 39, 0.85); backdrop-filter: blur(4px); 
+      align-items: center; justify-content: center; padding: 16px;
+    }
+    @keyframes welcomePop {
+      0% { opacity: 0; transform: scale(0.95) translateY(10px); }
+      100% { opacity: 1; transform: scale(1) translateY(0); }
+    }
+  </style>
+
+  <!-- ===== FLOATING AI STYLES — conversation-based ===== -->
+  <style>
+    #mp-ai-btn {
+        position: fixed; bottom: 24px; right: 24px; width: 60px; height: 60px; border-radius: 50%;
+        background: #059669; color: white; border: 2px solid #10b981; display: flex; align-items: center;
+        justify-content: center; box-shadow: 0 8px 24px rgba(5, 150, 105, 0.4); cursor: grab;
+        z-index: 9999; font-size: 30px; user-select: none; -webkit-user-select: none; touch-action: none;
+        transition: transform 0.2s;
+    }
+    #mp-ai-btn:hover { transform: scale(1.05); }
+    #mp-ai-btn.dragging { cursor: grabbing; transition: none; }
+
+    /* NEW: AI Thought Cloud Tooltip */
+    #mp-ai-tooltip {
+        position: fixed; bottom: 95px; right: 24px;
+        background: #ffffff; color: #065f46; border: 1px solid #a7f3d0;
+        border-radius: 16px; padding: 14px 16px; width: 300px; max-width: calc(100vw - 48px);
+        box-shadow: 0 10px 30px rgba(5, 150, 105, 0.2); z-index: 9998;
+        font-size: 14px; line-height: 1.5; display: flex; flex-direction: column; gap: 8px;
+        
+        /* Transition states */
+        opacity: 0; transform: translateY(10px); pointer-events: none;
+        transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+    #mp-ai-tooltip.show {
+        opacity: 1; transform: translateY(0); pointer-events: auto;
+    }
+    /* Tooltip Arrow (points down to the button) */
+    #mp-ai-tooltip::after {
+        content: ''; position: absolute; bottom: -8px; right: 34px;
+        width: 16px; height: 16px; background: #ffffff;
+        border-right: 1px solid #a7f3d0; border-bottom: 1px solid #a7f3d0;
+        transform: rotate(45deg);
+    }
+    #mp-ai-tooltip .close-tip {
+        position: absolute; top: 8px; right: 12px; cursor: pointer;
+        color: #9ca3af; font-size: 18px; line-height: 1; transition: color 0.15s;
+    }
+    #mp-ai-tooltip .close-tip:hover { color: #dc2626; }
+
+    #mp-ai-window {
+        position: fixed; bottom: 100px; right: 24px; width: 380px; max-width: calc(100vw - 32px);
+        height: 550px; max-height: calc(100vh - 120px); background: #ffffff; border-radius: 16px;
+        box-shadow: 0 12px 40px rgba(0,0,0,0.15); display: none; flex-direction: column; z-index: 10000;
+        border: 1px solid #e5e7eb; overflow: hidden; resize: both; min-width: 300px; min-height: 400px;
+    }
+    
+    /* Draggable Header */
+    #mp-ai-header {
+        background: #047857; color: white; padding: 12px 16px; display: flex; align-items: center;
+        gap: 8px; font-weight: 600; user-select: none; flex-shrink: 0; cursor: grab;
+    }
+    #mp-ai-header:active { cursor: grabbing; }
+
+    .mp-ai-hdr-btn {
+        cursor: pointer; font-size: 12px; background: rgba(255,255,255,0.2); padding: 4px 8px;
+        border-radius: 6px; border: none; color: white; font-weight: 600; transition: background 0.15s; white-space: nowrap;
+    }
+    .mp-ai-hdr-btn:hover { background: rgba(255,255,255,0.3); }
+    #mp-ai-body { flex: 1; padding: 16px; overflow-y: auto; background: #f9fafb; display: flex; flex-direction: column; gap: 12px; }
+    #mp-ai-input-area { display: flex; padding: 12px; background: white; border-top: 1px solid #e5e7eb; flex-shrink: 0; align-items: center; }
+    #mp-ai-input { flex: 1; border: 1px solid #d1d5db; border-radius: 20px; padding: 10px 16px; outline: none; font-size: 14px; }
+    #mp-ai-input:focus { border-color: #059669; box-shadow: 0 0 0 2px rgba(5,150,105,0.2); }
+    #mp-ai-send { background: #059669; color: white; border: none; border-radius: 50%; width: 40px; height: 40px; margin-left: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
+    #mp-ai-attach-btn {
+        background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; border-radius: 50%;
+        width: 40px; height: 40px; margin-right: 8px; cursor: pointer; display: flex;
+        align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0;
+        transition: background 0.15s, border-color 0.15s;
+    }
+    #mp-ai-attach-btn:hover { background: #d1fae5; border-color: #6ee7b7; }
+
+    #mp-ai-image-preview {
+        padding: 8px 12px; background: #f9fafb; border-top: 1px solid #e5e7eb;
+        display: none; align-items: center; gap: 10px; flex-shrink: 0;
+    }
+    #mp-ai-image-preview.show { display: flex; }
+    #mp-ai-image-preview img { height: 54px; width: 54px; object-fit: cover; border-radius: 6px; border: 1px solid #e5e7eb; flex-shrink: 0; }
+    #mp-ai-image-preview .mp-ai-img-info { flex: 1; min-width: 0; font-size: 12px; color: #6b7280; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #mp-ai-image-preview .mp-ai-img-remove { background: none; border: 0; color: #dc2626; font-size: 22px; line-height: 1; cursor: pointer; padding: 0 4px; flex-shrink: 0; }
+
+    .mp-ai-msg img { max-width: 100%; max-height: 240px; object-fit: contain; border-radius: 6px; margin-top: 6px; display: block; background: #fff; cursor: zoom-in; }
+    
+    /* File attachment styling in chat */
+    .mp-ai-file-attach {
+        display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.2);
+        padding: 8px 12px; border-radius: 6px; margin-top: 6px; font-size: 13px;
+        text-decoration: none; color: inherit; border: 1px solid rgba(255,255,255,0.3);
+    }
+    .mp-ai-msg.bot .mp-ai-file-attach { background: #d1fae5; border-color: #a7f3d0; color: #065f46; }
+
+    .mp-ai-msg { padding: 10px 14px; border-radius: 12px; font-size: 14px; max-width: 85%; line-height: 1.5; word-wrap: break-word; }
+    .mp-ai-msg.bot { background: #ecfdf5; color: #065f46; align-self: flex-start; border-bottom-left-radius: 2px; border: 1px solid #a7f3d0; }
+    .mp-ai-msg.user { background: #047857; color: white; align-self: flex-end; border-bottom-right-radius: 2px; }
+    
+    /* ChatGPT-Style Markdown Output */
+    .mp-ai-msg h2, .mp-ai-msg h3, .mp-ai-msg h4 { color: inherit; margin: 12px 0 6px; }
+    .mp-ai-msg ul { margin: 6px 0 10px; padding-left: 0; }
+    .mp-ai-msg li { margin-left: 16px; margin-bottom: 4px; }
+    .mp-ai-msg pre { background: #000; color: #fff; padding: 8px; border-radius: 6px; overflow-x: auto; font-size: 12px; }
+
+    /* Fullscreen Image Preview */
+    #mp-ai-fullscreen {
+        display: none; position: fixed; inset: 0; z-index: 100000;
+        background: rgba(0,0,0,0.9); align-items: center; justify-content: center;
+        flex-direction: column;
+    }
+    #mp-ai-fullscreen img { max-width: 95vw; max-height: 90vh; object-fit: contain; }
+    #mp-ai-fullscreen .close-btn {
+        position: absolute; top: 20px; right: 30px; color: white; font-size: 40px;
+        cursor: pointer; line-height: 1; font-weight: 300;
+    }
+
+    /* ===== History panel ===== */
+    #mp-ai-history { position: absolute; inset: 0; background: #ffffff; z-index: 5; display: none; flex-direction: column; }
+    #mp-ai-history.show { display: flex; }
+    #mp-ai-history-header { background: #047857; color: white; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; font-weight: 600; flex-shrink: 0; }
+    #mp-ai-history-header .close { cursor: pointer; font-size: 20px; line-height: 1; }
+    #mp-ai-history-body { flex: 1; overflow-y: auto; padding: 12px; background: #f9fafb; }
+    .mp-ai-session-card { padding: 12px; margin-bottom: 8px; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; }
+    .mp-ai-session-card:hover { border-color: #059669; box-shadow: 0 2px 8px rgba(5, 150, 105, 0.12); }
+    .mp-ai-session-card.is-active { border-color: #059669; background: #ecfdf5; }
+    .mp-ai-session-title { font-size: 13px; font-weight: 600; color: #111827; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mp-ai-session-preview { font-size: 12px; color: #6b7280; margin-bottom: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mp-ai-session-meta { font-size: 11px; color: #9ca3af; display: flex; justify-content: space-between; }
+    .mp-ai-history-toolbar { padding: 10px 12px; background: #ffffff; border-bottom: 1px solid #e5e7eb; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; }
+    .mp-ai-new-btn { width: 100%; padding: 8px 12px; background: #059669; color: white; border: 0; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .mp-ai-new-btn:hover { background: #047857; }
+    .mp-ai-clear-btn { width: 100%; padding: 8px 12px; background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.15s; }
+    .mp-ai-clear-btn:hover { background: #fee2e2; }
+    .mp-ai-delete-chat { background: none; border: none; color: #9ca3af; font-size: 18px; cursor: pointer; padding: 0 4px; line-height: 1; transition: color 0.15s; }
+    .mp-ai-delete-chat:hover { color: #dc2626; }
+  </style>
 </head>
-<body class="bg-gray-50 text-gray-900 min-h-screen">
+<body>
 
-  <nav class="bg-emerald-700 text-white">
-    <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-2">
-      <a href="{% url 'dashboard' %}" class="font-bold text-lg">MedPracticum Studio</a>
-      <div class="flex items-center gap-2">
-        <button id="install-btn" type="button"
-                class="hidden text-sm bg-white text-emerald-800 rounded-lg px-3 py-1.5 font-medium">
-          Install app
-        </button>
-        {% if user.is_authenticated %}
-          <form method="post" action="{% url 'logout' %}" data-logout>
-            {% csrf_token %}
-            <button type="submit" class="text-sm bg-emerald-800 hover:bg-emerald-900 rounded-lg px-3 py-1.5">
-              Log out
-            </button>
-          </form>
-        {% endif %}
-      </div>
-    </div>
-  </nav>
+  <div id="mp-page-loading" aria-hidden="true" role="status" aria-live="polite">
+    <div class="mp-loader-ring"></div>
+    <div class="mp-loader-text" id="mp-loader-text">Loading<span class="mp-loader-dots"></span></div>
+  </div>
 
-  <div id="mp-banner" class="hidden bg-amber-100 text-amber-900 text-sm text-center px-4 py-2"></div>
-    {% if messages %}
-    <div class="max-w-3xl mx-auto px-4 pt-4 space-y-2">
-      {% for message in messages %}
-        <div class="rounded-lg px-4 py-2 text-sm {% if message.tags == 'error' %}bg-red-50 text-red-700 border border-red-200{% else %}bg-emerald-50 text-emerald-800 border border-emerald-200{% endif %}">
-          {{ message }}
-        </div>
-      {% endfor %}
-    </div>
+  {% if user.is_authenticated %}
+  <div id="mp-backdrop" class="mp-backdrop" onclick="mpCloseSidebar()"></div>
   {% endif %}
 
-  <main class="max-w-3xl mx-auto px-4 py-6">
-    {% block content %}{% endblock %}
-  </main>
+  <div class="mp-shell">
+
+    {% if user.is_authenticated %}
+    <aside id="mp-sidebar" class="mp-sidebar" aria-label="Main navigation">
+
+      <div class="mp-sidebar__brand">
+        <a href="{% url 'dashboard' %}">
+          MedPracticum Studio
+          <small>HIM PRACTICUM</small>
+        </a>
+      </div>
+
+      <a href="{% url 'profile' %}" class="mp-sidebar__user" title="View your profile">
+        <div class="mp-sidebar__user-name">{{ user.get_username }}</div>
+        <div class="mp-sidebar__user-meta">
+          {% if user.department %}{{ user.get_department_display }} · {% endif %}Tap to view profile →
+        </div>
+      </a>
+
+      <nav class="mp-sidebar__nav">
+        <a href="{% url 'dashboard' %}">
+          <svg viewBox="0 0 24 24"><path d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1h3a1 1 0 001-1V10"/></svg>
+          Dashboard
+        </a>
+        <a href="{% url 'start_attachment' %}">
+          <svg viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          Start / Edit attachment
+        </a>
+        <a href="{% url 'new_log' %}">
+          <svg viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"/></svg>
+          New daily log
+        </a>
+        <a href="{% url 'report_options' %}">
+          <svg viewBox="0 0 24 24"><path d="M9 17v-6h6v6m2 4H7a2 2 0 01-2-2V7a2 2 0 012-2h10a2 2 0 012 2v12a2 2 0 01-2 2z"/></svg>
+          Reports
+        </a>
+
+        {# ===== Presentations (PowerPoint builder) ===== #}
+        <a href="{% url 'pptx_options' %}">
+          <svg viewBox="0 0 24 24">
+            <rect x="2.5" y="3" width="19" height="13" rx="2"/>
+            <path d="M8 21l4-4 4 4"/>
+          </svg>
+          Presentations
+        </a>
+
+        <a href="{% url 'attachments_list' %}">
+          <svg viewBox="0 0 24 24"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+          All Attachments
+        </a>
+        <a href="{% url 'logs_list' %}">
+          <svg viewBox="0 0 24 24"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+          View Logs
+        </a>
+        <a href="{% url 'workshops_list' %}">
+          <svg viewBox="0 0 24 24"><path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+          Workshops
+        </a>
+        <a href="{% url 'archive_list' %}">
+          <svg viewBox="0 0 24 24"><path d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
+          Archive
+        </a>
+
+        {% if user.is_staff %}
+          <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.12);"></div>
+          <a href="{% url 'admin:index' %}" style="background: rgba(0,0,0,0.2);">
+            <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Admin Workspace
+          </a>
+        {% endif %}
+      </nav>
+
+      <div class="mp-sidebar__footer" style="display: flex; flex-direction: column; gap: 8px;">
+        
+        <!-- NEW: How to Use link -->
+        <a href="{% url 'how_to_use' %}" style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 12px; background: rgba(255,255,255,0.1); border-radius: 8px; font-weight: 500; font-size: 14px; color: #ecfdf5; text-decoration: none; transition: background 0.15s ease;" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'">
+          <svg viewBox="0 0 24 24" style="width: 18px; height: 18px; flex-shrink: 0; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+          </svg>
+          How to Use System
+        </a>
+
+        <form method="post" action="{% url 'logout' %}" data-logout style="margin: 0;">
+          {% csrf_token %}
+          <button type="submit" class="mp-logout-btn">Log out</button>
+        </form>
+      </div>
+    </aside>
+    {% endif %}
+
+    <div class="mp-main-column">
+
+      <!-- MODERN HEADER -->
+      <header class="mp-header">
+        <div class="mp-header__left">
+          {% if user.is_authenticated %}
+          <button type="button" class="mp-hamburger" onclick="mpOpenSidebar()" aria-label="Open menu">
+            <svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+          </button>
+          {% endif %}
+          
+          <a href="{% url 'dashboard' %}" class="mp-header__brand">
+            <div class="mp-header__brand-logo">MP</div>
+            <span class="mp-header__brand-text">MedPracticum Studio</span>
+          </a>
+        </div>
+        <div class="mp-header__right">
+          
+          <!-- Minimized Contact -->
+          <a href="{% url 'contact' %}" class="mp-header__contact" title="Contact Service Provider">
+            <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>
+          </a>
+          
+          <!-- Profile Label (Shown on Mobile now) -->
+          {% if user.is_authenticated %}
+          <a href="{% url 'profile' %}" class="mp-profile-pill" title="Your profile">
+            <span>Tap to view profile</span>
+            <div class="mp-header__avatar">
+              {% if user.first_name or user.last_name %}{{ user.first_name|first|upper }}{{ user.last_name|first|upper }}{% else %}{{ user.username|first|upper }}{% endif %}
+            </div>
+          </a>
+          {% endif %}
+          
+          <button id="install-btn" type="button">Install app</button>
+        </div>
+      </header>
+
+      <!-- ================= BREADCRUMBS ================= -->
+      <div id="mp-breadcrumbs">
+        <a href="{% url 'dashboard' %}" class="mp-breadcrumb-link" style="display: flex; align-items: center; gap: 4px;">
+          <svg viewBox="0 0 24 24" style="width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"><path d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1h3a1 1 0 001-1V10"/></svg>
+          Dashboard
+        </a>
+        <span id="mp-breadcrumb-items" style="display: flex; align-items: center; gap: 8px;"></span>
+      </div>
+
+      <div id="mp-banner"></div>
+
+      {% if messages %}
+      <div class="mp-messages">
+        {% for message in messages %}
+          <div class="mp-message {% if message.tags == 'error' %}mp-message--error{% else %}mp-message--default{% endif %}">
+            {{ message }}
+          </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <main class="mp-main">
+        <div class="mp-main__inner">
+          {% block content %}{% endblock %}
+        </div>
+      </main>
+
+      <footer class="mp-footer">
+        <p>Developed by Hummingbird Digital Solutions &amp; Syntra Digital Solutions</p>
+        <p style="margin-top: 4px;">
+          &copy; <span id="footer-year"></span> MedPracticum Studio. All rights reserved. 
+          <span style="margin: 0 8px; color: #6b7280;">|</span> 
+          <a href="{% url 'terms' %}" style="color: #34d399; text-decoration: underline; font-weight: 500;">Terms &amp; Conditions</a>
+        </p>
+      </footer>
+
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('footer-year').textContent = new Date().getFullYear();
+
+    function mpOpenSidebar() {
+      var s = document.getElementById('mp-sidebar');
+      var b = document.getElementById('mp-backdrop');
+      if (s) s.classList.add('open');
+      if (b) b.classList.add('show');
+    }
+    function mpCloseSidebar() {
+      var s = document.getElementById('mp-sidebar');
+      var b = document.getElementById('mp-backdrop');
+      if (s) s.classList.remove('open');
+      if (b) b.classList.remove('show');
+    }
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') mpCloseSidebar();
+    });
+    window.addEventListener('resize', function () {
+      if (window.innerWidth >= 768) mpCloseSidebar();
+    });
+  </script>
+
+  <!-- ================= BREADCRUMB LOGIC ================= -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      var path = window.location.pathname.replace(/^\/|\/$/g, '');
+      var segments = path.split('/');
+      
+      // If on the main dashboard, keep breadcrumbs hidden
+      if (path === '' || path === 'dashboard') {
+        return;
+      }
+
+      var container = document.getElementById('mp-breadcrumbs');
+      var itemsContainer = document.getElementById('mp-breadcrumb-items');
+      
+      // Only show breadcrumbs if we are on an active page
+      if (container) {
+        container.style.display = 'flex';
+      }
+
+      var routeMap = {
+        'reports': '{% url "report_options" %}',
+        'pptx': '{% url "pptx_options" %}',
+        'logs': '{% url "logs_list" %}',
+        'attachments': '{% url "attachments_list" %}',
+        'workshops': '{% url "workshops_list" %}',
+        'archive': '{% url "archive_list" %}',
+        'attachment': '{% url "start_attachment" %}',
+        'terms': '{% url "terms" %}',
+        'how_to_use': '{% url "how_to_use" %}'
+      };
+
+      var labelMap = {
+        'reports': 'Reports',
+        'pptx': 'Presentations',
+        'logs': 'Daily Logs',
+        'attachments': 'Attachments',
+        'workshops': 'Workshops',
+        'archive': 'Archive',
+        'options': 'Settings',
+        'content': 'Edit Content',
+        'new': 'New Log',
+        'attachment': 'Attachment Details',
+        'how_to_use': 'How to Use',
+        'terms': 'Terms & Conditions'
+      };
+      
+      var html = '';
+      segments.forEach(function(seg, index) {
+        // Skip numeric IDs in the breadcrumb URL text
+        if (!isNaN(seg) && seg.trim() !== '') return; 
+        
+        var name = labelMap[seg] || seg.charAt(0).toUpperCase() + seg.slice(1).replace(/-/g, ' ');
+        var isLast = (index === segments.length - 1);
+        
+        // Build the URL
+        var url = routeMap[seg] ? routeMap[seg] : '/' + segments.slice(0, index + 1).join('/') + '/';
+        
+        html += '<span class="mp-breadcrumb-sep">›</span>';
+        
+        if (isLast) {
+          html += '<span class="mp-breadcrumb-current">' + name + '</span>';
+        } else {
+          html += '<a href="' + url + '" class="mp-breadcrumb-link">' + name + '</a>';
+        }
+      });
+      
+      if (itemsContainer) {
+        itemsContainer.innerHTML = html;
+      }
+    });
+  </script>
+
+  <!-- PAGE-TRANSITION LOADING OVERLAY — JS -->
+  <script>
+  (function () {
+    var overlay = document.getElementById('mp-page-loading');
+    var loaderText = document.getElementById('mp-loader-text');
+    if (!overlay) return;
+
+    var showing = false;
+    var safetyTimer = null;
+
+    function showLoading(text) {
+      if (showing) return;
+      showing = true;
+      if (loaderText) {
+        loaderText.innerHTML = (text || 'Loading') + '<span class="mp-loader-dots"></span>';
+      }
+      overlay.classList.add('show');
+      overlay.setAttribute('aria-hidden', 'false');
+      if (safetyTimer) clearTimeout(safetyTimer);
+      safetyTimer = setTimeout(function () {
+        if (showing) hideLoading();
+      }, 8000);
+    }
+
+    function hideLoading() {
+      showing = false;
+      overlay.classList.remove('show');
+      overlay.setAttribute('aria-hidden', 'true');
+      if (safetyTimer) { clearTimeout(safetyTimer); safetyTimer = null; }
+    }
+
+    document.addEventListener('click', function (e) {
+      var link = e.target.closest && e.target.closest('a');
+      if (!link) return;
+      if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+      if (link.target && link.target !== '_self') return;
+      if (link.hasAttribute('download')) return;
+      if (link.dataset.noLoading !== undefined) return;
+
+      var href = link.getAttribute('href') || '';
+      if (!href) return;
+      if (href.charAt(0) === '#') return;
+      if (href.indexOf('javascript:') === 0) return;
+      if (href.indexOf('mailto:') === 0) return;
+      if (href.indexOf('tel:') === 0) return;
+      if (href.indexOf('wa.me') !== -1) return;
+      if (href.indexOf('whatsapp.com') !== -1) return;
+
+      showLoading(link.dataset.loadingText || 'Loading');
+    });
+
+    document.addEventListener('submit', function (e) {
+      var form = e.target;
+      if (!form || form.tagName !== 'FORM') return;
+      if (form.dataset.noLoading !== undefined) return;
+      if (form.id && form.id.indexOf('gen-') === 0) return;
+
+      setTimeout(function () {
+        if (!e.defaultPrevented) {
+          showLoading(form.dataset.loadingText || 'Loading');
+        }
+      }, 0);
+    });
+
+    window.addEventListener('pageshow', function (e) {
+      if (e.persisted) hideLoading();
+    });
+    window.addEventListener('load', hideLoading);
+
+    window.mpShowLoading = showLoading;
+    window.mpHideLoading = hideLoading;
+  })();
+  </script>
+
+  <!-- ============================================================ -->
+  <!-- FLOATING AI ASSISTANT — conversation-based + VISION + DRAG    -->
+  <!-- ============================================================ -->
+  {% if user.is_authenticated %}
+  
+  <!-- AI Tooltip Speech Bubble -->
+  <div id="mp-ai-tooltip">
+      <span class="close-tip" onclick="document.getElementById('mp-ai-tooltip').classList.remove('show'); sessionStorage.setItem('mp_ai_tooltip_seen', '1');">×</span>
+      <div style="font-weight: 700; display: flex; align-items: center; gap: 6px;">
+          <span>🩺</span> Hi {{ user.username }} 👋
+      </div>
+      <div>I am your Practicum AI Assistant! I can help you write your report, read your documents, and analyze your logs. <strong>Let's get started!</strong> ✨</div>
+  </div>
+
+  <div id="mp-ai-btn" title="MedPracticum AI Assistant">🩺</div>
+
+  <div id="mp-ai-window">
+      <div id="mp-ai-header">
+          <span style="font-size:18px;">🩺</span>
+          <span style="flex:1;">Practicum AI Assistant</span>
+          <button type="button" class="mp-ai-hdr-btn" onclick="openAIHistory(event)">🕐 History</button>
+          <button type="button" class="mp-ai-hdr-btn" onclick="startNewAIChat(event)">+ New</button>
+          <span style="cursor:pointer; font-size:20px; margin-left:6px; line-height:1;" onclick="toggleAIWindow()">✕</span>
+      </div>
+      <div id="mp-ai-body">
+          <div class="mp-ai-msg bot">Hello! I am your AI assistant. I can read your logs, look at your photos, and help you write your report. Try:<br><br>• "Write an abstract for my report"<br>• "How many logs do I have?"<br>• 📎 Attach a file or photo and ask "Transcribe this"</div>
+      </div>
+
+      <!-- File/Image preview strip (hidden by default) -->
+      <div id="mp-ai-image-preview">
+          <img id="mp-ai-image-thumb" src="" alt="">
+          <div class="mp-ai-img-info" id="mp-ai-image-info"></div>
+          <button type="button" class="mp-ai-img-remove" id="mp-ai-image-remove" title="Remove file">×</button>
+      </div>
+
+      <div id="mp-ai-input-area">
+          <button type="button" id="mp-ai-attach-btn" title="Attach file or take photo">📎</button>
+          <input type="text" id="mp-ai-input" placeholder="Ask AI to help you..." onkeypress="if(event.key==='Enter') sendAIMessage()">
+          <button id="mp-ai-send" type="button" onclick="sendAIMessage()">➤</button>
+      </div>
+
+      <!-- Hidden file input: supports camera, images, pdfs, docs -->
+      <input type="file" id="mp-ai-file-input" accept="image/*,application/pdf,.doc,.docx,.txt" capture="environment" style="display:none;">
+
+      <div id="mp-ai-history">
+        <div id="mp-ai-history-header">
+          <span>🕐 Conversations</span>
+          <span class="close" onclick="closeAIHistory()">✕</span>
+        </div>
+        <div class="mp-ai-history-toolbar">
+          <button type="button" class="mp-ai-new-btn" onclick="startNewAIChat(event)">+ Start new conversation</button>
+          <button type="button" class="mp-ai-clear-btn" onclick="deleteAllAIChats(event)">🗑 Clear All Chats</button>
+        </div>
+        <div id="mp-ai-history-body">
+          <p style="color:#9ca3af; text-align:center; padding:32px 12px; font-size:13px;">Loading…</p>
+        </div>
+      </div>
+  </div>
+
+  <!-- Fullscreen Image Preview Overlay -->
+  <div id="mp-ai-fullscreen">
+      <span class="close-btn" id="mp-ai-fullscreen-close">&times;</span>
+      <img id="mp-ai-fullscreen-img" src="" alt="Full preview">
+  </div>
+
+  <script>
+  (function() {
+      var btn   = document.getElementById('mp-ai-btn');
+      var win   = document.getElementById('mp-ai-window');
+      var body  = document.getElementById('mp-ai-body');
+      var input = document.getElementById('mp-ai-input');
+      var histPanel = document.getElementById('mp-ai-history');
+      var histBody  = document.getElementById('mp-ai-history-body');
+      var header    = document.getElementById('mp-ai-header');
+      var tooltip   = document.getElementById('mp-ai-tooltip');
+
+      /* ── Tooltip Logic ─────────────────────────────────── */
+      // Check if tooltip has been seen in this session
+      if (tooltip && !sessionStorage.getItem('mp_ai_tooltip_seen')) {
+          // Show after 3 seconds
+          setTimeout(function() {
+              // Only show if the chat window is not already open
+              if (win.style.display !== 'flex') {
+                  tooltip.classList.add('show');
+              }
+              
+              // Auto-hide after 10 seconds
+              setTimeout(function() {
+                  tooltip.classList.remove('show');
+                  sessionStorage.setItem('mp_ai_tooltip_seen', '1');
+              }, 10000);
+          }, 3000);
+      }
+
+      /* ── Fullscreen Preview Logic ──────────────────────── */
+      var fullOverlay = document.getElementById('mp-ai-fullscreen');
+      var fullImg = document.getElementById('mp-ai-fullscreen-img');
+      var fullClose = document.getElementById('mp-ai-fullscreen-close');
+
+      body.addEventListener('click', function(e) {
+          if (e.target.tagName.toLowerCase() === 'img' && e.target.closest('.mp-ai-msg')) {
+              fullImg.src = e.target.src;
+              fullOverlay.style.display = 'flex';
+          }
+      });
+      fullClose.addEventListener('click', function() {
+          fullOverlay.style.display = 'none';
+      });
+      fullOverlay.addEventListener('click', function(e) {
+          if (e.target === fullOverlay) fullOverlay.style.display = 'none';
+      });
+
+      /* ── File Attach Wiring ────────────────────────────── */
+      var attachBtn = document.getElementById('mp-ai-attach-btn');
+      var fileIn    = document.getElementById('mp-ai-file-input');
+      var preview   = document.getElementById('mp-ai-image-preview');
+      var previewThumb = document.getElementById('mp-ai-image-thumb');
+      var previewInfo  = document.getElementById('mp-ai-image-info');
+      var previewRemove= document.getElementById('mp-ai-image-remove');
+
+      var pendingImageB64  = null;
+      var pendingImageMime = 'image/jpeg';
+      var pendingImageName = '';
+
+      function clearPendingImage() {
+          pendingImageB64  = null;
+          pendingImageMime = 'image/jpeg';
+          pendingImageName = '';
+          if (preview) preview.classList.remove('show');
+          if (previewThumb) previewThumb.src = '';
+          if (previewInfo)  previewInfo.textContent = '';
+          if (fileIn) fileIn.value = '';
+      }
+
+      if (attachBtn && fileIn) {
+          attachBtn.addEventListener('click', function () { fileIn.click(); });
+
+          fileIn.addEventListener('change', function () {
+              var f = fileIn.files && fileIn.files[0];
+              if (!f) return;
+              if (f.size > 5 * 1024 * 1024) {
+                  alert('File too large for AI processing (max 5 MB). Please compress or upload a screenshot.');
+                  fileIn.value = '';
+                  return;
+              }
+              var reader = new FileReader();
+              reader.onload = function (e) {
+                  var dataUrl = e.target.result;
+                  var comma = dataUrl.indexOf(',');
+                  var header = dataUrl.substring(5, comma); 
+                  var mime = header.split(';')[0] || 'image/jpeg';
+                  pendingImageB64  = dataUrl.substring(comma + 1);
+                  pendingImageMime = mime;
+                  pendingImageName = f.name || 'file';
+
+                  if (previewThumb) {
+                      if (mime.startsWith('image/')) {
+                          previewThumb.src = dataUrl;
+                      } else {
+                          // Show a document icon for PDFs/Docs
+                          previewThumb.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" fill="%236b7280"><rect width="50" height="50" fill="%23f3f4f6"/><text x="25" y="30" text-anchor="middle" font-size="12">📄</text></svg>';
+                      }
+                  }
+                  if (previewInfo) {
+                      previewInfo.textContent = pendingImageName + ' · ' + Math.round(f.size / 1024) + ' KB';
+                  }
+                  if (preview) preview.classList.add('show');
+              };
+              reader.onerror = function () { alert('Could not read that file.'); };
+              reader.readAsDataURL(f);
+              fileIn.value = '';
+          });
+
+          if (previewRemove) previewRemove.addEventListener('click', clearPendingImage);
+      }
+
+      var currentSessionId = null;
+      var GREETING = 'Hello! I am your AI assistant. I can read your logs, look at your photos, and help you write your report. Try:<br><br>• "Write an abstract for my report"<br>• "How many logs do I have?"<br>• 📎 Attach a file or photo and ask "Transcribe this"';
+
+      /* ── Floating Button Drag ────────────────────────── */
+      var isDragging = false, moved = false;
+      var dragStartX = 0, dragStartY = 0, startL = 0, startT = 0;
+      var EDGE = 8;
+
+      function clamp() {
+          var r = btn.getBoundingClientRect();
+          var W = window.innerWidth, H = window.innerHeight;
+          var maxL = W - r.width - EDGE, maxT = H - r.height - EDGE;
+          var l = r.left, t = r.top;
+          if (l < EDGE) l = EDGE; if (t < EDGE) t = EDGE;
+          if (l > maxL) l = maxL; if (t > maxT) t = maxT;
+          btn.style.left = l + 'px'; btn.style.top = t + 'px';
+          btn.style.right = 'auto'; btn.style.bottom = 'auto';
+      }
+
+      function snapToSide() {
+          var r = btn.getBoundingClientRect();
+          var W = window.innerWidth, H = window.innerHeight;
+          var targetL = (r.left + r.width / 2 < W / 2) ? EDGE : W - r.width - EDGE;
+          var targetT = r.top;
+          var maxT = H - r.height - EDGE;
+          if (targetT < EDGE) targetT = EDGE;
+          if (targetT > maxT) targetT = maxT;
+          btn.style.transition = 'left 0.3s ease, top 0.3s ease';
+          btn.style.left = targetL + 'px'; btn.style.top = targetT + 'px';
+          btn.style.right = 'auto'; btn.style.bottom = 'auto';
+          setTimeout(function () { btn.style.transition = 'transform 0.2s'; }, 320);
+      }
+
+      function onDragStart(e) {
+          if (e.pointerType === 'mouse' && e.button !== 0) return;
+          isDragging = true; moved = false;
+          dragStartX = e.clientX; dragStartY = e.clientY;
+          var r = btn.getBoundingClientRect();
+          startL = r.left; startT = r.top;
+          btn.classList.add('dragging');
+          try { btn.setPointerCapture(e.pointerId); } catch (_) {}
+      }
+
+      function onDragMove(e) {
+          if (!isDragging) return;
+          var dx = e.clientX - dragStartX, dy = e.clientY - dragStartY;
+          if (!moved && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) moved = true;
+          if (!moved) return;
+          if (e.cancelable) e.preventDefault();
+          var r = btn.getBoundingClientRect();
+          var W = window.innerWidth, H = window.innerHeight;
+          var newL = startL + dx, newT = startT + dy;
+          if (newL < EDGE) newL = EDGE; if (newT < EDGE) newT = EDGE;
+          if (newL > W - r.width - EDGE) newL = W - r.width - EDGE;
+          if (newT > H - r.height - EDGE) newT = H - r.height - EDGE;
+          btn.style.left = newL + 'px'; btn.style.top = newT + 'px';
+          btn.style.right = 'auto'; btn.style.bottom = 'auto';
+      }
+
+      function onDragEnd(e) {
+          if (!isDragging) return;
+          isDragging = false;
+          btn.classList.remove('dragging');
+          try { btn.releasePointerCapture(e.pointerId); } catch (_) {}
+          if (moved) snapToSide();
+      }
+
+      btn.addEventListener('pointerdown', onDragStart);
+      window.addEventListener('pointermove', onDragMove, { passive: false });
+      window.addEventListener('pointerup', onDragEnd);
+      window.addEventListener('pointercancel', onDragEnd);
+
+      window.addEventListener('resize', function () {
+          if (btn.style.left || btn.style.top) clamp();
+      });
+
+      btn.addEventListener('click', function (e) {
+          if (moved) { moved = false; e.stopImmediatePropagation(); e.preventDefault(); return; }
+          
+          // Hide tooltip if it's currently visible
+          if (tooltip && tooltip.classList.contains('show')) {
+              tooltip.classList.remove('show');
+              sessionStorage.setItem('mp_ai_tooltip_seen', '1');
+          }
+          
+          toggleAIWindow();
+      });
+
+      /* ── Draggable Chat Window ─────────────────────────────── */
+      var isWinDragging = false;
+      var winStartX = 0, winStartY = 0, winStartL = 0, winStartT = 0;
+
+      header.addEventListener('pointerdown', function (e) {
+          // Ignore clicks on buttons or the close 'X'
+          if (e.target.tagName.toLowerCase() === 'button' || e.target.tagName.toLowerCase() === 'span') return; 
+          if (e.pointerType === 'mouse' && e.button !== 0) return;
+          
+          isWinDragging = true;
+          winStartX = e.clientX; winStartY = e.clientY;
+          var rect = win.getBoundingClientRect();
+          winStartL = rect.left; winStartT = rect.top;
+          
+          win.style.right = 'auto';
+          win.style.bottom = 'auto';
+          win.style.left = winStartL + 'px';
+          win.style.top = winStartT + 'px';
+      });
+
+      window.addEventListener('pointermove', function (e) {
+          if (!isWinDragging) return;
+          e.preventDefault();
+          var dx = e.clientX - winStartX;
+          var dy = e.clientY - winStartY;
+          win.style.left = (winStartL + dx) + 'px';
+          win.style.top = (winStartT + dy) + 'px';
+      });
+
+      window.addEventListener('pointerup', function () {
+          if (isWinDragging) isWinDragging = false;
+      });
+
+      /* ── Chat Helpers ────────────────────────────────────── */
+      function escapeHtml(s) {
+          return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+              return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+          });
+      }
+
+      function formatContent(s) {
+          var cleaned = String(s == null ? '' : s).replace(/\[Image attached:[^\]]*\]\s*/g, '');
+          var html = escapeHtml(cleaned);
+          
+          html = html.replace(/^### (.*$)/gim, '<h4 style="margin: 12px 0 4px; font-weight: 700; font-size: 15px;">$1</h4>');
+          html = html.replace(/^## (.*$)/gim, '<h3 style="margin: 14px 0 6px; font-weight: 700; font-size: 16px;">$1</h3>');
+          html = html.replace(/^# (.*$)/gim, '<h2 style="margin: 16px 0 8px; font-weight: 700; font-size: 18px;">$1</h2>');
+          html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+          
+          html = html.replace(/^\s*[\-\*]\s+(.*$)/gim, '<li style="margin-left: 16px; margin-bottom: 4px;">$1</li>');
+          html = html.replace(/(<li.*<\/li>)/gim, '<ul style="margin: 6px 0 10px; padding-left: 0;">$1</ul>');
+          html = html.replace(/^\s*\d+\.\s+(.*$)/gim, '<li style="margin-left: 16px; margin-bottom: 4px;">$1</li>');
+
+          html = html.replace(/\n/g, '<br>');
+          html = html.replace(/<br><ul/g, '<ul').replace(/<\/ul><br>/g, '</ul>');
+          
+          return html;
+      }
+
+      window.toggleAIWindow = function () {
+          var open = win.style.display === 'flex';
+          if (open) { win.style.display = 'none'; }
+          else { win.style.display = 'flex'; input.focus(); }
+      };
+
+      window.startNewAIChat = function (e) {
+          if (e) e.stopPropagation();
+          closeAIHistory();
+          currentSessionId = null;
+          body.innerHTML = '<div class="mp-ai-msg bot">' + GREETING + '</div>';
+          clearPendingImage();
+          input.focus();
+      };
+
+      window.openAIHistory = function (e) {
+          if (e) e.stopPropagation();
+          histBody.innerHTML = '<p style="color:#9ca3af; text-align:center; padding:32px 12px; font-size:13px;">Loading…</p>';
+          histPanel.classList.add('show');
+          loadSessions();
+      };
+
+      window.closeAIHistory = function () { histPanel.classList.remove('show'); };
+
+      async function loadSessions() {
+          try {
+              var res = await fetch('/api/ai/sessions/', { credentials: 'same-origin' });
+              if (!res.ok) throw new Error('HTTP ' + res.status);
+              var data = await res.json();
+              renderSessions((data && data.sessions) || []);
+          } catch (err) {
+              histBody.innerHTML = '<p style="color:#9ca3af; text-align:center; padding:32px 12px; font-size:13px;">Could not load conversations.</p>';
+          }
+      }
+
+      function renderSessions(sessions) {
+          if (!sessions || sessions.length === 0) {
+              histBody.innerHTML = '<p style="color:#9ca3af; text-align:center; padding:32px 12px; font-size:13px;">No conversations yet.<br>Type a message to start one.</p>';
+              return;
+          }
+          var html = '';
+          sessions.forEach(function (s) {
+              var activeCls = (currentSessionId === s.id) ? ' is-active' : '';
+              html += '<div class="mp-ai-session-card' + activeCls + '" data-session-id="' + s.id + '">'
+                    +   '<div style="display: flex; justify-content: space-between; align-items: flex-start;">'
+                    +     '<div style="flex: 1; min-width: 0;">'
+                    +       '<div class="mp-ai-session-title">' + escapeHtml(s.title) + '</div>'
+                    +       '<div class="mp-ai-session-preview">' + escapeHtml(s.preview || 'No messages yet') + '</div>'
+                    +     '</div>'
+                    +     '<button type="button" class="mp-ai-delete-chat" data-id="' + s.id + '" title="Delete chat">×</button>'
+                    +   '</div>'
+                    +   '<div class="mp-ai-session-meta">'
+                    +     '<span>' + escapeHtml(s.updated_at_display) + '</span>'
+                    +     '<span>' + s.message_count + ' message' + (s.message_count === 1 ? '' : 's') + '</span>'
+                    +   '</div>'
+                    + '</div>';
+          });
+          histBody.innerHTML = html;
+
+          histBody.querySelectorAll('.mp-ai-session-card').forEach(function (card) {
+              card.addEventListener('click', function (e) {
+                  if (e.target.classList.contains('mp-ai-delete-chat')) return;
+                  loadSession(parseInt(card.dataset.sessionId, 10));
+              });
+          });
+
+          histBody.querySelectorAll('.mp-ai-delete-chat').forEach(function (btn) {
+              btn.addEventListener('click', function (e) {
+                  e.stopPropagation();
+                  var sessionId = parseInt(this.dataset.id, 10);
+                  if (confirm('Delete this conversation?')) deleteSingleAIChat(sessionId, this);
+              });
+          });
+      }
+
+      async function deleteSingleAIChat(sessionId, btnElement) {
+          try {
+              var csrfToken = document.cookie.split('; ').find(function (row) { return row.indexOf('csrftoken=') === 0; }).split('=')[1];
+              var res = await fetch('/api/ai/sessions/' + sessionId + '/delete/', {
+                  method: 'POST', headers: { 'X-CSRFToken': csrfToken }, credentials: 'same-origin'
+              });
+              if (res.ok) {
+                  btnElement.closest('.mp-ai-session-card').remove();
+                  if (currentSessionId === sessionId) startNewAIChat();
+                  if (!histBody.querySelector('.mp-ai-session-card')) {
+                      histBody.innerHTML = '<p style="color:#9ca3af; text-align:center; padding:32px 12px; font-size:13px;">No conversations yet.<br>Type a message to start one.</p>';
+                  }
+              } else { alert('Could not delete chat.'); }
+          } catch (err) { alert('Network error while deleting.'); }
+      }
+
+      window.deleteAllAIChats = async function(e) {
+          if (e) e.stopPropagation();
+          if (!confirm('Are you sure you want to delete ALL chat history? This cannot be undone.')) return;
+          try {
+              var csrfToken = document.cookie.split('; ').find(function (row) { return row.indexOf('csrftoken=') === 0; }).split('=')[1];
+              var res = await fetch('/api/ai/sessions/delete-all/', {
+                  method: 'POST', headers: { 'X-CSRFToken': csrfToken }, credentials: 'same-origin'
+              });
+              if (res.ok) {
+                  histBody.innerHTML = '<p style="color:#9ca3af; text-align:center; padding:32px 12px; font-size:13px;">No conversations yet.<br>Type a message to start one.</p>';
+                  startNewAIChat();
+              } else { alert('Could not clear chats.'); }
+          } catch (err) { alert('Network error while clearing chats.'); }
+      };
+
+      async function loadSession(sessionId) {
+          closeAIHistory();
+          body.innerHTML = '<div class="mp-ai-msg bot" style="opacity:0.6;">Loading conversation…</div>';
+          try {
+              var res = await fetch('/api/ai/sessions/' + sessionId + '/', { credentials: 'same-origin' });
+              if (!res.ok) throw new Error('HTTP ' + res.status);
+              var data = await res.json();
+              currentSessionId = data.session_id;
+              var html = '';
+              (data.messages || []).forEach(function (m) {
+                  var cls = m.role === 'user' ? 'user' : 'bot';
+                  html += '<div class="mp-ai-msg ' + cls + '">' + formatContent(m.content) + '</div>';
+              });
+              if (!html) html = '<div class="mp-ai-msg bot">This conversation is empty. Type a message to continue.</div>';
+              body.innerHTML = html;
+              body.scrollTop = body.scrollHeight;
+              input.focus();
+              clearPendingImage();
+          } catch (err) {
+              body.innerHTML = '<div class="mp-ai-msg bot" style="color:red;">Could not load conversation.</div>';
+          }
+      }
+
+      window.sendAIMessage = async function () {
+          var text = input.value.trim();
+          var hasImage = !!pendingImageB64;
+          if (!text && !hasImage) return;
+          input.value = '';
+
+          /* ── Render user bubble ───── */
+          var userBubble = '<div class="mp-ai-msg user">';
+          if (text) userBubble += escapeHtml(text);
+          
+          if (hasImage) {
+              if (text) userBubble += '<br>';
+              if (pendingImageMime.startsWith('image/')) {
+                  userBubble += '<img src="data:' + pendingImageMime + ';base64,' + pendingImageB64 + '" alt="attached image">';
+              } else {
+                  userBubble += '<div class="mp-ai-file-attach">📎 ' + escapeHtml(pendingImageName) + '</div>';
+              }
+          }
+          userBubble += '</div>';
+          body.innerHTML += userBubble;
+          body.scrollTop = body.scrollHeight;
+
+          /* ── Dynamic Typing Indicator ───── */
+          var typingId = 'typing-' + Date.now();
+          body.innerHTML += '<div class="mp-ai-msg bot" id="' + typingId + '"><span style="opacity:0.6;" class="mp-typing-text">Thinking…</span></div>';
+          body.scrollTop = body.scrollHeight;
+
+          var statuses = hasImage
+              ? ['Reading file...', 'Examining document...', 'Extracting data...', 'Analyzing content...', 'Almost there...']
+              : ['Thinking...', 'Analyzing context...', 'Drafting response...', 'Formatting text...', 'Almost there...'];
+
+          var statusIndex = 0;
+          var typingTextEl = document.querySelector('#' + typingId + ' .mp-typing-text');
+          if (typingTextEl) typingTextEl.textContent = statuses[0];
+
+          // Increasing delays so it doesn't loop infinitely
+          var delays = [4000, 7000, 10000, 15000];
+          var statusTimer = null;
+
+          function nextStatus() {
+              if (statusIndex >= statuses.length - 1) return; // Stop at "Almost there..."
+              statusIndex++;
+              var el = document.querySelector('#' + typingId + ' .mp-typing-text');
+              if (el) el.textContent = statuses[statusIndex];
+              if (statusIndex < statuses.length - 1) {
+                  statusTimer = setTimeout(nextStatus, delays[statusIndex - 1] || 15000);
+              }
+          }
+          statusTimer = setTimeout(nextStatus, delays[0]);
+
+          var sendImageB64  = pendingImageB64;
+          var sendImageMime = pendingImageMime;
+          var sendImageName = pendingImageName;
+          clearPendingImage();
+
+          try {
+              var csrfToken = '';
+              var match = document.cookie.split('; ').find(function (row) { return row.indexOf('csrftoken=') === 0; });
+              if (match) csrfToken = match.split('=')[1];
+
+              var payload = {
+                  message: text || (hasImage ? 'Describe or transcribe the contents of this file.' : '')
+              };
+              if (currentSessionId) payload.session_id = currentSessionId;
+              if (sendImageB64) {
+                  payload.image = sendImageB64;
+                  payload.image_mime = sendImageMime;
+                  payload.image_name = sendImageName || 'file';
+              }
+
+              var res = await fetch('/api/ai/chat/', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                  body: JSON.stringify(payload)
+              });
+              var data = await res.json();
+              
+              // Stop the timer and show "Ready." briefly
+              clearTimeout(statusTimer);
+              var typingEl = document.getElementById(typingId);
+              if (typingEl) {
+                  var readyEl = typingEl.querySelector('.mp-typing-text');
+                  if (readyEl) readyEl.textContent = 'Ready.';
+                  setTimeout(function() { if (typingEl) typingEl.remove(); }, 400);
+              }
+
+              if (data && data.success) {
+                  if (data.session_id) currentSessionId = data.session_id;
+                  setTimeout(function() {
+                      body.innerHTML += '<div class="mp-ai-msg bot">' + formatContent(data.reply) + '</div>';
+                      body.scrollTop = body.scrollHeight;
+                  }, 400); // Wait for the "Ready." text to show
+              } else {
+                  body.innerHTML += '<div class="mp-ai-msg bot" style="color:red;">Error: ' + escapeHtml((data && data.error) || 'Unknown error') + '</div>';
+              }
+          } catch (err) {
+              clearTimeout(statusTimer);
+              var typingEl2 = document.getElementById(typingId);
+              if (typingEl2) typingEl2.remove();
+              body.innerHTML += '<div class="mp-ai-msg bot" style="color:red;">Network error. Could not reach the AI server.</div>';
+          }
+          body.scrollTop = body.scrollHeight;
+      };
+  })();
+  </script>
+  {% endif %}
+
+  <!-- ================= WELCOME OVERLAY ================= -->
+  {% if user.is_authenticated %}
+  <div id="mp-welcome-overlay">
+    <div style="background: #fff; border-radius: 20px; max-width: 600px; width: 100%; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); animation: welcomePop 0.4s ease-out; position: relative;">
+      
+      <!-- Header -->
+      <div style="background: linear-gradient(135deg, #047857, #10b981); padding: 24px; text-align: center; color: white;">
+        <div style="font-size: 40px; margin-bottom: 8px;">👋</div>
+        <h2 style="margin: 0; font-size: 24px; font-weight: 800;">Welcome to MedPracticum Studio!</h2>
+        <p style="margin: 8px 0 0; opacity: 0.9; font-size: 14px;">Your all-in-one platform for COHY practicum management.</p>
+      </div>
+
+      <!-- Body -->
+      <div style="padding: 24px;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
+          
+          <div style="background: #f9fafb; padding: 16px; border-radius: 12px; border: 1px solid #e5e7eb;">
+            <div style="font-size: 24px; margin-bottom: 8px;">📝</div>
+            <h3 style="margin: 0 0 4px; font-size: 15px; font-weight: 700; color: #1f2937;">Log Activities</h3>
+            <p style="margin: 0; font-size: 12px; color: #6b7280;">Record units, skills, and challenges in seconds.</p>
+          </div>
+          
+          <div style="background: #f9fafb; padding: 16px; border-radius: 12px; border: 1px solid #e5e7eb;">
+            <div style="font-size: 24px; margin-bottom: 8px;">📊</div>
+            <h3 style="margin: 0 0 4px; font-size: 15px; font-weight: 700; color: #1f2937;">Auto-Generate Reports</h3>
+            <p style="margin: 0; font-size: 12px; color: #6b7280;">Let AI draft your PDF and Word reports instantly.</p>
+          </div>
+          
+          <div style="background: #f9fafb; padding: 16px; border-radius: 12px; border: 1px solid #e5e7eb;">
+            <div style="font-size: 24px; margin-bottom: 8px;">🖥️</div>
+            <h3 style="margin: 0 0 4px; font-size: 15px; font-weight: 700; color: #1f2937;">Build Presentations</h3>
+            <p style="margin: 0; font-size: 12px; color: #6b7280;">Create stunning slides with speaker notes.</p>
+          </div>
+          
+          <div style="background: #f9fafb; padding: 16px; border-radius: 12px; border: 1px solid #e5e7eb;">
+            <div style="font-size: 24px; margin-bottom: 8px;">🩺</div>
+            <h3 style="margin: 0 0 4px; font-size: 15px; font-weight: 700; color: #1f2937;">24/7 AI Assistant</h3>
+            <p style="margin: 0; font-size: 12px; color: #6b7280;">Ask questions, transcribe images, get writing help.</p>
+          </div>
+          
+        </div>
+
+        <div style="display: flex; gap: 12px;">
+          <button id="welcome-skip" type="button" style="flex: 1; padding: 12px; border-radius: 10px; border: 1px solid #d1d5db; background: white; color: #4b5563; font-weight: 600; font-size: 14px; cursor: pointer; transition: background 0.15s;">
+            Skip Tour
+          </button>
+          <a id="welcome-continue" href="{% url 'how_to_use' %}" style="flex: 1; padding: 12px; border-radius: 10px; border: none; background: #059669; color: white; font-weight: 600; font-size: 14px; text-align: center; text-decoration: none; cursor: pointer; transition: background 0.15s; display: flex; align-items: center; justify-content: center;">
+            Show Me How →
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      var welcomeOverlay = document.getElementById('mp-welcome-overlay');
+      var skipBtn = document.getElementById('welcome-skip');
+      var continueBtn = document.getElementById('welcome-continue');
+
+      // Check if user has seen the welcome overlay
+      if (!localStorage.getItem('mp_welcome_seen')) {
+        setTimeout(function() {
+          welcomeOverlay.style.display = 'flex';
+        }, 1000); // Slight delay so the page loads first
+      }
+
+      function closeWelcome() {
+        welcomeOverlay.style.display = 'none';
+        localStorage.setItem('mp_welcome_seen', 'true');
+      }
+
+      skipBtn.addEventListener('click', closeWelcome);
+      continueBtn.addEventListener('click', closeWelcome);
+    });
+  </script>
+  {% endif %}
 
   <script src="{% static 'js/offline-sync.js' %}"></script>
   <script src="{% static 'js/pwa.js' %}"></script>

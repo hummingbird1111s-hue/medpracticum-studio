@@ -9,13 +9,19 @@
   <form method="post">
     {% csrf_token %}
     {% include 'partials/form_fields.html' %}
-    <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg py-2.5">
+    <button type="submit" class="w-full mt-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg py-2.5 transition-colors">
       Log in
     </button>
   </form>
 
-  <p class="text-sm text-center mt-4">
-    New here? <a href="{% url 'register' %}" class="text-emerald-700 font-medium underline">Create an account</a>
+  <p class="text-sm text-center mt-3 text-gray-600">
+    <a href="{% url 'password_reset_request' %}" class="text-emerald-700 font-medium underline hover:text-emerald-900">
+      Forgot your password?
+    </a>
+  </p>
+
+  <p class="text-sm text-center mt-2 text-gray-600">
+    New here? <a href="{% url 'register' %}" class="text-emerald-700 font-medium underline hover:text-emerald-900">Create an account</a>
   </p>
 </div>
 {% endblock %}

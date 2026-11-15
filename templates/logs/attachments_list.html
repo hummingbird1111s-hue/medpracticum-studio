@@ -1,0 +1,514 @@
+{% extends 'base.html' %}
+{% block title %}All Attachments · MedPracticum Studio{% endblock %}
+
+{% block content %}
+<style>
+  /* Voice recorder styles (modal-scoped) */
+  .cmp-input-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+  }
+  .cmp-input-wrap .cmp-input {
+    flex: 1;
+    min-width: 0;
+    width: 100%;
+    padding: 8px 42px 8px 10px;   /* right padding leaves room for mic */
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 14px;
+    box-sizing: border-box;
+  }
+  .cmp-mic {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+    color: #047857;
+    border-radius: 6px;
+    width: 30px;
+    height: 30px;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+  }
+  .cmp-mic:hover { background: #d1fae5; border-color: #6ee7b7; }
+  .cmp-mic.recording {
+    background: #fef2f2;
+    border-color: #fca5a5;
+    color: #dc2626;
+    animation: cmpmic-pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes cmpmic-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }
+    50%      { box-shadow: 0 0 0 6px rgba(220, 38, 38, 0); }
+  }
+</style>
+
+<div class="max-w-4xl mx-auto space-y-6">
+  
+  <!-- Header -->
+  <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">My Attachments</h1>
+      <p class="text-sm text-gray-500">History of all your practicum placements.</p>
+    </div>
+    <a href="{% url 'start_attachment' %}" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-5 py-2.5 text-sm shadow-sm transition-colors text-center">
+      + New Attachment
+    </a>
+  </div>
+
+  <!-- Attachment Cards -->
+  <div class="space-y-4">
+    {% for att in attachments %}
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-4">
+        
+        {% if att.id == active_id %}
+          <div class="absolute top-0 left-0 w-1.5 h-full bg-emerald-500"></div>
+        {% endif %}
+
+        <div>
+          <div class="flex items-center gap-3 mb-1">
+            <h2 class="text-lg font-bold text-gray-900">{{ att.facility.name }}</h2>
+            {% if att.id == active_id %}
+              <span class="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Active</span>
+            {% endif %}
+          </div>
+          
+          <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-600 mb-2">
+            <span class="font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">{{ att.active_logs|length }} Logs</span>
+            <span>{{ att.start_date|date:"j M Y" }} &mdash; {{ att.end_date|date:"j M Y" }}</span>
+          </div>
+          
+          <p class="text-xs text-gray-400 uppercase tracking-wide">{{ att.academic_year }} &middot; {{ att.report_title|default:"Practicum Report" }}</p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 mt-2 md:mt-0">
+          <button type="button"
+                  class="cmp-view-btn bg-white border border-emerald-200 hover:bg-emerald-50 text-emerald-700 font-semibold rounded-lg px-4 py-2 text-sm transition-colors"
+                  data-attachment-id="{{ att.id }}"
+                  data-facility="{{ att.facility.name }}">
+            Competency Area
+          </button>
+          <a href="{% url 'logs_list' %}?view={{ att.id }}" class="bg-gray-50 border border-gray-200 hover:bg-gray-100 text-gray-700 font-semibold rounded-lg px-4 py-2 text-sm transition-colors">
+            View Logs
+          </a>
+          <form method="post" action="{% url 'delete_attachment' att.id %}" onsubmit="return confirm('Are you sure you want to move this attachment to the archive?');" class="inline-block">
+            {% csrf_token %}
+            <button type="submit" class="bg-red-50 border border-red-200 hover:bg-red-100 text-red-600 font-semibold rounded-lg px-4 py-2 text-sm transition-colors">
+              Delete
+            </button>
+          </form>
+        </div>
+
+      </div>
+    {% empty %}
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-10 text-center">
+        <div class="text-4xl mb-3">🏥</div>
+        <h2 class="text-lg font-bold text-gray-900 mb-2">No attachments yet</h2>
+        <p class="text-sm text-gray-500 mb-4">You haven't started any practicum attachments yet.</p>
+        <a href="{% url 'start_attachment' %}" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-6 py-2.5 shadow-sm transition-colors inline-block">
+          Start your first attachment
+        </a>
+      </div>
+    {% endfor %}
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- Competency editor modal                                    -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div id="cmp-modal"
+     style="display:none; position:fixed; inset:0; z-index:99999;
+            background:rgba(17,24,39,0.6); backdrop-filter:blur(2px);
+            align-items:center; justify-content:center; padding:16px;">
+  <div style="background:#fff; border-radius:16px; width:100%; max-width:560px;
+              max-height:90vh; display:flex; flex-direction:column; overflow:hidden;
+              box-shadow:0 20px 60px rgba(0,0,0,0.35);">
+
+    <div style="padding:16px; border-bottom:1px solid #e5e7eb;
+                display:flex; align-items:center; justify-content:space-between;">
+      <div>
+        <h3 style="margin:0; font-size:17px; font-weight:700; color:#065f46;">
+          Competency areas
+        </h3>
+        <p id="cmp-modal-facility" style="margin:2px 0 0; font-size:12px; color:#6b7280;"></p>
+      </div>
+      <button type="button" id="cmp-modal-close"
+              style="background:none; border:0; font-size:24px; line-height:1;
+                     cursor:pointer; color:#6b7280; padding:4px 8px;">&times;</button>
+    </div>
+
+    <div style="flex:1; overflow-y:auto; padding:16px;">
+      <div id="cmp-modal-rows"></div>
+      <div style="margin-top:6px;">
+        <button type="button" id="cmp-modal-add"
+                style="background:#ecfdf5; color:#047857; border:1px dashed #6ee7b7;
+                       border-radius:8px; padding:8px 14px; font-size:13px;
+                       font-weight:600; cursor:pointer;">
+          + Add competency
+        </button>
+      </div>
+      
+      <!-- Dual Buttons for Upload / Camera -->
+      <div style="margin-top:12px; border:1px dashed #d1d5db; border-radius:10px; padding:12px; background:#f9fafb;">
+        <p style="margin:0 0 4px; font-size:13px; font-weight:600; color:#111827;">
+          Or capture a photo / upload a file
+        </p>
+        
+        <input type="file" id="cmp-modal-upload" accept="image/*" style="display:none;">
+        <input type="file" id="cmp-modal-camera" accept="image/*" capture="environment" style="display:none;">
+        
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <button type="button" onclick="document.getElementById('cmp-modal-upload').click()" class="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold rounded-lg px-4 py-2 text-sm shadow-sm transition-colors flex items-center gap-2">
+            📁 Choose File
+          </button>
+          <button type="button" id="btn-modal-take-photo" class="bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 font-semibold rounded-lg px-4 py-2 text-sm shadow-sm transition-colors flex items-center gap-2">
+            📷 Take Photo
+          </button>
+        </div>
+        <span id="cmp-modal-file-status" style="font-size:12px; color:#6b7280; display:block; margin-top:8px;"></span>
+      </div>
+
+      <p id="cmp-modal-empty"
+         style="display:none; margin-top:12px; font-size:13px; color:#92400e;
+                background:#fef3c7; border:1px solid #fde68a;
+                border-radius:8px; padding:8px 10px;">
+        No competency areas saved for this attachment yet. Add rows above and save —
+        you can always come back.
+      </p>
+    </div>
+
+    <div style="padding:12px 16px; border-top:1px solid #e5e7eb; background:#f9fafb;
+                display:flex; justify-content:flex-end; gap:8px;">
+      <button type="button" id="cmp-modal-cancel"
+              style="background:#f3f4f6; color:#374151; border:0;
+                     border-radius:8px; padding:8px 14px; font-size:14px;
+                     font-weight:600; cursor:pointer;">Cancel</button>
+      <button type="button" id="cmp-modal-save"
+              style="background:#059669; color:#fff; border:0;
+                     border-radius:8px; padding:8px 14px; font-size:14px;
+                     font-weight:600; cursor:pointer;">Save competencies</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var modal     = document.getElementById('cmp-modal');
+  var modalFac  = document.getElementById('cmp-modal-facility');
+  var rowsBox   = document.getElementById('cmp-modal-rows');
+  var addBtn    = document.getElementById('cmp-modal-add');
+  
+  // Updated to grab the dual buttons
+  var fileUpload= document.getElementById('cmp-modal-upload');
+  var fileCamera= document.getElementById('cmp-modal-camera');
+  var fileStat  = document.getElementById('cmp-modal-file-status');
+  
+  var emptyNote = document.getElementById('cmp-modal-empty');
+  var saveBtn   = document.getElementById('cmp-modal-save');
+  var cancelBtn = document.getElementById('cmp-modal-cancel');
+  var closeBtn  = document.getElementById('cmp-modal-close');
+
+  var currentAttId = null;
+
+  function openModal()  { modal.style.display = 'flex'; }
+  function closeModal() { modal.style.display = 'none'; }
+
+  function addRow(text, source) {
+    var row = document.createElement('div');
+    row.className = 'cmp-row';
+    row.dataset.source = source || 'manual';
+    row.style.cssText = 'display:flex; gap:8px; margin-bottom:8px; align-items:center;';
+    row.innerHTML =
+      '<div class="cmp-input-wrap">' +
+        '<input type="text" class="cmp-input" maxlength="500" value="' +
+          (text ? String(text).replace(/"/g, '&quot;') : '') + '" ' +
+          'placeholder="e.g. ICD coding accuracy">' +
+        '<button type="button" class="cmp-mic" title="Speak">🎤</button>' +
+      '</div>' +
+      '<button type="button" class="cmp-del" title="Remove" ' +
+        'style="background:none; border:0; color:#dc2626; font-size:20px; ' +
+        'line-height:1; cursor:pointer; padding:4px 8px;">&times;</button>';
+    rowsBox.appendChild(row);
+    refreshEmpty();
+    return row;
+  }
+  function refreshEmpty() {
+    var has = rowsBox.querySelectorAll('.cmp-input').length > 0;
+    emptyNote.style.display = has ? 'none' : 'block';
+  }
+
+  async function loadFor(attachmentId, facilityName) {
+    currentAttId = attachmentId;
+    modalFac.textContent = facilityName || '';
+    rowsBox.innerHTML = '';
+    fileStat.textContent = '';
+    openModal();
+
+    try {
+      var res = await fetch('/attachments/' + attachmentId + '/competencies/', {
+        credentials: 'same-origin',
+      });
+      var data = await res.json().catch(function () { return {}; });
+      if (!res.ok) {
+        addRow('', 'manual');
+      } else {
+        (data.competencies || []).forEach(function (c) {
+          addRow(c.text, c.source);
+        });
+        if (!data.competencies || !data.competencies.length) {
+          addRow('', 'manual');
+        }
+      }
+    } catch (e) {
+      addRow('', 'manual');
+    }
+    refreshEmpty();
+  }
+
+  document.querySelectorAll('.cmp-view-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      loadFor(btn.dataset.attachmentId, btn.dataset.facility);
+    });
+  });
+
+  addBtn.addEventListener('click', function () {
+    var row = addRow('', 'manual');
+    row.querySelector('.cmp-input').focus();
+  });
+
+  rowsBox.addEventListener('click', function (e) {
+    if (e.target.classList.contains('cmp-del')) {
+      e.target.closest('.cmp-row').remove();
+      refreshEmpty();
+    }
+  });
+
+  /* ── Camera Check (Laptop vs Mobile) ─────────────────────── */
+  document.getElementById('btn-modal-take-photo').addEventListener('click', function(e) {
+      var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      if (isMobile) {
+          fileCamera.click();
+      } else {
+          var proceed = confirm("On a laptop or desktop, clicking 'Take Photo' will open your file browser.\n\nIf you have a webcam connected, you can usually use your OS camera app to take a photo first, then select that file here.\n\nClick OK to open the file browser.");
+          if (proceed) {
+              fileCamera.click();
+          }
+      }
+  });
+
+  // ── Unified Upload / Camera → OCR ────────────────────────
+  async function handleFileUpload(fileObj) {
+    if (!fileObj) return;
+    fileStat.textContent = 'Transcribing…';
+    var fd = new FormData();
+    fd.append('image', fileObj);
+    
+    try {
+      var res = await fetch('/attachments/competencies/upload-image/', {
+        method: 'POST',
+        body: fd,
+        credentials: 'same-origin',
+        headers: { 'X-CSRFToken': '{{ csrf_token }}' },
+      });
+      var data = await res.json().catch(function () { return {}; });
+      
+      if (!res.ok) {
+        fileStat.textContent = data.error || 'Upload failed';
+        return;
+      }
+      
+      var lines = (data.lines && data.lines.length)
+        ? data.lines
+        : (data.text || '').split(/\r?\n/).map(function (s) { return s.trim(); }).filter(Boolean);
+        
+      lines.forEach(function (line) {
+        addRow(line.length > 500 ? line.slice(0, 500) : line, 'ocr');
+      });
+      fileStat.textContent = 'Added ' + lines.length + ' line(s).';
+      
+    } catch (e) {
+      fileStat.textContent = 'Network error.';
+    } finally {
+      fileUpload.value = '';
+      fileCamera.value = '';
+    }
+  }
+
+  // Bind both buttons
+  fileUpload.addEventListener('change', function() { handleFileUpload(this.files[0]); });
+  fileCamera.addEventListener('change', function() { handleFileUpload(this.files[0]); });
+
+
+  saveBtn.addEventListener('click', async function () {
+    if (!currentAttId) return;
+    var items = [];
+    rowsBox.querySelectorAll('.cmp-row').forEach(function (row) {
+      var text = row.querySelector('.cmp-input').value.trim();
+      if (!text) return;
+      items.push({ text: text, source: row.dataset.source || 'manual' });
+    });
+
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving…';
+    try {
+      var csrfRow = document.cookie.split('; ').find(function (r) {
+        return r.indexOf('csrftoken=') === 0;
+      });
+      var csrf = csrfRow ? csrfRow.split('=')[1] : '';
+      var res = await fetch('/attachments/' + currentAttId + '/competencies/', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrf,
+        },
+        body: JSON.stringify({ competencies: items }),
+      });
+      var data = await res.json().catch(function () { return {}; });
+      if (!res.ok) {
+        alert(data.error || 'Could not save competencies.');
+        return;
+      }
+      closeModal();
+    } catch (e) {
+      alert('Network error while saving.');
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save competencies';
+    }
+  });
+
+  cancelBtn.addEventListener('click', closeModal);
+  closeBtn.addEventListener('click', closeModal);
+  modal.addEventListener('click', function (e) {
+    if (e.target === modal) closeModal();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && modal.style.display === 'flex') closeModal();
+  });
+
+  // ── Voice recorder for competency inputs ─────────────────
+  (function () {
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      document.querySelectorAll('.cmp-mic').forEach(function (b) { b.style.display = 'none'; });
+      var origAppend = Element.prototype.appendChild;
+      Element.prototype.appendChild = function (child) {
+        var result = origAppend.call(this, child);
+        if (child.nodeType === 1 && child.querySelectorAll) {
+          child.querySelectorAll('.cmp-mic').forEach(function (b) {
+            b.style.display = 'none';
+          });
+        }
+        return result;
+      };
+      return;
+    }
+
+    var activeRec = null;
+    var activeBtn = null;
+
+    function stopActive() {
+      if (activeRec) {
+        try { activeRec.stop(); } catch (e) {}
+        activeRec = null;
+      }
+      if (activeBtn) {
+        activeBtn.classList.remove('recording');
+        activeBtn.textContent = '🎤';
+        activeBtn.setAttribute('title', 'Speak');
+        activeBtn = null;
+      }
+    }
+
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest('.cmp-mic');
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (btn === activeBtn) {
+        stopActive();
+        return;
+      }
+      stopActive();
+
+      var wrap  = btn.closest('.cmp-input-wrap');
+      var input = wrap && wrap.querySelector('.cmp-input');
+      if (!input) return;
+
+      var rec = new SR();
+      rec.lang = 'en-GB';
+      rec.continuous = false;
+      rec.interimResults = true;
+      rec.maxAlternatives = 1;
+
+      var baseValue = (input.value || '').trim();
+      var finalText = '';
+
+      rec.onresult = function (event) {
+        var interim = '';
+        var finalChunk = '';
+        for (var i = event.resultIndex; i < event.results.length; i++) {
+          var r = event.results[i];
+          if (r.isFinal) finalChunk += r[0].transcript;
+          else           interim    += r[0].transcript;
+        }
+        if (finalChunk) {
+          finalText = (finalText + ' ' + finalChunk).trim();
+        }
+        var preview = [baseValue, finalText, interim].filter(Boolean).join(' ').trim();
+        input.value = preview.slice(0, 500);
+      };
+
+      rec.onerror = function (event) {
+        if (event.error === 'no-speech') return;
+        if (event.error === 'not-allowed') {
+          alert('Microphone access was denied. Please allow it in your browser settings, then try again.');
+        }
+        if (event.error === 'aborted') return;
+        stopActive();
+      };
+
+      rec.onend = function () {
+        if (activeRec === rec) stopActive();
+        input.value = (input.value || '').trim().slice(0, 500);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      };
+
+      activeRec = rec;
+      activeBtn = btn;
+      btn.classList.add('recording');
+      btn.textContent = '⏹';
+      btn.setAttribute('title', 'Stop recording');
+
+      try {
+        rec.start();
+      } catch (err) {
+        stopActive();
+      }
+    });
+
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden && activeRec) stopActive();
+    });
+
+    var closeWatcher = new MutationObserver(function () {
+      if (modal.style.display !== 'flex' && activeRec) stopActive();
+    });
+    closeWatcher.observe(modal, { attributes: true, attributeFilter: ['style'] });
+  })();
+})();
+</script>
+{% endblock %}

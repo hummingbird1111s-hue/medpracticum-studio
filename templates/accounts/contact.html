@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+{% block title %}Contact providers · MedPracticum Studio{% endblock %}
+
+{% block content %}
+<style>
+  /* WhatsApp brand green — class survives any Tailwind build */
+  .mp-wa-btn {
+    background-color: #25D366 !important;
+    color: #ffffff !important;
+    border: 0;
+  }
+  .mp-wa-btn:hover { background-color: #1ebe5d !important; }
+  .mp-wa-btn:active { background-color: #189f4f !important; }
+</style>
+
+<div class="max-w-2xl mx-auto">
+
+  <div class="mb-4">
+    <button type="button" id="mp-contact-back"
+            class="inline-flex items-center gap-2 text-sm text-emerald-700 hover:text-emerald-900 font-medium transition-colors">
+      <svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;">
+        <path d="M19 12H5M12 19l-7-7 7-7"/>
+      </svg>
+      Go back
+    </button>
+  </div>
+
+  <div class="text-center mb-8">
+    <h1 class="text-2xl font-bold mb-1">Contact a provider</h1>
+    <p class="text-sm text-gray-600">
+      Reach out to one of our support consultants for help with your account,
+      password reset, or technical issues.
+    </p>
+  </div>
+
+  <div class="bg-white rounded-2xl shadow p-6 mb-4">
+    <div class="flex items-start gap-4">
+      <div style="width:56px;height:56px;border-radius:50%;background:#ecfdf5;
+                  color:#047857;font-weight:700;font-size:20px;display:flex;
+                  align-items:center;justify-content:center;flex-shrink:0;
+                  border:1px solid #a7f3d0;">C1</div>
+      <div class="min-w-0 flex-1">
+        <div class="font-bold text-gray-900">Support Consultant 1</div>
+        <div class="text-sm text-gray-600 mb-1">MedPracticum Studio · Provider</div>
+        <div class="text-sm font-mono text-gray-800 mb-4">+233 533 052 562</div>
+        <div class="flex flex-col sm:flex-row gap-2">
+          <a href="tel:+233533052562"
+             class="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-4 py-2 text-sm transition-colors">
+            📞 Call
+          </a>
+          <a href="https://wa.me/233533052562?text=Hi%2C%20I%20need%20help%20with%20my%20MedPracticum%20account."
+             target="_blank" rel="noopener"
+             class="mp-wa-btn flex items-center justify-center gap-2 font-semibold rounded-lg px-4 py-2 text-sm transition-colors">
+            💬 WhatsApp
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-2xl shadow p-6 mb-4">
+    <div class="flex items-start gap-4">
+      <div style="width:56px;height:56px;border-radius:50%;background:#ecfdf5;
+                  color:#047857;font-weight:700;font-size:20px;display:flex;
+                  align-items:center;justify-content:center;flex-shrink:0;
+                  border:1px solid #a7f3d0;">C2</div>
+      <div class="min-w-0 flex-1">
+        <div class="font-bold text-gray-900">Support Consultant 2</div>
+        <div class="text-sm text-gray-600 mb-1">MedPracticum Studio · Provider</div>
+        <div class="text-sm font-mono text-gray-800 mb-4">+233 55 602 5786</div>
+        <div class="flex flex-col sm:flex-row gap-2">
+          <a href="tel:+233556025786"
+             class="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-4 py-2 text-sm transition-colors">
+            📞 Call
+          </a>
+          <a href="https://wa.me/233556025786?text=Hi%2C%20I%20need%20help%20with%20my%20MedPracticum%20account."
+             target="_blank" rel="noopener"
+             class="mp-wa-btn flex items-center justify-center gap-2 font-semibold rounded-lg px-4 py-2 text-sm transition-colors">
+            💬 WhatsApp
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-gray-50 rounded-2xl border border-gray-200 p-5 mt-6 text-sm text-gray-700">
+    <p class="mb-2 font-semibold">Hours of availability</p>
+    <p class="text-xs text-gray-600">
+      Monday–Friday, 9:00 AM – 5:00 PM (GMT). WhatsApp messages answered
+      outside these hours when possible.
+    </p>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  var btn = document.getElementById('mp-contact-back');
+  if (!btn) return;
+  btn.addEventListener('click', function () {
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      window.location.href = '/';
+    }
+  });
+})();
+</script>
+{% endblock %}

@@ -2,64 +2,308 @@
 {% block title %}Dashboard · MedPracticum Studio{% endblock %}
 
 {% block content %}
-<h1 class="text-2xl font-bold mb-1">Hello, {{ user.first_name|default:user.username }}</h1>
-<p class="text-sm text-gray-600 mb-6">
-  {{ user.get_department_display }} · Level {{ user.level }} · {{ user.index_number }}
-</p>
+<div class="max-w-6xl mx-auto space-y-6">
 
-{% if not session %}
-  <div class="bg-white rounded-2xl shadow p-6 text-center">
-    <h2 class="text-lg font-semibold mb-2">No attachment yet</h2>
-    <p class="text-sm text-gray-600 mb-4">Add your facility and dates to begin logging.</p>
-    <a href="{% url 'start_attachment' %}"
-       class="inline-block bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-5 py-2.5">
-      Start attachment
-    </a>
-  </div>
-{% else %}
-  <div class="bg-white rounded-2xl shadow p-5 mb-4">
-    <p class="text-xs uppercase tracking-wide text-gray-500">Current attachment</p>
-    <h2 class="text-lg font-semibold">{{ session.facility.name|default:"Facility not set" }}</h2>
-    <p class="text-sm text-gray-600">
-      {{ session.academic_year }} · {{ session.start_date }} to {{ session.end_date }}
-    </p>
-    <p class="text-sm mt-2"><span class="font-semibold">{{ total_logs }}</span> daily log{{ total_logs|pluralize }} recorded</p>
-    <a href="{% url 'new_log' %}"
-       class="mt-4 block text-center bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg py-3">
-      + New daily log
-    </a>
-  </div>
-
-  <div class="bg-white rounded-2xl shadow p-5 mb-4">
-    <h2 class="font-semibold mb-1">Practicum report</h2>
-    <p class="text-sm text-gray-600 mb-3">Builds your APA-style report from your daily logs.</p>
-    <div class="flex flex-wrap gap-2">
-      <form method="post" action="{% url 'generate_report' %}">
-        {% csrf_token %}
-        <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-4 py-2 text-sm">
-          {% if session.report.pdf_file %}Regenerate PDF{% else %}Generate PDF report{% endif %}
-        </button>
-      </form>
-      {% if session.report.pdf_file %}
-        <a href="{% url 'download_report' %}" class="border border-emerald-600 text-emerald-700 rounded-lg px-4 py-2 text-sm font-medium">Download PDF</a>
-      {% endif %}
-      <a href="{% url 'preview_report' %}" target="_blank" class="border border-gray-300 text-gray-700 rounded-lg px-4 py-2 text-sm">Quick preview</a>
+  <!-- Header & Top Bar -->
+  <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">Welcome back, {{ user.username }} 👋</h1>
+      <p class="text-sm text-gray-500 mt-1">
+        {{ user.get_department_display }} &middot; Level {{ user.level }} &middot; {{ user.index_number }}
+      </p>
     </div>
-    {% if session.report.generated_at %}
-      <p class="text-xs text-gray-500 mt-2">Last generated {{ session.report.generated_at|date:"j M Y, H:i" }}</p>
+    
+    <!-- Switch Attachment Dropdown -->
+    {% if all_attachments %}
+    <div class="bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 flex items-center gap-4">
+      <div>
+        <label class="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Switch Active Attachment</label>
+        <form method="get" action="{% url 'dashboard' %}">
+          <select name="switch_attachment" onchange="this.form.submit()" class="w-full bg-transparent border-none text-sm font-semibold text-emerald-700 focus:ring-0 cursor-pointer p-0 pr-8">
+            {% for att in all_attachments %}
+              <option value="{{ att.id }}" {% if session and att.id == session.id %}selected{% endif %}>
+                {{ att.facility.name }} ({{ att.start_date|date:"M Y" }})
+              </option>
+            {% endfor %}
+          </select>
+        </form>
+      </div>
+    </div>
     {% endif %}
   </div>
 
-  <div class="bg-white rounded-2xl shadow p-5">
-    <h2 class="font-semibold mb-3">Recent logs</h2>
-    {% for log in recent_logs %}
-      <a href="{% url 'new_log' %}?date={{ log.date|date:'Y-m-d' }}" class="block border-b last:border-b-0 py-2">
-        <p class="text-sm font-medium">{{ log.date }} · Week {{ log.week_number }} · {{ log.unit_sub_department }}</p>
-        <p class="text-sm text-gray-600 line-clamp-2">{{ log.activity_summary }}</p>
-      </a>
-    {% empty %}
-      <p class="text-sm text-gray-500">No logs yet. Tap "New daily log" to add your first one.</p>
-    {% endfor %}
+  <!-- KPI Cards (Grid) -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <!-- Card 1: All Attachments -->
+    <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-all hover:-translate-y-0.5">
+      <div class="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center flex-shrink-0">
+        <svg viewBox="0 0 24 24" style="width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;">
+          <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+        </svg>
+      </div>
+      <div>
+        <p class="text-sm font-medium text-gray-500">Total Attachments</p>
+        <h3 class="text-3xl font-bold text-gray-900">{{ active_attachments_count }}</h3>
+      </div>
+    </div>
+
+    <!-- Card 2: Total Logs (All Time) -->
+    <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-all hover:-translate-y-0.5">
+      <div class="w-12 h-12 rounded-full bg-teal-100 text-teal-600 flex items-center justify-center flex-shrink-0">
+        <svg viewBox="0 0 24 24" style="width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;">
+          <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+      </div>
+      <div>
+        <p class="text-sm font-medium text-gray-500">Total Logs Recorded</p>
+        <h3 class="text-3xl font-bold text-gray-900">{{ active_logs_count }}</h3>
+      </div>
+    </div>
+
+    <!-- Card 3: Logs for Current Attachment -->
+    <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-all hover:-translate-y-0.5">
+      <div class="w-12 h-12 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center flex-shrink-0">
+        <svg viewBox="0 0 24 24" style="width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;">
+          <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      </div>
+      <div>
+        <p class="text-sm font-medium text-gray-500">Logs (This Attachment)</p>
+        <h3 class="text-3xl font-bold text-gray-900">{{ total_logs }}</h3>
+      </div>
+    </div>
   </div>
-{% endif %}
+
+  <!-- Main Split Layout -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    
+    <!-- LEFT COLUMN (2/3 Width) -->
+    <div class="lg:col-span-2 space-y-6">
+      
+      <!-- Current Attachment Spotlight -->
+      {% if session %}
+      <div class="bg-emerald-700 rounded-2xl p-6 shadow-lg text-white relative overflow-hidden">
+        <!-- Background Icon Watermark -->
+        <div class="absolute -right-4 -top-4 text-emerald-600 opacity-40">
+          <svg viewBox="0 0 24 24" style="width:150px;height:150px;stroke:currentColor;fill:none;stroke-width:2;"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+        </div>
+        
+        <div class="relative z-10">
+          <p class="text-xs uppercase tracking-wider text-emerald-200 font-bold mb-1">Current Active Attachment</p>
+          <h2 class="text-2xl font-bold mb-1 text-white">{{ session.facility.name }}</h2>
+          <p class="text-emerald-100 text-sm mb-6">{{ session.start_date|date:"M j, Y" }} &rarr; {{ session.end_date|date:"M j, Y" }}</p>
+          
+          <div class="flex gap-3">
+            <a href="{% url 'new_log' %}" class="bg-white text-emerald-800 font-bold rounded-xl px-5 py-2.5 text-sm shadow-md hover:bg-emerald-50 transition-colors flex items-center gap-2">
+              <svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><path d="M12 4v16m8-8H4"/></svg>
+              New Daily Log
+            </a>
+            <a href="{% url 'logs_list' %}?view={{ session.id }}" class="bg-emerald-800 text-white font-bold rounded-xl px-5 py-2.5 text-sm shadow-md hover:bg-emerald-900 transition-colors border border-emerald-500">
+              View All Logs
+            </a>
+          </div>
+        </div>
+      </div>
+      {% else %}
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 text-center">
+        <div class="text-4xl mb-3">🏥</div>
+        <h2 class="text-lg font-bold text-gray-900 mb-2">No Active Attachment</h2>
+        <p class="text-sm text-gray-500 mb-4">You need to start an attachment to begin logging your practicum.</p>
+        <a href="{% url 'start_attachment' %}" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-6 py-2.5 shadow-sm transition-colors">Start an attachment</a>
+      </div>
+      {% endif %}
+
+      <!-- NEW: Target Competencies Section -->
+      {% if session %}
+        {% if session_competencies %}
+        <div class="bg-white rounded-2xl shadow-sm border border-emerald-100 p-6 relative overflow-hidden">
+          <!-- Accent Stripe -->
+          <div class="absolute top-0 left-0 w-1.5 h-full bg-emerald-500"></div>
+          
+          <div class="flex justify-between items-start mb-4">
+            <div>
+              <h2 class="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:#059669;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                Target Competencies
+              </h2>
+              <p class="text-sm text-gray-500 mt-1">Skills you are targeting at {{ session.facility.name }}</p>
+            </div>
+            <a href="{% url 'attachments_list' %}" class="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg hover:bg-emerald-100 transition-colors">
+              Manage
+            </a>
+          </div>
+          
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {% for comp in session_competencies %}
+              <div class="flex items-start gap-3 bg-gray-50 border border-gray-100 p-3 rounded-xl hover:bg-emerald-50/50 hover:border-emerald-100 transition-colors">
+                <div class="mt-0.5 text-emerald-500">
+                  <svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;"><path d="M5 13l4 4L19 7"/></svg>
+                </div>
+                <span class="text-sm font-medium text-gray-800 leading-snug">{{ comp.text }}</span>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% else %}
+        <!-- Prompt to add competencies if empty -->
+        <div class="bg-amber-50 rounded-2xl shadow-sm border border-amber-200 p-6 text-center">
+          <div class="text-3xl mb-2">🎯</div>
+          <h2 class="text-lg font-bold text-amber-900 mb-1">No Competencies Added Yet</h2>
+          <p class="text-sm text-amber-700 mb-4">Adding target skills helps the AI focus your report on what truly matters for your course.</p>
+          <a href="{% url 'attachments_list' %}" class="bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg px-5 py-2.5 text-sm shadow-sm transition-colors inline-block">
+            Add Competencies
+          </a>
+        </div>
+        {% endif %}
+      {% endif %}
+
+      <!-- Recent Logs -->
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+        <div class="flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
+          <h2 class="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+            Recent Activities
+          </h2>
+          {% if session %}
+          <a href="{% url 'logs_list' %}" class="text-sm text-emerald-700 font-semibold hover:text-emerald-900 transition-colors">View All &rarr;</a>
+          {% endif %}
+        </div>
+        
+        {% if recent_logs %}
+          <div class="space-y-3">
+            {% for log in recent_logs %}
+              <div class="group border border-gray-100 rounded-xl p-4 hover:border-emerald-200 hover:bg-emerald-50/30 transition-all">
+                <div class="flex items-start justify-between gap-4">
+                  <div class="flex items-start gap-3">
+                    <div class="bg-gray-50 text-gray-600 font-bold rounded-lg p-2 text-center min-w-[60px] border border-gray-200 group-hover:bg-white group-hover:border-emerald-200 transition-colors">
+                      <div class="text-[10px] uppercase text-gray-400">{{ log.date|date:"M" }}</div>
+                      <div class="text-lg leading-tight">{{ log.date|date:"j" }}</div>
+                    </div>
+                    <div>
+                      <div class="flex items-center gap-2 mb-1">
+                        <span class="text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">{{ log.unit_sub_department }}</span>
+                        <span class="text-xs text-gray-400">Week {{ log.week_number }}</span>
+                      </div>
+                      <p class="text-sm text-gray-800 line-clamp-2 leading-snug">{{ log.activity_summary }}</p>
+                    </div>
+                  </div>
+                  <a href="{% url 'new_log' %}?edit_id={{ log.id }}&attachment_id={{ session.id }}" class="opacity-0 group-hover:opacity-100 text-xs font-semibold text-emerald-600 hover:text-emerald-800 underline whitespace-nowrap transition-opacity">Edit</a>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="text-center py-8">
+            <div class="text-3xl mb-2">📝</div>
+            <p class="text-sm text-gray-500">No logs recorded yet for this attachment.</p>
+          </div>
+        {% endif %}
+      </div>
+
+    </div>
+
+    <!-- RIGHT COLUMN (1/3 Width) -->
+    <div class="space-y-6">
+      
+      <!-- Live Clock Widget -->
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col items-center justify-center text-center">
+        <p class="text-xs text-gray-400 uppercase tracking-widest font-bold mb-3">Local Time (Accra)</p>
+        <div id="live-clock" class="text-4xl font-black text-gray-800 tracking-wider" style="font-variant-numeric: tabular-nums;">--:--:--</div>
+        <div id="live-date" class="text-sm text-emerald-600 font-bold mt-2 bg-emerald-50 px-3 py-1 rounded-full"></div>
+      </div>
+
+      <!-- POS-Style Calendar Widget -->
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+        <div class="flex justify-between items-center mb-2">
+          <button id="prevMonthBtn" class="bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-1 rounded text-sm transition-colors">&larr;</button>
+          <span id="calendarMonthYear" class="font-semibold text-sm text-gray-800"></span>
+          <button id="nextMonthBtn" class="bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-1 rounded text-sm transition-colors">&rarr;</button>
+        </div>
+        
+        <table class="w-full text-center border-collapse">
+          <thead>
+            <tr>
+              <th class="text-[10px] text-gray-400 font-bold py-1">Su</th>
+              <th class="text-[10px] text-gray-400 font-bold py-1">Mo</th>
+              <th class="text-[10px] text-gray-400 font-bold py-1">Tu</th>
+              <th class="text-[10px] text-gray-400 font-bold py-1">We</th>
+              <th class="text-[10px] text-gray-400 font-bold py-1">Th</th>
+              <th class="text-[10px] text-gray-400 font-bold py-1">Fr</th>
+              <th class="text-[10px] text-gray-400 font-bold py-1">Sa</th>
+            </tr>
+          </thead>
+          <tbody id="calendarBody">
+            <!-- JS will populate -->
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // --- Live Clock ---
+    function updateClock() {
+        const now = new Date();
+        const timeOptions = { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Africa/Accra' };
+        const timeString = now.toLocaleTimeString('en-US', timeOptions);
+        document.getElementById('live-clock').textContent = timeString;
+        
+        const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Africa/Accra' };
+        document.getElementById('live-date').textContent = now.toLocaleDateString('en-US', dateOptions);
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // --- POS-Style Calendar Logic ---
+    let calendarYear = new Date().getFullYear();
+    let calendarMonth = new Date().getMonth();
+    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+    function renderCalendar(year, month) {
+        document.getElementById('calendarMonthYear').textContent = `${monthNames[month]} ${year}`;
+        
+        const firstDay = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        
+        let html = '<tr>';
+        for (let i = 0; i < firstDay; i++) {
+            html += '<td></td>';
+        }
+        
+        for (let d = 1; d <= daysInMonth; d++) {
+            const isToday = (d === new Date().getDate() && month === new Date().getMonth() && year === new Date().getFullYear());
+            let cls = 'p-1.5 text-xs rounded cursor-pointer hover:bg-emerald-100 hover:text-emerald-800 transition-colors ';
+            if (isToday) {
+                cls += 'bg-emerald-600 text-white font-bold shadow-sm ring-2 ring-emerald-200';
+            } else {
+                cls += 'text-gray-700';
+            }
+            html += `<td class="${cls}">${d}</td>`;
+            if ((firstDay + d) % 7 === 0 && d !== daysInMonth) {
+                html += '</tr><tr>';
+            }
+        }
+        html += '</tr>';
+        document.getElementById('calendarBody').innerHTML = html;
+    }
+
+    renderCalendar(calendarYear, calendarMonth);
+
+    document.getElementById('prevMonthBtn').addEventListener('click', function() {
+        if (calendarMonth === 0) { calendarMonth = 11; calendarYear--; }
+        else { calendarMonth--; }
+        renderCalendar(calendarYear, calendarMonth);
+    });
+
+    document.getElementById('nextMonthBtn').addEventListener('click', function() {
+        if (calendarMonth === 11) { calendarMonth = 0; calendarYear++; }
+        else { calendarMonth++; }
+        renderCalendar(calendarYear, calendarMonth);
+    });
+});
+</script>
 {% endblock %}

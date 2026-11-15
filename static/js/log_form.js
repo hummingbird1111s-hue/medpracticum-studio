@@ -1,46 +1,39 @@
 document.addEventListener('alpine:init', () => {
   Alpine.data('logForm', (cfg) => {
-    let recognition = null; // kept outside Alpine so the browser object isn't proxied
+    let recognition = null;
 
     return {
       cfg,
       form: {
+        id: null,
         date: '',
         unit_sub_department: '',
         activity_summary: '',
         skills_acquired: '',
         challenges_faced: '',
         solutions_applied: '',
-        tags: [],
-        tallies: {},
-        details: {},
       },
-      tagInput: '',
       listening: null,
+      interimText: '',
       speechSupported: !!(window.SpeechRecognition || window.webkitSpeechRecognition),
       saving: false,
       message: '',
       messageType: 'info',
 
       init() {
-        cfg.tallies.forEach((t) => { this.form.tallies[t.key] = ''; });
-        cfg.details.forEach((d) => { this.form.details[d.key] = ''; });
-
         const now = new Date();
         const localToday = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
-        let date = cfg.existing ? cfg.existing.date : localToday;
-        if (date < cfg.start_date) date = cfg.start_date;
-        if (date > cfg.end_date) date = cfg.end_date;
-        this.form.date = date;
+        
+        // Use the existing date if editing, otherwise default to today.
+        // We removed the clamping logic so users can select any date freely.
+        this.form.date = cfg.existing ? cfg.existing.date : localToday;
 
         const ex = cfg.existing;
         if (ex) {
+          this.form.id = ex.id || null;
           this.form.unit_sub_department = ex.unit_sub_department || '';
           ['activity_summary', 'skills_acquired', 'challenges_faced', 'solutions_applied']
             .forEach((f) => { this.form[f] = ex[f] || ''; });
-          this.form.tags = [...(ex.tags || [])];
-          Object.entries(ex.tallies || {}).forEach(([k, v]) => { this.form.tallies[k] = v; });
-          Object.entries(ex.details || {}).forEach(([k, v]) => { this.form.details[k] = v; });
         }
       },
 
@@ -52,21 +45,14 @@ document.addEventListener('alpine:init', () => {
         return Math.floor(days / 7) + 1;
       },
 
-      // ----- Tags -----
-      addTag(value) {
-        let tag = (value !== undefined ? value : this.tagInput).trim();
-        if (!tag) return;
-        if (!tag.startsWith('#')) tag = '#' + tag;
-        if (!this.form.tags.includes(tag) && this.form.tags.length < 20) this.form.tags.push(tag);
-        this.tagInput = '';
-      },
-      removeTag(tag) {
-        this.form.tags = this.form.tags.filter((t) => t !== tag);
-      },
-
-      // ----- Voice dictation -----
       dictate(field) {
-        if (!this.speechSupported) return;
+        console.log("Dictate clicked for:", field);
+        
+        if (!this.speechSupported) {
+          this.setMessage('Voice dictation is not supported in this browser. Use Chrome or Edge.', 'error');
+          return;
+        }
+        
         if (this.listening === field && recognition) {
           recognition.stop();
           return;
@@ -75,50 +61,75 @@ document.addEventListener('alpine:init', () => {
 
         const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
         const rec = new SR();
-        rec.lang = 'en-US'; // try 'en-GH' if it recognises your accent better
+        rec.lang = 'en-US'; 
         rec.continuous = true;
-        rec.interimResults = false;
+        rec.interimResults = true; 
 
-        rec.onstart = () => { this.listening = field; };
+        rec.onstart = () => { 
+          console.log("Mic started successfully");
+          this.listening = field; 
+          this.interimText = '';
+          this.setMessage('Listening... Speak now.', 'success');
+        };
+
         rec.onresult = (e) => {
+          let interim = '';
+          let final = '';
+
           for (let i = e.resultIndex; i < e.results.length; i++) {
+            const transcript = e.results[i][0].transcript;
             if (e.results[i].isFinal) {
-              this.form[field] = (this.form[field] + ' ' + e.results[i][0].transcript).trim();
+              final += transcript + ' ';
+            } else {
+              interim += transcript;
             }
           }
+
+          if (final) {
+            this.form[field] = (this.form[field] + ' ' + final).trim();
+          }
+          this.interimText = interim; 
         };
-        rec.onend = () => { this.listening = null; };
+
+        rec.onend = () => { 
+          console.log("Mic stopped");
+          this.listening = null; 
+          this.interimText = '';
+        };
+
         rec.onerror = (e) => {
+          console.error("Mic Error:", e.error);
           this.listening = null;
-          if (e.error === 'not-allowed') this.setMessage('Microphone permission was blocked.', 'error');
-          else if (e.error === 'network') this.setMessage('Dictation needs an internet connection.', 'error');
+          this.interimText = '';
+          if (e.error === 'not-allowed') {
+            this.setMessage('Microphone blocked by browser or Windows. Please check permissions.', 'error');
+          } else if (e.error === 'network') {
+            this.setMessage('Dictation needs an internet connection.', 'error');
+          } else {
+            this.setMessage('Mic error: ' + e.error, 'error');
+          }
         };
 
         recognition = rec;
-        rec.start();
+        try {
+          rec.start();
+        } catch (err) {
+          console.error("Mic Start failed:", err);
+          this.setMessage('Could not start mic. Wait a second and try again.', 'error');
+        }
       },
 
-      // ----- Saving -----
       validate() {
         if (!this.form.date) return 'Pick a date.';
-        if (this.form.date < cfg.start_date || this.form.date > cfg.end_date) {
-          return 'That date is outside your attachment period (' + cfg.start_date + ' to ' + cfg.end_date + ').';
-        }
+        // Date range validation removed to allow any date selection
         if (!this.form.unit_sub_department.trim()) return 'Choose or type the unit you worked in.';
         if (!this.form.activity_summary.trim()) return 'Describe what you did today.';
         return '';
       },
 
       buildPayload() {
-        const tallies = {};
-        Object.entries(this.form.tallies).forEach(([k, v]) => {
-          if (v !== '' && v !== null && !Number.isNaN(Number(v))) tallies[k] = Number(v);
-        });
-        const details = {};
-        Object.entries(this.form.details).forEach(([k, v]) => {
-          if (String(v || '').trim()) details[k] = String(v).trim();
-        });
         return {
+          id: this.form.id,
           attachment_id: cfg.attachment_id,
           date: this.form.date,
           unit_sub_department: this.form.unit_sub_department.trim(),
@@ -126,18 +137,16 @@ document.addEventListener('alpine:init', () => {
           skills_acquired: this.form.skills_acquired.trim(),
           challenges_faced: this.form.challenges_faced.trim(),
           solutions_applied: this.form.solutions_applied.trim(),
-          tags: [...this.form.tags],
-          numeric_tallies: tallies,
-          department_details: details,
+          tags: [],
+          numeric_tallies: {},
+          department_details: {},
         };
       },
 
       async queueOffline(payload, authProblem) {
         await window.MPOffline.queueLog(payload);
         this.setMessage(
-          authProblem
-            ? 'Session expired. Saved on this device; log in again to sync.'
-            : 'Saved on this device. It will sync automatically when you are back online.',
+          authProblem ? 'Session expired. Saved on this device; log in to sync.' : 'Saved offline. Will sync when online.',
           'success'
         );
       },
@@ -169,7 +178,7 @@ document.addEventListener('alpine:init', () => {
           this.setMessage('Saved ✓', 'success');
           setTimeout(() => { window.location.href = cfg.dashboard_url; }, 700);
         } catch (e) {
-          this.setMessage('Could not save on this device: ' + (e && e.message ? e.message : e), 'error');
+          this.setMessage('Could not save: ' + (e && e.message ? e.message : e), 'error');
         } finally {
           this.saving = false;
         }

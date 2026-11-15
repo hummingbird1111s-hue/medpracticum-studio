@@ -1,0 +1,127 @@
+{% extends 'base.html' %}
+{% block title %}Workshops · MedPracticum Studio{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+  <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">Workshops & Meetings</h1>
+      <p class="text-sm text-gray-500">Record all workshops, meetings, and tutorials attended during this attachment.</p>
+    </div>
+    
+    <!-- Attachment Switcher -->
+    <form method="get" action="{% url 'workshops_list' %}" class="bg-white border border-gray-200 rounded-lg shadow-sm px-4 py-2">
+      <label class="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Attachment</label>
+      <select name="attachment_id" onchange="this.form.submit()" class="w-full bg-transparent border-none text-sm font-semibold text-emerald-700 focus:ring-0 cursor-pointer p-0">
+        {% for att in all_attachments %}
+          <option value="{{ att.id }}" {% if att.id == session.id %}selected{% endif %}>
+            {{ att.facility.name }} ({{ att.start_date|date:"M Y" }})
+          </option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+
+  <!-- Add / Edit Workshop Form -->
+  <div class="bg-white rounded-xl shadow-sm border border-emerald-100 p-5">
+    <h2 class="text-sm font-bold text-emerald-800 mb-4 uppercase tracking-wide">
+      {% if edit_workshop %}Edit Workshop{% else %}Add New Workshop{% endif %}
+    </h2>
+    <form method="post" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+      {% csrf_token %}
+      
+      <!-- If we are editing, submit to the same URL with edit param -->
+      <input type="hidden" name="edit_id" value="{% if edit_workshop %}{{ edit_workshop.id }}{% endif %}">
+
+      <div class="md:col-span-1">
+        <label class="block text-xs font-medium text-gray-600 mb-1">Date</label>
+        <input type="date" name="date" required value="{% if edit_workshop %}{{ edit_workshop.date|date:'Y-m-d' }}{% endif %}" 
+               class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm">
+      </div>
+      <div class="md:col-span-2">
+        <label class="block text-xs font-medium text-gray-600 mb-1">Activity / Theme</label>
+        <input type="text" name="activity" required value="{% if edit_workshop %}{{ edit_workshop.activity }}{% endif %}" 
+               placeholder="e.g., Infection Control Training" 
+               class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm">
+      </div>
+      <div class="md:col-span-1">
+        <label class="block text-xs font-medium text-gray-600 mb-1">Type</label>
+        <select name="type" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm bg-white">
+          <option value="Workshop" {% if edit_workshop.type == 'Workshop' %}selected{% endif %}>Workshop</option>
+          <option value="Meeting" {% if edit_workshop.type == 'Meeting' %}selected{% endif %}>Meeting</option>
+          <option value="Tutorial" {% if edit_workshop.type == 'Tutorial' %}selected{% endif %}>Tutorial</option>
+        </select>
+      </div>
+      
+      <div class="md:col-span-4 flex justify-end gap-2 mt-2">
+        {% if edit_workshop %}
+          <a href="{% url 'workshops_list' %}?attachment_id={{ session.id }}" 
+             class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-lg px-4 py-2 text-sm transition-colors">
+            Cancel
+          </a>
+          <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-6 py-2 text-sm shadow-sm transition-colors">
+            Save Changes
+          </button>
+        {% else %}
+          <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-6 py-2 text-sm shadow-sm transition-colors">
+            Add Workshop
+          </button>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+
+  <!-- List of Workshops -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <div class="bg-gray-50 px-5 py-3 border-b border-gray-200 flex justify-between items-center">
+      <h2 class="font-bold text-gray-800">Recorded Workshops for {{ session.facility.name }}</h2>
+      <span class="bg-emerald-100 text-emerald-800 text-xs font-bold px-2.5 py-1 rounded-full">{{ workshops.count }} Entries</span>
+    </div>
+    
+    {% if workshops %}
+      <table class="w-full text-sm text-left">
+        <thead class="bg-white text-gray-500 border-b border-gray-200">
+          <tr>
+            <th class="px-5 py-3 font-medium w-16">S/N</th>
+            <th class="px-5 py-3 font-medium w-32">Date</th>
+            <th class="px-5 py-3 font-medium w-32">Type</th>
+            <th class="px-5 py-3 font-medium">Activity / Theme</th>
+            <th class="px-5 py-3 font-medium text-right w-32">Action</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for w in workshops %}
+            <tr class="hover:bg-gray-50">
+              <td class="px-5 py-3 text-gray-500">{{ forloop.counter }}</td>
+              <td class="px-5 py-3 font-medium text-gray-900">{{ w.date|date:"j M Y" }}</td>
+              <td class="px-5 py-3">
+                <span class="inline-block px-2 py-1 rounded text-xs font-medium 
+                  {% if w.type == 'Workshop' %}bg-blue-50 text-blue-700{% elif w.type == 'Meeting' %}bg-amber-50 text-amber-700{% else %}bg-purple-50 text-purple-700{% endif %}">
+                  {{ w.type }}
+                </span>
+              </td>
+              <td class="px-5 py-3 text-gray-700">{{ w.activity }}</td>
+              <td class="px-5 py-3 text-right space-x-2">
+                <!-- EDIT BUTTON -->
+                <a href="{% url 'workshops_list' %}?attachment_id={{ session.id }}&edit={{ w.id }}" 
+                   class="text-emerald-600 hover:text-emerald-800 text-xs font-semibold">
+                  Edit
+                </a>
+                <!-- DELETE BUTTON -->
+                <form method="post" action="{% url 'delete_workshop' w.id %}" onsubmit="return confirm('Delete this workshop?');" class="inline-block">
+                  {% csrf_token %}
+                  <button type="submit" class="text-red-500 hover:text-red-700 text-xs font-semibold">Delete</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="p-10 text-center text-gray-500 italic">
+        No workshops or meetings recorded for this attachment yet.
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

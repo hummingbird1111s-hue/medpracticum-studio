@@ -4,275 +4,452 @@
 <meta charset="utf-8">
 <title>Practicum Report - {{ student_name }}</title>
 <style>
-  @page { size: A4; margin: 1in; @top-right { content: counter(page); font: 12pt "Times New Roman", "Liberation Serif", serif; } }
-  @page title { @top-right { content: none; } }
+  /* ============= PAGE SETUP ============= */
+  @page {
+    margin: 1in 1in 1in 1.5in;
+    @top-right {
+      content: counter(page);
+      font-family: "Times New Roman", Times, serif;
+      font-size: 12pt;
+    }
+  }
+  
+  @page :first {
+    margin: 1in;
+    @top-right { content: none; }
+    @bottom-center { content: none; }
+  }
+  
+  @page front {
+    @top-right { content: none; }
+    @bottom-center {
+      content: "ii";
+      font-family: "Times New Roman", Times, serif;
+      font-size: 12pt;
+    }
+  }
 
-  body { font-family: "Times New Roman", "Liberation Serif", Tinos, serif; font-size: 12pt; line-height: 1.5; color: #000; }
-  p { margin: 0 0 0.6em; text-indent: 0.5in; text-align: left; }
-  p.plain, td p, li p { text-indent: 0; }
-  ul, ol { margin: 0 0 0.6em; }
+  /* ============= BASE TYPOGRAPHY ============= */
+  html, body {
+    font-family: "Times New Roman", Times, serif;
+    font-size: 12pt;
+    line-height: 1.5;
+    color: #000;
+    margin: 0;
+    padding: 0;
+  }
+  p {
+    margin: 0 0 0.5em;
+    text-align: justify;
+    text-indent: 0;
+  }
 
-  h1 { font-size: 12pt; font-weight: bold; text-align: center; margin: 0 0 1em; }
-  h2 { font-size: 12pt; font-weight: bold; margin: 1em 0 0.5em; }
-  h3 { font-size: 12pt; font-weight: bold; font-style: italic; margin: 0.8em 0 0.4em; }
-  .chapter { page-break-before: always; }
-  .chapter-label { display: block; }
-  h1, h2, h3 { page-break-after: avoid; }
+  .bullet-item {
+    margin-bottom: 0.5em;
+    margin-left: 1.5em;
+    text-indent: -1.5em;
+    text-align: justify;
+  }
 
-  .title-page { page: title; text-align: center; }
-  .title-page p { text-indent: 0; text-align: center; margin: 0 0 0.9em; }
-  .title-page .big { font-size: 14pt; font-weight: bold; margin-top: 1.3in; }
-  .title-page .name { font-weight: bold; }
+  h1, h2, h3 {
+    font-family: "Times New Roman", Times, serif;
+    font-weight: bold;
+    page-break-after: avoid;
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+  }
 
-  .toc a { display: block; text-decoration: none; color: #000; margin-bottom: 0.3em; }
-  .toc a::after { content: leader('.') target-counter(attr(href), page); }
+  /* ============= WATERMARK ============= */
+  .watermark {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-30deg);
+    font-size: 110pt;
+    color: rgba(5, 150, 105, 0.07);
+    font-weight: bold;
+    z-index: -1;
+    pointer-events: none;
+    letter-spacing: 0.1em;
+    text-align: center;
+    white-space: nowrap;
+  }
 
-  table { width: 100%; border-collapse: collapse; margin: 0 0 1em; font-size: 11pt; line-height: 1.25; }
-  thead th { border-top: 1pt solid #000; border-bottom: 1pt solid #000; text-align: left; padding: 4pt 5pt; }
-  tbody td { padding: 4pt 5pt; vertical-align: top; }
-  tbody tr:last-child td { border-bottom: 1pt solid #000; }
-  tr { page-break-inside: avoid; }
-  td.num, th.num { text-align: center; }
-  .table-title { text-indent: 0; margin: 1em 0 0.2em; page-break-after: avoid; }
-  .table-title b { font-weight: bold; }
-  .table-title i { font-style: italic; }
-  .detail { font-size: 10pt; margin: 3pt 0 0; color: #333; }
+  /* ============= SECTIONS ============= */
+  .cover-page {
+    page-break-after: always;
+    text-align: center;
+    padding-top: 1in;
+  }
+  .cover-page p { text-align: center; margin: 0 0 0.15em; }
+  .cover-school { font-size: 16pt; font-weight: bold; letter-spacing: 0.05em; }
+  .cover-dept { font-size: 13pt; font-weight: bold; margin-bottom: 0.6in !important; }
+  .cover-logo { display: block; width: 1.3in; height: auto; margin: 0.5in auto 0.6in; }
+  .cover-title { font-size: 14pt; font-weight: bold; margin-top: 1in !important; }
+  .cover-code { font-size: 13pt; font-weight: bold; }
+  .cover-level { font-size: 13pt; font-weight: bold; margin-bottom: 1.5in !important; }
+  .cover-name { font-size: 14pt; font-weight: bold; margin-top: 1.5in !important; }
+  .cover-index { font-size: 13pt; font-weight: bold; }
 
-  figure { margin: 1em 0; text-align: center; page-break-inside: avoid; }
-  figure img { max-width: 100%; }
-  .fig-title { text-indent: 0; text-align: left; margin-bottom: 0.2em; page-break-after: avoid; }
+  .toc-page { 
+    page: front; 
+    page-break-after: always; 
+  }
+  .toc-heading {
+    text-align: center;
+    font-size: 14pt;
+    font-weight: bold;
+    margin: 0 0 1in;
+    letter-spacing: 0.1em;
+  }
+  .toc a {
+    display: block;
+    text-decoration: none;
+    color: #000;
+    margin-bottom: 0.4em;
+    text-align: left;
+  }
+  
+  .toc a::after {
+    content: leader('.') target-counter(attr(href), page, decimal);
+  }
+  .toc a.toc-sub { padding-left: 1.5em; }
 
-  .signoff-box { border: 1pt solid #000; padding: 14pt; margin-top: 1em; page-break-inside: avoid; }
-  .signoff-box .line { border-bottom: 1pt solid #000; height: 24pt; margin-bottom: 6pt; }
-  .qr { text-align: center; }
-  .qr img { width: 1.6in; height: 1.6in; }
-  .qr p { text-indent: 0; text-align: center; font-size: 10pt; word-break: break-all; }
-  .stamp-area { border: 1pt dashed #777; height: 1.1in; margin-top: 10pt; text-align: center; color: #777; padding-top: 0.4in; }
-  .verified { border: 2pt solid #059669; color: #059669; padding: 8pt; text-align: center; font-weight: bold; margin-top: 10pt; }
-  .watermark { position: fixed; top: 38%; left: 8%; width: 84%; text-align: center; transform: rotate(-28deg);
-               font-size: 44pt; font-weight: bold; color: rgba(5, 150, 105, 0.16); border: 4pt solid rgba(5, 150, 105, 0.16); padding: 10pt; }
+  .body-section { page-break-before: always; }
+  
+  .chapter-title {
+    font-size: 14pt;
+    text-transform: uppercase;
+    margin-top: 1.5em;
+    margin-bottom: 1em;
+  }
+  .chapter-title:first-child { margin-top: 0; }
+  .sub-title {
+    font-size: 12pt;
+    text-transform: capitalize;
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+  }
+
+  /* Styling for AI output with linebreaks */
+  .ai-content p { margin-bottom: 0.8em; }
+  .ai-content strong { font-weight: bold; }
+
+  /* ============= SIGNATURE BLOCKS ============= */
+  .sig-block { margin-top: 0.5in; page-break-inside: avoid; }
+  .sig-line {
+    border-bottom: 1pt solid #000;
+    width: 3in;
+    height: 30pt;
+    margin-bottom: 4pt;
+  }
+  .sig-label { font-size: 12pt; margin-bottom: 0.5in; }
+
+  .signoff-box {
+    border: 1pt solid #000;
+    padding: 0.3in;
+    margin-top: 0.6in;
+    page-break-inside: avoid;
+  }
+  .signoff-box .plain { margin: 0 0 0.15em; text-align: left; text-indent: 0; }
+  .signoff-box .line {
+    border-bottom: 1pt solid #000;
+    width: 3in;
+    height: 24pt;
+    margin-bottom: 0.25in;
+  }
+  .signoff-box .verified {
+    margin-top: 0.3in;
+    font-size: 13pt;
+    font-weight: bold;
+    color: #047857;
+    border: 1.5pt solid #047857;
+    padding: 0.15in;
+    text-align: center;
+    letter-spacing: 0.05em;
+  }
+  .signoff-box .stamp-area {
+    margin-top: 0.3in;
+    border: 1pt dashed #999;
+    height: 1.2in;
+    width: 2in;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #999;
+    font-size: 10pt;
+  }
+
+  .qr { text-align: center; margin: 0.3in 0; page-break-inside: avoid; }
+  .qr img { width: 1.5in; height: 1.5in; display: inline-block; }
+  .qr p {
+    font-size: 8pt;
+    text-align: center;
+    word-break: break-all;
+    color: #666;
+    text-indent: 0;
+    margin-top: 4pt;
+  }
 </style>
 </head>
 <body>
+
 {% if signed_off %}<div class="watermark">VERIFIED &amp; APPROVED</div>{% endif %}
 
-<!-- TITLE PAGE -->
-<section class="title-page">
-  <p class="big">YAMFO COLLEGE OF HEALTH (COHY)</p>
-  <p>Department of {{ dept_name }}</p>
-  <p class="big" style="margin-top:0.6in;">PRACTICUM (CLINICAL ATTACHMENT) REPORT</p>
-  <p>at</p>
-  <p class="name">{{ facility_name }}</p>
-  {% if facility %}<p>{{ facility.district }}, {{ facility.region }}</p>{% endif %}
-  <p style="margin-top:0.6in;">Submitted by</p>
-  <p class="name">{{ student_name }}</p>
-  <p>Index Number: {{ student.index_number }}</p>
-  <p>Level {{ student.level }}</p>
-  <p style="margin-top:0.5in;">Academic Year: {{ s.academic_year }}</p>
-  <p>Attachment period: {{ s.start_date|date:"j F Y" }} to {{ s.end_date|date:"j F Y" }}</p>
-  <p>Submission date: {{ generated_on|date:"j F Y" }}</p>
-</section>
+{% if f.summary_only %}
+<!-- ============ SUMMARY MODE ============ -->
+<section class="summary-body">
+  <h2>Abstract</h2>
+  {% for para in abstract_paras %}<p>{{ para }}</p>{% endfor %}
+  <p><b>Keywords:</b> {{ keywords }}</p>
 
-<!-- DECLARATION -->
-<section class="chapter" id="declaration">
-  <h1>Declaration</h1>
-  <p>{{ declaration }}</p>
-  <p class="plain" style="margin-top:0.6in;">Student's signature: ____________________________&nbsp;&nbsp;&nbsp; Date: ______________</p>
-</section>
-
-<!-- ACKNOWLEDGMENTS -->
-<section class="chapter" id="acknowledgments">
-  <h1>Acknowledgments</h1>
-  {% for para in acknowledgments %}<p>{{ para }}</p>{% endfor %}
-</section>
-
-<!-- TABLE OF CONTENTS -->
-<section class="chapter toc">
-  <h1>Table of Contents</h1>
-  <a href="#declaration">Declaration</a>
-  <a href="#acknowledgments">Acknowledgments</a>
-  <a href="#ch1">Chapter 1: Introduction and Facility Profile</a>
-  <a href="#ch2">Chapter 2: Weekly Activities and Methodology</a>
-  <a href="#ch3">Chapter 3: Results and Data Analysis</a>
-  <a href="#ch4">Chapter 4: Challenges and Solutions</a>
-  <a href="#ch5">Chapter 5: Conclusion and Recommendations</a>
-  <a href="#references">References</a>
-  <a href="#appendix-a">Appendix A: Daily Log Record</a>
-  <a href="#appendix-b">Appendix B: Supervisor Sign-off</a>
-</section>
-
-<!-- CHAPTER 1 -->
-<section class="chapter" id="ch1">
-  <h1><span class="chapter-label">CHAPTER 1</span>Introduction and Facility Profile</h1>
-
-  <h2>1.1 Introduction</h2>
-  <p>This report presents the practicum experience of {{ student_name }}, a Level {{ student.level }} student of the Department of {{ dept_name }} at Yamfo College of Health. The attachment took place at {{ facility_name }} between {{ s.start_date|date:"j F Y" }} and {{ s.end_date|date:"j F Y" }}{% if s.assigned_supervisor_name %}, under the supervision of {{ s.assigned_supervisor_name }}{% endif %}.</p>
-
-  <h2>1.2 Objectives of the Attachment</h2>
-  <p class="plain">The objectives of the attachment were to:</p>
-  <ul>{% for o in objectives %}<li>{{ o }}</li>{% endfor %}</ul>
-
-  <h2>1.3 Background of the Facility</h2>
-  {% if facility and facility.history_and_background %}
-    {{ facility.history_and_background|linebreaks }}
-  {% else %}<p>The history of the facility has not yet been entered.</p>{% endif %}
-  {% if facility %}<p>{{ facility.name }} is a {{ facility.facility_type }} located in the {{ facility.district }} District of the {{ facility.region }} Region.</p>{% endif %}
-
-  <h2>1.4 Vision and Mission</h2>
-  {% if facility and facility.vision_mission %}{{ facility.vision_mission|linebreaks }}{% else %}<p>The vision and mission of the facility have not yet been entered.</p>{% endif %}
-
-  <h2>1.5 Organisational Structure</h2>
-  {% if facility and facility.organogram_description %}{{ facility.organogram_description|linebreaks }}{% else %}<p>The organisational structure has not yet been entered.</p>{% endif %}
-</section>
-
-<!-- CHAPTER 2 -->
-<section class="chapter" id="ch2">
-  <h1><span class="chapter-label">CHAPTER 2</span>Weekly Activities and Methodology</h1>
-
-  <h2>2.1 Methodology</h2>
-  {% for para in methodology %}<p>{{ para }}</p>{% endfor %}
-
-  <h2>2.2 Weekly Activities</h2>
-  {% for week in weeks %}
-    <h3>Week {{ week.number }} ({{ week.start|date:"j M" }} to {{ week.end|date:"j M Y" }})</h3>
-    <p>During Week {{ week.number }}, the student logged {{ week.days }} day{{ week.days|pluralize }} of activity in {{ week.units|join:", " }}.</p>
-    <p class="table-title"><b>Table {{ forloop.counter }}</b></p>
-    <p class="table-title"><i>Activities Recorded in Week {{ week.number }}</i></p>
-    <table>
-      <thead><tr><th style="width:16%">Date</th><th style="width:22%">Unit</th><th>Activities</th></tr></thead>
-      <tbody>
-      {% for log in week.logs %}
-        <tr>
-          <td>{{ log.date|date:"D, j M" }}</td>
-          <td>{{ log.unit }}</td>
-          <td>{{ log.summary|linebreaksbr }}
-            {% for label, value in log.details %}<p class="detail">{{ label }}: {{ value }}</p>{% endfor %}
-          </td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  {% empty %}<p>No daily logs have been recorded yet.</p>{% endfor %}
-</section>
-
-<!-- CHAPTER 3 -->
-<section class="chapter" id="ch3">
-  <h1><span class="chapter-label">CHAPTER 3</span>Results and Data Analysis</h1>
-
-  <h2>3.1 Overview of Logged Activity</h2>
-  {% for para in results %}<p>{{ para }}</p>{% endfor %}
-
-  {% if unit_rows %}
-  <h2>3.2 Distribution of Activity by Unit</h2>
-  <p class="table-title"><b>Table {{ table_base|add:1 }}</b></p>
-  <p class="table-title"><i>Days Logged per Unit</i></p>
-  <table>
-    <thead><tr><th>Unit</th><th class="num">Days logged</th><th class="num">Share of all days (%)</th></tr></thead>
-    <tbody>{% for r in unit_rows %}<tr><td>{{ r.unit }}</td><td class="num">{{ r.days }}</td><td class="num">{{ r.pct }}</td></tr>{% endfor %}</tbody>
-  </table>
-  {% endif %}
-
-  {% if tally_table.rows %}
-  <h2>3.3 Recorded Activity Measures</h2>
-  <p class="table-title"><b>Table {{ table_base|add:2 }}</b></p>
-  <p class="table-title"><i>Weekly Totals of Recorded Measures</i></p>
-  <table>
-    <thead><tr><th>Measure</th>{% for w in tally_table.weeks %}<th class="num">W{{ w }}</th>{% endfor %}<th class="num">Total</th></tr></thead>
-    <tbody>{% for row in tally_table.rows %}
-      <tr><td>{{ row.label }}</td>{% for v in row.values %}<td class="num">{{ v }}</td>{% endfor %}<td class="num"><b>{{ row.total }}</b></td></tr>
-    {% endfor %}</tbody>
-  </table>
-  {% endif %}
-
-  {% if charts %}
-  <h2>3.4 Charts and Trends</h2>
-  {% for chart in charts %}
-    <p>{{ chart.intro }}</p>
-    <figure>
-      <p class="fig-title"><b>Figure {{ chart.number }}</b></p>
-      <p class="fig-title"><i>{{ chart.title }}</i></p>
-      <img src="{{ chart.uri }}" alt="{{ chart.title }}">
-    </figure>
-  {% endfor %}
-  {% endif %}
-
-  <h2>3.5 Skills Acquired</h2>
-  {% if skills %}
-    <ul>{% for d, text in skills %}<li><b>{{ d|date:"j M" }}:</b> {{ text }}</li>{% endfor %}</ul>
-  {% else %}<p>No skills were recorded in the daily logs.</p>{% endif %}
-</section>
-
-<!-- CHAPTER 4 -->
-<section class="chapter" id="ch4">
-  <h1><span class="chapter-label">CHAPTER 4</span>Challenges and Solutions</h1>
-  {% if challenges %}
-    <p>The challenges encountered during the attachment, and the actions taken to address them, are summarised in Table {{ table_base|add:3 }}.</p>
-    <p class="table-title"><b>Table {{ table_base|add:3 }}</b></p>
-    <p class="table-title"><i>Challenges Faced and Solutions Applied</i></p>
-    <table>
-      <thead><tr><th style="width:14%">Date</th><th style="width:43%">Challenge</th><th>Solution applied</th></tr></thead>
-      <tbody>{% for d, challenge, solution in challenges %}
-        <tr><td>{{ d|date:"j M" }}</td><td>{{ challenge|linebreaksbr }}</td><td>{{ solution|default:"-"|linebreaksbr }}</td></tr>
-      {% endfor %}</tbody>
-    </table>
-  {% else %}<p>No challenges were recorded in the daily logs.</p>{% endif %}
-</section>
-
-<!-- CHAPTER 5 -->
-<section class="chapter" id="ch5">
-  <h1><span class="chapter-label">CHAPTER 5</span>Conclusion and Recommendations</h1>
-  <h2>5.1 Conclusion</h2>
-  {% for para in conclusion %}<p>{{ para }}</p>{% endfor %}
-
-  <h2>5.2 Recommendations to the Facility</h2>
-  <ol>{% for r in facility_recs %}<li>{{ r }}</li>{% endfor %}</ol>
-
-  <h2>5.3 Recommendations to the College</h2>
-  <ol>{% for r in academic_recs %}<li>{{ r }}</li>{% endfor %}</ol>
-</section>
-
-<!-- REFERENCES -->
-<section class="chapter" id="references">
-  <h1>References</h1>
-  <p>No external sources were cited in this report. Its content is drawn from the student's daily practicum logs and direct observation at {{ facility_name }}.</p>
-</section>
-
-<!-- APPENDIX A -->
-<section class="chapter" id="appendix-a">
-  <h1><span class="chapter-label">APPENDIX A</span>Daily Log Record</h1>
-  {% for log in all_logs %}
-    <h3>{{ log.date|date:"l, j F Y" }} (Week {{ log.week_number }}): {{ log.unit_sub_department }}</h3>
-    <p class="plain"><b>Activities:</b> {{ log.activity_summary|linebreaksbr }}</p>
-    {% if log.skills_acquired %}<p class="plain"><b>Skills acquired:</b> {{ log.skills_acquired|linebreaksbr }}</p>{% endif %}
-    {% if log.challenges_faced %}<p class="plain"><b>Challenges:</b> {{ log.challenges_faced|linebreaksbr }}</p>{% endif %}
-    {% if log.solutions_applied %}<p class="plain"><b>Solutions:</b> {{ log.solutions_applied|linebreaksbr }}</p>{% endif %}
-    {% if log.tags %}<p class="plain"><b>Tags:</b> {{ log.tags|join:", " }}</p>{% endif %}
+  <h2>Key Figures</h2>
+  {% for row in tally_table.rows %}
+    <p class="bullet-item">&#8226; {{ row.label }}: <b>{{ row.total }}</b></p>
   {% endfor %}
 </section>
 
-<!-- APPENDIX B -->
-<section class="chapter" id="appendix-b">
-  <h1><span class="chapter-label">APPENDIX B</span>Supervisor Sign-off</h1>
-  <p>The clinical supervisor confirms that the student named below completed the attachment described in this report. Scan the QR code to review a summary of the logs and approve this report online.</p>
+{% else %}
 
-  <div class="qr">
-    <img src="{{ qr_uri }}" alt="Verification QR code">
-    <p>{{ verify_url }}</p>
+<!-- ============ COVER PAGE ============ -->
+<section class="cover-page">
+  <p class="cover-school">COLLEGE OF HEALTH, YAMFO</p>
+  <p class="cover-dept">DEPARTMENT OF {{ dept_name|upper }}</p>
+
+  {% if title_logo %}
+    <img class="cover-logo" src="{{ title_logo }}" alt="School logo">
+  {% endif %}
+
+  <p class="cover-title">{{ report_title|upper }}</p>
+  <p class="cover-code">{{ course_code|upper }}</p>
+  <p class="cover-level">LEVEL {{ student.level }} {{ semester|upper }}</p>
+
+  <p class="cover-name">{{ student_name|upper }}</p>
+  <p class="cover-index">{{ student.index_number|upper }}</p>
+</section>
+
+<!-- ============ TABLE OF CONTENTS ============ -->
+<section class="toc-page">
+  <h1 class="toc-heading">TABLE OF CONTENTS</h1>
+  <div class="toc">
+    <a href="#ch1">Introduction</a>
+    <a href="#ch2">Facility Profile</a>
+    <a href="#ch3">Activities Performed</a>
+    <a href="#ch4">Skills Acquired</a>
+    <a href="#ch5">Workshops</a>
+    <a href="#ch6">Lessons Learnt</a>
+    <a href="#ch7">Observations</a>
+    <a href="#ch8">Challenges</a>
+    <a href="#ch9">Recommendations</a>
+    <a href="#ch10">Conclusion</a>
+    <a href="#ch11">Signature and Date</a>
+  </div>
+</section>
+
+<!-- ============ BODY ============ -->
+<section class="body-section">
+
+  <!-- Introduction -->
+  <h1 id="ch1" class="chapter-title">Introduction</h1>
+  <div class="ai-content">
+    {% if content.introduction %}
+      {{ content.introduction|linebreaks }}
+    {% else %}
+      <p>This report presents the vacation practicum experience of {{ student_name }}, a Level {{ student.level }} student of the Department of {{ dept_name }} at {{ school_name }}. The attachment took place at {{ facility_name }} from {{ s.start_date|date:"j F Y" }} to {{ s.end_date|date:"j F Y" }}.</p>
+      {% for para in introduction_paras %}<p>{{ para }}</p>{% endfor %}
+    {% endif %}
   </div>
 
+  <!-- Facility Profile -->
+  <h1 id="ch2" class="chapter-title">Facility Profile</h1>
+  <div class="ai-content">
+    {% if content.facility_profile %}
+      {{ content.facility_profile|linebreaks }}
+    {% else %}
+      <p>{{ facility_name }} is a {{ facility.facility_type|default:"health facility" }} located in the {{ facility.district|default:"" }} of the {{ facility.region|default:"" }} Region.</p>
+      {% if facility and facility.history_and_background %}
+        {{ facility.history_and_background|linebreaks }}
+      {% endif %}
+      {% if facility and facility.vision_mission %}
+        <p><strong>Vision and Mission:</strong> {{ facility.vision_mission }}</p>
+      {% endif %}
+      {% if facility and facility.organogram_description %}
+        <p><strong>Organisational Structure:</strong> {{ facility.organogram_description }}</p>
+      {% endif %}
+    {% endif %}
+  </div>
+
+  <!-- Activities Performed -->
+  <h1 id="ch3" class="chapter-title">Activities Performed</h1>
+  <div class="ai-content">
+    {% if content.activities_performed %}
+      {{ content.activities_performed|linebreaks }}
+    {% else %}
+      <p>During the practicum period, I was involved in the following activities as recorded in my logbook:</p>
+      {% for group in unit_activities %}
+        <h2 class="sub-title">{{ group.unit }}</h2>
+        <p style="margin-bottom: 1em;">{{ group.narrative }}</p>
+      {% empty %}
+        <p>No activities recorded.</p>
+      {% endfor %}
+    {% endif %}
+  </div>
+
+  <!-- Skills Acquired -->
+  <h1 id="ch4" class="chapter-title">Skills Acquired</h1>
+  <div class="ai-content">
+    {% if content.skills_acquired %}
+      <ul style="margin-top: 0; padding-left: 20px;">
+        {% for line in content_skills_acquired %}
+          <li style="margin-bottom: 8px; text-align: justify;">{{ line|safe }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>Through my participation in the practicum activities, I acquired the following skills:</p>
+      <ul style="padding-left: 20px;">
+        {% for d, text in skills %}
+          <li style="margin-bottom: 8px;">{{ text }}</li>
+        {% empty %}
+          <li>No specific skills recorded.</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  </div>
+
+  <!-- Workshops -->
+  <h1 id="ch5" class="chapter-title">Workshops</h1>
+  <div class="ai-content">
+    {% if content.workshops %}
+      {{ content.workshops|linebreaks }}
+    {% else %}
+      {% if workshops %}
+        {% for w in workshops %}
+          <p>On {{ w.date|date:"j F Y" }}, I attended a {{ w.type|lower }} on {{ w.activity }}.</p>
+        {% endfor %}
+      {% else %}
+        <p>No formal workshop was attended during the practicum period.</p>
+      {% endif %}
+    {% endif %}
+  </div>
+
+  <!-- Lessons Learnt -->
+  <h1 id="ch6" class="chapter-title">Lessons Learnt</h1>
+  <div class="ai-content">
+    {% if content.lessons_learnt %}
+      <ul style="margin-top: 0; padding-left: 20px;">
+        {% for line in content_lessons_learnt %}
+          <li style="margin-bottom: 8px; text-align: justify;">{{ line|safe }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <ul style="padding-left: 20px;">
+        {% for para in lessons_learnt %}
+          <li style="margin-bottom: 8px;">{{ para }}</li>
+        {% empty %}
+          <li>Lessons learnt will be updated by the student.</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  </div>
+
+  <!-- Observations -->
+  <h1 id="ch7" class="chapter-title">Observations</h1>
+  <div class="ai-content">
+    {% if content.observation %}
+      {{ content.observation|linebreaks }}
+    {% else %}
+      {% for para in observation %}
+        <p>{{ para }}</p>
+      {% empty %}
+        <p>Observations will be updated by the student.</p>
+      {% endfor %}
+    {% endif %}
+  </div>
+
+  <!-- Challenges -->
+  <h1 id="ch8" class="chapter-title">Challenges</h1>
+  <div class="ai-content">
+    {% if content.challenges %}
+      {{ content.challenges|linebreaks }}
+    {% else %}
+      {% for ch in challenges %}
+        <p style="margin-bottom: 0.5em;">{{ ch.challenge_text }}</p>
+      {% empty %}
+        <p>No specific challenges were recorded. The student successfully adapted to the daily routines and workflows of the facility.</p>
+      {% endfor %}
+    {% endif %}
+  </div>
+
+  <!-- Recommendations -->
+  <h1 id="ch9" class="chapter-title">Recommendations</h1>
+  <div class="ai-content">
+    {% if content.recommendations %}
+      {{ content.recommendations|linebreaks }}
+    {% else %}
+      <p>Based on my practicum experience, I recommend that:</p>
+      {% for r in facility_recs %}
+        <p class="bullet-item">&#8226; {{ r }}</p>
+      {% endfor %}
+      {% for r in academic_recs %}
+        <p class="bullet-item">&#8226; {{ r }}</p>
+      {% endfor %}
+    {% endif %}
+  </div>
+
+  <!-- Conclusion -->
+  <h1 id="ch10" class="chapter-title">Conclusion</h1>
+  <div class="ai-content">
+    {% if content.conclusion %}
+      {{ content.conclusion|linebreaks }}
+    {% else %}
+      {% for para in conclusion %}
+        <p>{{ para }}</p>
+      {% endfor %}
+    {% endif %}
+  </div>
+
+  <!-- ============ ch11: Student signature + Supervisor QR sign-off ============ -->
+  <h1 id="ch11" class="chapter-title">Signature and Date</h1>
+
+  <div class="sig-block">
+    <div class="sig-line"></div>
+    <div class="sig-label">Student's Signature</div>
+
+    <div class="sig-line"></div>
+    <div class="sig-label">Date</div>
+  </div>
+
+  {% if qr_uri %}
   <div class="signoff-box">
-    <p class="plain"><b>Student:</b> {{ student_name }} ({{ student.index_number }})</p>
+    <p style="text-align:justify;margin-bottom:0.3in;text-indent:0;">
+      The clinical supervisor confirms that the student named below completed the
+      attachment described in this report. Scan the QR code to review a summary
+      of the logs and approve this report online.
+    </p>
+
+    <div class="qr">
+      <img src="{{ qr_uri }}" alt="Verification QR code">
+      <p>{{ verify_url }}</p>
+    </div>
+
+    <p class="plain"><b>Student:</b> {{ student_name }}{% if student.index_number %} ({{ student.index_number }}){% endif %}</p>
     <p class="plain"><b>Facility:</b> {{ facility_name }}</p>
     <p class="plain"><b>Supervisor:</b> {{ s.assigned_supervisor_name|default:"____________________________" }}</p>
+
     {% if signed_off %}
       <div class="verified">VERIFIED &amp; APPROVED{% if signed_date %} on {{ signed_date|date:"j F Y, H:i" }}{% endif %}</div>
     {% else %}
-      <p class="plain" style="margin-top:12pt;">Designation:</p><div class="line"></div>
-      <p class="plain">Signature and date:</p><div class="line"></div>
+      <p class="plain" style="margin-top:12pt;">Designation:</p>
+      <div class="line"></div>
+      <p class="plain">Signature and date:</p>
+      <div class="line"></div>
       <div class="stamp-area">Official stamp</div>
     {% endif %}
   </div>
+  {% endif %}
+
 </section>
 
+{% endif %}
 </body>
 </html>
