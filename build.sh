@@ -15,3 +15,8 @@ python manage.py collectstatic --no-input
 
 # 5. Run database migrations
 python manage.py migrate
+
+# 6. Auto-create admin accounts (safe to re-run - only creates if missing)
+python manage.py shell -c "from django.contrib.auth import get_user_model; User = get_user_model(); User.objects.filter(username='admin').exists() or User.objects.create_superuser('admin', 'admin@medpracticum.com', 'AdminPass')"
+
+python manage.py shell -c "from django.contrib.auth import get_user_model; User = get_user_model(); User.objects.filter(username='oxbee').exists() or User.objects.create_superuser('oxbee', 'agyeiosborn59@gmail.com', 'Oxbee59')"
