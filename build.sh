@@ -1,12 +1,10 @@
 #!/usr/bin/env bash
-# Exit on error
 set -o errexit
 
-# Install dependencies
 pip install -r requirements.txt
 
-# Collect static files
-python manage.py collectstatic --no-input
+# Pre-build Matplotlib font cache so it doesn't block server startup
+python -c "import matplotlib; matplotlib.use('Agg'); import matplotlib.pyplot" || true
 
-# Apply database migrations
+python manage.py collectstatic --no-input
 python manage.py migrate
