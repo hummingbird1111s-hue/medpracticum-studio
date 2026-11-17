@@ -10,6 +10,18 @@ from dotenv import load_dotenv
 
 load_dotenv()  # Must run before DATABASES is defined
 
+# ===== Render free-tier memory guards =====
+# These MUST be in os.environ before matplotlib or numpy is first imported.
+# Without them, numpy spawns cpu_count() BLAS threads and matplotlib's
+# default backend loads GUI libs — together adding ~180 MB of RSS that
+# pushes the 512 MB free-tier worker into SIGKILL during chart rendering.
+# Setting them at module load guarantees they're in place before any view
+# code (apps/reports/charts.py) triggers the import.
+os.environ.setdefault('MPLBACKEND', 'Agg')           # no GUI backend → saves ~80MB
+os.environ.setdefault('OMP_NUM_THREADS', '1')        # numpy single-threaded
+os.environ.setdefault('OPENBLAS_NUM_THREADS', '1')   # stop OpenBLAS thread pool
+os.environ.setdefault('MKL_NUM_THREADS', '1')        # Intel MKL thread pool (if used)
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 

@@ -4,6 +4,7 @@ Shared AI client with three-provider fallback:
 - Groq fallback (rate-limit relief, free tier, text-only)
 - OpenRouter fallback (massive free model pool)
 - Rate-limit memory: once Gemini 429s, skipped for the requested duration
+- Per-model blacklist: 404'd models skipped for 5 minutes (avoids 6+ wasted API calls per request)
 """
 
 import logging
@@ -14,6 +15,7 @@ import re
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
+
 
 # ---------- Gemini ----------
 try:
@@ -27,16 +29,31 @@ except ImportError:
 
 try:
     _gemini_key = getattr(settings, 'GEMINI_API_KEY', None)
-    ai_client = genai.Client(api_key=_gemini_key) if (_gemini_key and genai) else None
+    if _gemini_key and genai:
+        # Try to set HTTP timeout (SDK-version-dependent). Fall back gracefully.
+        try:
+            ai_client = genai.Client(
+                api_key=_gemini_key,
+                http_options={'timeout': 20000},  # 20 seconds in ms
+            )
+        except (TypeError, ValueError, AttributeError):
+            ai_client = genai.Client(api_key=_gemini_key)
+    else:
+        ai_client = None
 except Exception as e:
     logger.exception('Gemini Client Init Error: %s', e)
     ai_client = None
+
 
 # ---------- Groq ----------
 try:
     from groq import Groq
     _groq_key = os.environ.get('GROQ_API_KEY', '')
-    groq_client = Groq(api_key=_groq_key) if _groq_key else None
+    groq_client = Groq(
+        api_key=_groq_key,
+        max_retries=0,   # FIX: SDK default is 2 → sleeps 20-60s between failed calls
+        timeout=15.0,    # FIX: fail fast
+    ) if _groq_key else None
     if not groq_client:
         logger.info('Groq disabled (no GROQ_API_KEY in .env)')
 except ImportError:
@@ -46,6 +63,7 @@ except Exception as e:
     groq_client = None
     logger.exception('Groq Client Init Error: %s', e)
 
+
 # ---------- OpenRouter (Final Fallback) ----------
 try:
     from openai import OpenAI
@@ -53,6 +71,8 @@ try:
     openrouter_client = OpenAI(
         base_url="https://openrouter.ai/api/v1",
         api_key=_openrouter_key,
+        max_retries=0,   # FIX
+        timeout=15.0,    # FIX
     ) if _openrouter_key else None
     if not openrouter_client:
         logger.info('OpenRouter disabled (no OPENROUTER_API_KEY in .env)')
@@ -65,11 +85,20 @@ except Exception as e:
 
 
 # ---------- Model catalogs ----------
-# FIX: real Gemini model names (previous 'gemini-3.5-flash' etc. 404 on every call)
+# Broad list so at least one works regardless of Google's model rotation.
+# Order matters: first usable is tried first.
 PREFERRED_MODELS = [
     'gemini-2.5-flash',
     'gemini-2.5-flash-lite',
+    'gemini-2.5-pro',
     'gemini-2.0-flash',
+    'gemini-2.0-flash-001',
+    'gemini-2.0-flash-lite',
+    'gemini-2.0-flash-exp',
+    'gemini-1.5-flash',
+    'gemini-1.5-flash-002',
+    'gemini-1.5-pro',
+    'gemini-1.5-pro-002',
 ]
 GROQ_MODEL = 'openai/gpt-oss-120b'
 GROQ_FALLBACK_MODEL = 'openai/gpt-oss-20b'
@@ -89,10 +118,16 @@ def _discover_live_models():
                 live.add(name)
         usable = [m for m in PREFERRED_MODELS if m in live]
         if usable:
-            logger.info('Gemini live models: %s', usable)
+            logger.info('Gemini live models at startup: %s', usable)
             return usable
-    except Exception:
-        pass
+        else:
+            logger.warning(
+                'Gemini discovery found NO matching models. '
+                'PREFERRED_MODELS=%s ; live models seen=%s',
+                PREFERRED_MODELS, sorted(live)[:15],
+            )
+    except Exception as e:
+        logger.warning('Gemini model discovery failed: %s', e)
     return list(PREFERRED_MODELS)
 
 
@@ -100,7 +135,7 @@ _AVAILABLE_MODELS = _discover_live_models()
 DEFAULT_MODEL = getattr(settings, 'GEMINI_MODEL', _AVAILABLE_MODELS[0])
 
 
-# ---------- Gemini rate-limit memory ----------
+# ---------- Gemini rate-limit memory (provider-wide) ----------
 RATE_LIMIT_COOLDOWN = 60
 _gemini_down_until = 0.0
 
@@ -112,7 +147,21 @@ def _gemini_available():
 def _mark_gemini_down(seconds=RATE_LIMIT_COOLDOWN):
     global _gemini_down_until
     _gemini_down_until = time.time() + seconds
-    logger.warning('Gemini marked rate-limited for %ss', seconds)
+    logger.warning('Gemini provider marked rate-limited for %ss', seconds)
+
+
+# ---------- Per-model blacklist (skip 404'd models for 5 minutes) ----------
+MODEL_COOLDOWN = 300  # 5 minutes
+_model_down_until = {}
+
+
+def _model_available(model_name):
+    return time.time() >= _model_down_until.get(model_name, 0.0)
+
+
+def _mark_model_down(model_name, seconds=MODEL_COOLDOWN):
+    _model_down_until[model_name] = time.time() + seconds
+    logger.warning('Gemini model "%s" blacklisted for %ss', model_name, seconds)
 
 
 # ---------- Error classification ----------
@@ -135,19 +184,15 @@ def _is_rate_limit(exc):
 def _extract_retry_seconds(exc, default=60):
     """Parse 'retry in 7h10m17s' or 'retryDelay: 25817s' from the Gemini error."""
     msg = str(exc)
-    # Match "retryDelay": "25817s"
     m = re.search(r'retryDelay[^0-9]*(\d+)s', msg)
     if m:
-        return min(int(m.group(1)), 86400)  # cap at 24h
-        
-    # Match "Please retry in 7h10m17s"
+        return min(int(m.group(1)), 86400)
     m = re.search(r'retry in (?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?', msg)
     if m and any(m.groups()):
         h, mn, s = (int(g) if g else 0 for g in m.groups())
         total = h * 3600 + mn * 60 + s
         if total > 0:
-            return min(total, 86400)  # cap at 24h
-            
+            return min(total, 86400)
     return default
 
 
@@ -177,11 +222,11 @@ def _try_groq(prompt, model=GROQ_MODEL):
             model=model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
-            max_tokens=1024,   # FIX: was 2048 — halves token budget → faster responses
+            max_tokens=1024,
         )
         return (response.choices[0].message.content or '').strip() or None
     except Exception as exc:
-        logger.warning('Groq %s failed: %s', model, exc)
+        logger.warning('Groq %s failed: %s', model, str(exc)[:250])
         return None
 
 
@@ -197,15 +242,15 @@ def _try_openrouter(prompt, model=OPENROUTER_MODEL):
         )
         return (response.choices[0].message.content or '').strip() or None
     except Exception as exc:
-        logger.warning('OpenRouter %s failed: %s', model, exc)
+        logger.warning('OpenRouter %s failed: %s', model, str(exc)[:250])
         return None
 
 
 def get_ai_reply(prompt, model=None):
     """
     Three-provider strategy:
-    1. If Gemini available: try primary + one fallback.
-    2. Gemini 429 -> mark down for the requested duration, go to Groq.
+    1. If Gemini available: try up to 3 non-blacklisted models.
+    2. Gemini 429 -> mark provider down for requested duration, go to Groq.
     3. Groq primary model; if it fails, Groq fallback model.
     4. If both fail, go to OpenRouter (auto-routed to a working free model).
     """
@@ -221,28 +266,40 @@ def get_ai_reply(prompt, model=None):
     # --- Phase 1: Gemini ---
     if ai_client and _gemini_available():
         tried_models = []
-        for m in candidates[:2]:
+        for m in candidates:
+            if len(tried_models) >= 3:
+                break
+            if not _model_available(m):
+                logger.debug('Skipping %s (in blacklist)', m)
+                continue
             tried_models.append(m)
             try:
                 response = _try_gemini(m, prompt)
                 text = (response.text or '').strip()
                 if text:
+                    logger.info('Gemini succeeded (model=%s)', m)
                     return text
             except Exception as exc:
+                code = _exc_code(exc)
+                snippet = str(exc)[:250]
                 if _is_rate_limit(exc):
-                    # Extract the exact retry time (e.g. 7 hours) so we don't waste time
                     cooldown = _extract_retry_seconds(exc, RATE_LIMIT_COOLDOWN)
                     _mark_gemini_down(cooldown)
                     break
                 if _is_missing_model(exc):
-                    logger.warning('Gemini %s retired, trying next', m)
+                    # FIX: show actual Google error, not just "retired"
+                    logger.warning('Gemini %s NOT FOUND (code=%s): %s', m, code, snippet)
+                    _mark_model_down(m, MODEL_COOLDOWN)
                     continue
                 if _is_transient(exc):
-                    logger.warning('Gemini %s overloaded (503), trying next', m)
+                    logger.warning('Gemini %s transient (code=%s): %s', m, code, snippet)
                     continue
-                logger.error('Gemini %s hard error: %s', m, exc)
+                logger.error('Gemini %s hard error (code=%s): %s', m, code, snippet)
                 break
-        logger.info('Gemini failed (tried: %s) — falling back to Groq', tried_models)
+        if tried_models:
+            logger.info('Gemini failed (tried: %s) — falling back to Groq', tried_models)
+        else:
+            logger.info('Gemini skipped (all models blacklisted) — falling back to Groq')
     elif not _gemini_available():
         remaining = int(_gemini_down_until - time.time())
         logger.info('Skipping Gemini (cooling down for %ss) — using Groq', max(0, remaining))
@@ -302,24 +359,31 @@ def get_ai_reply_with_image(prompt, image_bytes, mime='image/jpeg'):
     primary = DEFAULT_MODEL
     candidates = [primary] + [m for m in _AVAILABLE_MODELS if m != primary]
 
-    for m in candidates[:2]:
+    for m in candidates:
+        if not _model_available(m):
+            logger.debug('Skipping vision model %s (in blacklist)', m)
+            continue
         try:
             response = _try_gemini_vision(m, prompt, image_bytes, mime)
             text = (response.text or '').strip()
             if text:
+                logger.info('Vision succeeded (model=%s)', m)
                 return text
         except Exception as exc:
+            code = _exc_code(exc)
+            snippet = str(exc)[:250]
             if _is_rate_limit(exc):
                 cooldown = _extract_retry_seconds(exc, RATE_LIMIT_COOLDOWN)
                 _mark_gemini_down(cooldown)
                 break
             if _is_missing_model(exc):
-                logger.warning('Vision model %s retired, trying next', m)
+                logger.warning('Vision %s NOT FOUND (code=%s): %s', m, code, snippet)
+                _mark_model_down(m, MODEL_COOLDOWN)
                 continue
             if _is_transient(exc):
-                logger.warning('Vision model %s overloaded, trying next', m)
+                logger.warning('Vision %s transient (code=%s): %s', m, code, snippet)
                 continue
-            logger.error('Vision OCR hard error on %s: %s', m, exc)
+            logger.error('Vision OCR hard error on %s (code=%s): %s', m, code, snippet)
             break
 
     logger.warning('Vision OCR failed across models')

@@ -106,8 +106,11 @@ DRAFT_SECTIONS = [
      "APA-style reference list for any sources you cite. If you cite nothing, return an empty response. Do NOT include a heading."),
 ]
 
-# Increased from 90 to 240 seconds to allow for fallback delays
-DEFAULT_MAX_SECONDS = 240
+# FIX: capped at 90s so the AI loop bails well before Gunicorn's 180s timeout
+# (see Render Start Command: --timeout 180). Sections not drafted by 90s fall
+# back to template text — the report still generates, just less AI prose.
+# Was 240s, which exceeded the timeout and caused WORKER TIMEOUT / SIGKILL.
+DEFAULT_MAX_SECONDS = 90
 
 
 # ============================================================
