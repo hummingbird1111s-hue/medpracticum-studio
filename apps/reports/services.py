@@ -163,31 +163,67 @@ class PracticumReportBuilder:
         return 'data:image/png;base64,' + base64.b64encode(buf.getvalue()).decode('ascii')
 
     def _school(self):
+        """
+        Resolve the school branding logo with three-source fallback:
+          1. Per-report custom logo (uploaded by the student for this report)
+          2. SchoolProfile.logo (uploaded via Django admin)
+          3. static/branding/school-logo.png (committed to git — never missing)
+
+        Render's free tier wipes /media/ on every deploy, so steps 1 & 2 can
+        fail with FileNotFoundError. Step 3 guarantees the logo always shows.
+        """
         if self._school_cache is None:
+            from django.contrib.staticfiles import finders
+
             info = {'name': 'College of Health, Yamfo', 'motto': '', 'title_logo': None, 'header_logo': None}
             school = SchoolProfile.objects.first()
-
-            logo_to_use = None
-            if self.report_obj and self.report_obj.custom_logo:
-                logo_to_use = self.report_obj.custom_logo
-            elif school and school.logo:
-                logo_to_use = school.logo
 
             if school:
                 if school.name and 'COHY' not in school.name:
                     info['name'] = school.name
                 info['motto'] = school.motto
 
-            if logo_to_use:
+            logo_image = None
+
+            # --- 1) Per-report custom logo ---
+            if self.report_obj and self.report_obj.custom_logo:
                 try:
                     from PIL import Image
-                    with logo_to_use.open('rb') as fh:
-                        image = Image.open(fh)
-                        image.load()
-                    info['title_logo'] = self._png_uri(image, (600, 600))
-                    info['header_logo'] = self._png_uri(image, (220, 36))
-                except Exception:
-                    pass
+                    with self.report_obj.custom_logo.open('rb') as fh:
+                        logo_image = Image.open(fh)
+                        logo_image.load()
+                except Exception as e:
+                    logger.warning("Custom report logo missing or unreadable: %s", e)
+
+            # --- 2) School logo from DB ---
+            if logo_image is None and school and school.logo:
+                try:
+                    from PIL import Image
+                    with school.logo.open('rb') as fh:
+                        logo_image = Image.open(fh)
+                        logo_image.load()
+                except Exception as e:
+                    logger.warning("School logo missing or unreadable: %s", e)
+
+            # --- 3) Static fallback (guaranteed present in repo) ---
+            if logo_image is None:
+                static_path = finders.find('branding/school-logo.png')
+                if static_path:
+                    try:
+                        from PIL import Image
+                        logo_image = Image.open(static_path)
+                        logo_image.load()
+                        logger.info("Using static school logo fallback: %s", static_path)
+                    except Exception as e:
+                        logger.error("Static logo fallback failed: %s", e)
+
+            if logo_image is not None:
+                try:
+                    info['title_logo'] = self._png_uri(logo_image, (600, 600))
+                    info['header_logo'] = self._png_uri(logo_image, (220, 36))
+                except Exception as e:
+                    logger.error("Failed to build logo URIs: %s", e)
+
             self._school_cache = info
         return self._school_cache
 

@@ -1,4 +1,6 @@
 {% extends 'base.html' %}
+{% load static %}
+{% static "branding/school-logo.png" as fallback_logo %}
 {% block title %}Report settings · MedPracticum Studio{% endblock %}
 
 {% block content %}
@@ -258,14 +260,18 @@
         <span style="font-size: 5px; color: #4b5563; text-align: center; margin-bottom: 16px;">DEPT OF {{ user.get_department_display|upper }}</span>
 
         <div style="width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px;">
+          {# ── Logo fallback chain: custom → school (DB) → static (git) ── #}
           {% if session.report.custom_logo %}
-            <img src="{{ session.report.custom_logo.url }}" alt="Custom Logo" style="max-width: 100%; max-height: 100%; object-fit: contain;">
+            <img src="{{ session.report.custom_logo.url }}" alt="Custom Logo"
+                 style="max-width: 100%; max-height: 100%; object-fit: contain;"
+                 onerror="this.onerror=null; this.src='{{ fallback_logo }}';">
           {% elif school_logo %}
-            <img src="{{ school_logo.url }}" alt="School Logo" style="max-width: 100%; max-height: 100%; object-fit: contain;">
+            <img src="{{ school_logo.url }}" alt="School Logo"
+                 style="max-width: 100%; max-height: 100%; object-fit: contain;"
+                 onerror="this.onerror=null; this.src='{{ fallback_logo }}';">
           {% else %}
-            <div style="width: 40px; height: 40px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
-              <span style="font-size: 7px; color: #9ca3af;">Logo</span>
-            </div>
+            <img src="{{ fallback_logo }}" alt="School Logo"
+                 style="max-width: 100%; max-height: 100%; object-fit: contain;">
           {% endif %}
         </div>
 
@@ -324,7 +330,6 @@
     <p class="text-sm text-emerald-100 mb-4">
       The AI drafts each section using the hardcoded COHY standard (Times New Roman, 12pt, 1.5 spacing, 1-inch margins).
     </p>
-    <!-- Crucial fix: name="action" value="official" -->
     <button type="submit" name="action" value="official" id="gen-official-btn"
             class="w-full bg-white text-emerald-800 font-semibold rounded-lg py-2.5 hover:bg-emerald-50 transition disabled:opacity-70 disabled:cursor-wait">
       {% if session.report.pdf_file %}Regenerate Official Report{% else %}Generate Official Report{% endif %}
