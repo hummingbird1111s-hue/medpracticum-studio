@@ -98,7 +98,7 @@
 
     /* ================= MAIN COLUMN ================= */
     .mp-main-column { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-    
+
     /* HEADER */
     .mp-header {
       background: #ffffff; border-bottom: 1px solid #e5e7eb; padding: 12px 16px;
@@ -106,8 +106,7 @@
       flex-shrink: 0; box-shadow: 0 1px 2px rgba(0,0,0,0.03);
     }
     .mp-header__left { display: flex; align-items: center; gap: 10px; min-width: 0; }
-    
-    /* Modern System Name */
+
     .mp-header__brand {
       display: flex; align-items: center; gap: 8px;
       text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -123,8 +122,7 @@
     }
 
     .mp-header__right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-    
-    /* Minimized Contact Button */
+
     .mp-header__contact {
       display: inline-flex; align-items: center; justify-content: center;
       width: 34px; height: 34px; border-radius: 50%;
@@ -133,8 +131,7 @@
     }
     .mp-header__contact:hover { background: #d1fae5; border-color: #6ee7b7; }
     .mp-header__contact svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-    
-    /* Profile Pill with Label */
+
     .mp-profile-pill {
       display: inline-flex; align-items: center; gap: 6px;
       padding: 3px 3px 3px 12px; border-radius: 20px;
@@ -148,17 +145,26 @@
       border-radius: 50%; background: #047857; color: #ffffff; font-weight: 700; font-size: 12px;
     }
 
+    /* Login pill (anonymous) */
+    .mp-login-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 12px; border-radius: 20px;
+      background: #059669; color: #ffffff; text-decoration: none;
+      font-size: 12px; font-weight: 700; transition: background 0.15s;
+    }
+    .mp-login-pill:hover { background: #047857; }
+
     .mp-hamburger {
       background: transparent; border: 0; color: #374151; padding: 6px; border-radius: 8px;
       cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: background 0.15s ease;
     }
     .mp-hamburger:hover { background: #f3f4f6; }
     .mp-hamburger svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-    
+
     #install-btn { display: none; background: #059669; color: #ffffff; border: 0; border-radius: 8px; padding: 7px 12px; font-size: 13px; font-weight: 500; cursor: pointer; }
     #install-btn:hover { background: #047857; }
     #install-btn.show { display: inline-block; }
-    
+
     @media (min-width: 768px) { 
       .mp-hamburger { display: none; } 
       .mp-header { padding: 10px 20px; } 
@@ -166,7 +172,7 @@
 
     /* ================= BREADCRUMBS ================= */
     #mp-breadcrumbs {
-      display: none; /* Hidden by default, JS shows it if needed */
+      display: none;
       background: #ffffff; border-bottom: 1px solid #e5e7eb;
       padding: 10px 16px; font-size: 13px; color: #6b7280;
       align-items: center; flex-wrap: wrap; gap: 8px;
@@ -222,7 +228,7 @@
     }
   </style>
 
-  <!-- ===== FLOATING AI STYLES — conversation-based ===== -->
+  <!-- ===== FLOATING AI STYLES ===== -->
   <style>
     #mp-ai-btn {
         position: fixed; bottom: 24px; right: 24px; width: 60px; height: 60px; border-radius: 50%;
@@ -234,22 +240,18 @@
     #mp-ai-btn:hover { transform: scale(1.05); }
     #mp-ai-btn.dragging { cursor: grabbing; transition: none; }
 
-    /* NEW: AI Thought Cloud Tooltip */
     #mp-ai-tooltip {
         position: fixed; bottom: 95px; right: 24px;
         background: #ffffff; color: #065f46; border: 1px solid #a7f3d0;
         border-radius: 16px; padding: 14px 16px; width: 300px; max-width: calc(100vw - 48px);
         box-shadow: 0 10px 30px rgba(5, 150, 105, 0.2); z-index: 9998;
         font-size: 14px; line-height: 1.5; display: flex; flex-direction: column; gap: 8px;
-        
-        /* Transition states */
         opacity: 0; transform: translateY(10px); pointer-events: none;
         transition: opacity 0.5s ease, transform 0.5s ease;
     }
     #mp-ai-tooltip.show {
         opacity: 1; transform: translateY(0); pointer-events: auto;
     }
-    /* Tooltip Arrow (points down to the button) */
     #mp-ai-tooltip::after {
         content: ''; position: absolute; bottom: -8px; right: 34px;
         width: 16px; height: 16px; background: #ffffff;
@@ -268,8 +270,7 @@
         box-shadow: 0 12px 40px rgba(0,0,0,0.15); display: none; flex-direction: column; z-index: 10000;
         border: 1px solid #e5e7eb; overflow: hidden; resize: both; min-width: 300px; min-height: 400px;
     }
-    
-    /* Draggable Header */
+
     #mp-ai-header {
         background: #047857; color: white; padding: 12px 16px; display: flex; align-items: center;
         gap: 8px; font-weight: 600; user-select: none; flex-shrink: 0; cursor: grab;
@@ -305,8 +306,7 @@
     #mp-ai-image-preview .mp-ai-img-remove { background: none; border: 0; color: #dc2626; font-size: 22px; line-height: 1; cursor: pointer; padding: 0 4px; flex-shrink: 0; }
 
     .mp-ai-msg img { max-width: 100%; max-height: 240px; object-fit: contain; border-radius: 6px; margin-top: 6px; display: block; background: #fff; cursor: zoom-in; }
-    
-    /* File attachment styling in chat */
+
     .mp-ai-file-attach {
         display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.2);
         padding: 8px 12px; border-radius: 6px; margin-top: 6px; font-size: 13px;
@@ -317,14 +317,12 @@
     .mp-ai-msg { padding: 10px 14px; border-radius: 12px; font-size: 14px; max-width: 85%; line-height: 1.5; word-wrap: break-word; }
     .mp-ai-msg.bot { background: #ecfdf5; color: #065f46; align-self: flex-start; border-bottom-left-radius: 2px; border: 1px solid #a7f3d0; }
     .mp-ai-msg.user { background: #047857; color: white; align-self: flex-end; border-bottom-right-radius: 2px; }
-    
-    /* ChatGPT-Style Markdown Output */
+
     .mp-ai-msg h2, .mp-ai-msg h3, .mp-ai-msg h4 { color: inherit; margin: 12px 0 6px; }
     .mp-ai-msg ul { margin: 6px 0 10px; padding-left: 0; }
     .mp-ai-msg li { margin-left: 16px; margin-bottom: 4px; }
     .mp-ai-msg pre { background: #000; color: #fff; padding: 8px; border-radius: 6px; overflow-x: auto; font-size: 12px; }
 
-    /* Fullscreen Image Preview */
     #mp-ai-fullscreen {
         display: none; position: fixed; inset: 0; z-index: 100000;
         background: rgba(0,0,0,0.9); align-items: center; justify-content: center;
@@ -336,7 +334,6 @@
         cursor: pointer; line-height: 1; font-weight: 300;
     }
 
-    /* ===== History panel ===== */
     #mp-ai-history { position: absolute; inset: 0; background: #ffffff; z-index: 5; display: none; flex-direction: column; }
     #mp-ai-history.show { display: flex; }
     #mp-ai-history-header { background: #047857; color: white; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; font-weight: 600; flex-shrink: 0; }
@@ -404,8 +401,6 @@
           <svg viewBox="0 0 24 24"><path d="M9 17v-6h6v6m2 4H7a2 2 0 01-2-2V7a2 2 0 012-2h10a2 2 0 012 2v12a2 2 0 01-2 2z"/></svg>
           Reports
         </a>
-
-        {# ===== Presentations (PowerPoint builder) ===== #}
         <a href="{% url 'pptx_options' %}">
           <svg viewBox="0 0 24 24">
             <rect x="2.5" y="3" width="19" height="13" rx="2"/>
@@ -413,7 +408,6 @@
           </svg>
           Presentations
         </a>
-
         <a href="{% url 'attachments_list' %}">
           <svg viewBox="0 0 24 24"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
           All Attachments
@@ -441,8 +435,6 @@
       </nav>
 
       <div class="mp-sidebar__footer" style="display: flex; flex-direction: column; gap: 8px;">
-        
-        <!-- NEW: How to Use link -->
         <a href="{% url 'how_to_use' %}" style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 12px; background: rgba(255,255,255,0.1); border-radius: 8px; font-weight: 500; font-size: 14px; color: #ecfdf5; text-decoration: none; transition: background 0.15s ease;" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'">
           <svg viewBox="0 0 24 24" style="width: 18px; height: 18px; flex-shrink: 0; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;">
             <circle cx="12" cy="12" r="10"></circle>
@@ -470,20 +462,18 @@
             <svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
           </button>
           {% endif %}
-          
+
           <a href="{% url 'dashboard' %}" class="mp-header__brand">
             <div class="mp-header__brand-logo">MP</div>
             <span class="mp-header__brand-text">MedPracticum Studio</span>
           </a>
         </div>
         <div class="mp-header__right">
-          
-          <!-- Minimized Contact -->
+
           <a href="{% url 'contact' %}" class="mp-header__contact" title="Contact Service Provider">
             <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>
           </a>
-          
-          <!-- Profile Label (Shown on Mobile now) -->
+
           {% if user.is_authenticated %}
           <a href="{% url 'profile' %}" class="mp-profile-pill" title="Your profile">
             <span>Tap to view profile</span>
@@ -491,18 +481,29 @@
               {% if user.first_name or user.last_name %}{{ user.first_name|first|upper }}{{ user.last_name|first|upper }}{% else %}{{ user.username|first|upper }}{% endif %}
             </div>
           </a>
+          {% else %}
+          <a href="{% url 'login' %}" class="mp-login-pill" title="Log in to your account">
+            Log in →
+          </a>
           {% endif %}
-          
-          <button id="install-btn" type="button">Install app</button>
+
+          <button id="install-btn" type="button" data-authenticated="{% if user.is_authenticated %}1{% else %}0{% endif %}">Install app</button>
         </div>
       </header>
 
       <!-- ================= BREADCRUMBS ================= -->
       <div id="mp-breadcrumbs">
+        {% if user.is_authenticated %}
         <a href="{% url 'dashboard' %}" class="mp-breadcrumb-link" style="display: flex; align-items: center; gap: 4px;">
           <svg viewBox="0 0 24 24" style="width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"><path d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1h3a1 1 0 001-1V10"/></svg>
           Dashboard
         </a>
+        {% else %}
+        <a href="{% url 'login' %}" class="mp-breadcrumb-link" style="display: flex; align-items: center; gap: 4px;">
+          <svg viewBox="0 0 24 24" style="width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          Login
+        </a>
+        {% endif %}
         <span id="mp-breadcrumb-items" style="display: flex; align-items: center; gap: 8px;"></span>
       </div>
 
@@ -529,7 +530,7 @@
         <p style="margin-top: 4px;">
           &copy; <span id="footer-year"></span> MedPracticum Studio. All rights reserved. 
           <span style="margin: 0 8px; color: #6b7280;">|</span> 
-          <a href="{% url 'terms' %}" style="color: #34d399; text-decoration: underline; font-weight: 500;">Terms &amp; Conditions</a>
+          <a href="{% url 'terms' %}" style="color: #34d399; text-decoration: underline; font-weight: 500;">Terms, Conditions &amp; Privacy Policy</a>
         </p>
       </footer>
 
@@ -559,24 +560,24 @@
     });
   </script>
 
-  <!-- ================= BREADCRUMB LOGIC ================= -->
+  <!-- ================= BREADCRUMB LOGIC (AUTH-SAFE) ================= -->
   <script>
     document.addEventListener('DOMContentLoaded', function() {
       var path = window.location.pathname.replace(/^\/|\/$/g, '');
-      var segments = path.split('/');
-      
-      // If on the main dashboard, keep breadcrumbs hidden
-      if (path === '' || path === 'dashboard') {
+
+      // Skip breadcrumbs for auth, admin, dashboard, and root pages
+      if (!path || path === 'dashboard' || path === 'accounts' ||
+          path.indexOf('accounts/') === 0 || path.indexOf('admin/') === 0 ||
+          path === 'login' || path === 'logout' || path === 'password-reset' ||
+          path.indexOf('password') !== -1) {
         return;
       }
 
+      var segments = path.split('/');
       var container = document.getElementById('mp-breadcrumbs');
       var itemsContainer = document.getElementById('mp-breadcrumb-items');
-      
-      // Only show breadcrumbs if we are on an active page
-      if (container) {
-        container.style.display = 'flex';
-      }
+
+      if (container) container.style.display = 'flex';
 
       var routeMap = {
         'reports': '{% url "report_options" %}',
@@ -587,7 +588,8 @@
         'archive': '{% url "archive_list" %}',
         'attachment': '{% url "start_attachment" %}',
         'terms': '{% url "terms" %}',
-        'how_to_use': '{% url "how_to_use" %}'
+        'how_to_use': '{% url "how_to_use" %}',
+        'contact': '{% url "contact" %}'
       };
 
       var labelMap = {
@@ -602,32 +604,28 @@
         'new': 'New Log',
         'attachment': 'Attachment Details',
         'how_to_use': 'How to Use',
-        'terms': 'Terms & Conditions'
+        'terms': 'Terms, Conditions & Privacy Policy',
+        'contact': 'Contact'
       };
-      
+
       var html = '';
       segments.forEach(function(seg, index) {
-        // Skip numeric IDs in the breadcrumb URL text
-        if (!isNaN(seg) && seg.trim() !== '') return; 
-        
+        if (!isNaN(seg) && seg.trim() !== '') return;
+
         var name = labelMap[seg] || seg.charAt(0).toUpperCase() + seg.slice(1).replace(/-/g, ' ');
         var isLast = (index === segments.length - 1);
-        
-        // Build the URL
         var url = routeMap[seg] ? routeMap[seg] : '/' + segments.slice(0, index + 1).join('/') + '/';
-        
+
         html += '<span class="mp-breadcrumb-sep">›</span>';
-        
+
         if (isLast) {
           html += '<span class="mp-breadcrumb-current">' + name + '</span>';
         } else {
           html += '<a href="' + url + '" class="mp-breadcrumb-link">' + name + '</a>';
         }
       });
-      
-      if (itemsContainer) {
-        itemsContainer.innerHTML = html;
-      }
+
+      if (itemsContainer) itemsContainer.innerHTML = html;
     });
   </script>
 
@@ -705,12 +703,68 @@
   })();
   </script>
 
+  <!-- ================= PWA INSTALL BUTTON (always visible for logged-in users) ================= -->
+  <script>
+  (function() {
+    var installBtn = document.getElementById('install-btn');
+    if (!installBtn) return;
+
+    // Hide if already installed as standalone PWA
+    var isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
+                       window.navigator.standalone === true;
+    if (isStandalone) {
+      installBtn.style.display = 'none';
+      installBtn.classList.remove('show');
+      return;
+    }
+
+    // Show only for logged-in users (read from data-authenticated attribute set by Django)
+    if (installBtn.dataset.authenticated === '1') {
+      installBtn.classList.add('show');
+    }
+
+    // Capture the native install prompt
+    var deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', function(e) {
+      e.preventDefault();
+      deferredPrompt = e;
+    });
+
+    installBtn.addEventListener('click', async function() {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        var choice = await deferredPrompt.userChoice;
+        deferredPrompt = null;
+        if (choice.outcome === 'accepted') {
+          installBtn.classList.remove('show');
+          installBtn.style.display = 'none';
+        }
+      } else {
+        var ua = navigator.userAgent.toLowerCase();
+        var msg = '';
+        if (ua.includes('iphone') || ua.includes('ipad')) {
+          msg = 'To install on iPhone/iPad:\n\n1. Tap the Share button (square with up arrow)\n2. Scroll down and tap "Add to Home Screen"\n3. Tap "Add"';
+        } else if (ua.includes('android')) {
+          msg = 'To install on Android:\n\n1. Tap the browser menu (three dots)\n2. Tap "Install app" or "Add to Home screen"\n3. Tap "Install"';
+        } else {
+          msg = 'To install on desktop:\n\n• Chrome: Menu (three dots) > "Install MedPracticum Studio"\n• Edge: Menu (...) > Apps > "Install this site as an app"\n\nLook for the install icon in your address bar.';
+        }
+        alert(msg);
+      }
+    });
+
+    window.addEventListener('appinstalled', function() {
+      installBtn.classList.remove('show');
+      installBtn.style.display = 'none';
+    });
+  })();
+  </script>
+
   <!-- ============================================================ -->
-  <!-- FLOATING AI ASSISTANT — conversation-based + VISION + DRAG    -->
+  <!-- FLOATING AI ASSISTANT -->
   <!-- ============================================================ -->
   {% if user.is_authenticated %}
-  
-  <!-- AI Tooltip Speech Bubble -->
+
   <div id="mp-ai-tooltip">
       <span class="close-tip" onclick="document.getElementById('mp-ai-tooltip').classList.remove('show'); sessionStorage.setItem('mp_ai_tooltip_seen', '1');">×</span>
       <div style="font-weight: 700; display: flex; align-items: center; gap: 6px;">
@@ -733,7 +787,6 @@
           <div class="mp-ai-msg bot">Hello! I am your AI assistant. I can read your logs, look at your photos, and help you write your report. Try:<br><br>• "Write an abstract for my report"<br>• "How many logs do I have?"<br>• 📎 Attach a file or photo and ask "Transcribe this"</div>
       </div>
 
-      <!-- File/Image preview strip (hidden by default) -->
       <div id="mp-ai-image-preview">
           <img id="mp-ai-image-thumb" src="" alt="">
           <div class="mp-ai-img-info" id="mp-ai-image-info"></div>
@@ -746,7 +799,6 @@
           <button id="mp-ai-send" type="button" onclick="sendAIMessage()">➤</button>
       </div>
 
-      <!-- Hidden file input: supports camera, images, pdfs, docs -->
       <input type="file" id="mp-ai-file-input" accept="image/*,application/pdf,.doc,.docx,.txt" capture="environment" style="display:none;">
 
       <div id="mp-ai-history">
@@ -764,7 +816,6 @@
       </div>
   </div>
 
-  <!-- Fullscreen Image Preview Overlay -->
   <div id="mp-ai-fullscreen">
       <span class="close-btn" id="mp-ai-fullscreen-close">&times;</span>
       <img id="mp-ai-fullscreen-img" src="" alt="Full preview">
@@ -781,17 +832,11 @@
       var header    = document.getElementById('mp-ai-header');
       var tooltip   = document.getElementById('mp-ai-tooltip');
 
-      /* ── Tooltip Logic ─────────────────────────────────── */
-      // Check if tooltip has been seen in this session
       if (tooltip && !sessionStorage.getItem('mp_ai_tooltip_seen')) {
-          // Show after 3 seconds
           setTimeout(function() {
-              // Only show if the chat window is not already open
               if (win.style.display !== 'flex') {
                   tooltip.classList.add('show');
               }
-              
-              // Auto-hide after 10 seconds
               setTimeout(function() {
                   tooltip.classList.remove('show');
                   sessionStorage.setItem('mp_ai_tooltip_seen', '1');
@@ -799,7 +844,6 @@
           }, 3000);
       }
 
-      /* ── Fullscreen Preview Logic ──────────────────────── */
       var fullOverlay = document.getElementById('mp-ai-fullscreen');
       var fullImg = document.getElementById('mp-ai-fullscreen-img');
       var fullClose = document.getElementById('mp-ai-fullscreen-close');
@@ -817,7 +861,6 @@
           if (e.target === fullOverlay) fullOverlay.style.display = 'none';
       });
 
-      /* ── File Attach Wiring ────────────────────────────── */
       var attachBtn = document.getElementById('mp-ai-attach-btn');
       var fileIn    = document.getElementById('mp-ai-file-input');
       var preview   = document.getElementById('mp-ai-image-preview');
@@ -864,7 +907,6 @@
                       if (mime.startsWith('image/')) {
                           previewThumb.src = dataUrl;
                       } else {
-                          // Show a document icon for PDFs/Docs
                           previewThumb.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" fill="%236b7280"><rect width="50" height="50" fill="%23f3f4f6"/><text x="25" y="30" text-anchor="middle" font-size="12">📄</text></svg>';
                       }
                   }
@@ -884,7 +926,6 @@
       var currentSessionId = null;
       var GREETING = 'Hello! I am your AI assistant. I can read your logs, look at your photos, and help you write your report. Try:<br><br>• "Write an abstract for my report"<br>• "How many logs do I have?"<br>• 📎 Attach a file or photo and ask "Transcribe this"';
 
-      /* ── Floating Button Drag ────────────────────────── */
       var isDragging = false, moved = false;
       var dragStartX = 0, dragStartY = 0, startL = 0, startT = 0;
       var EDGE = 8;
@@ -959,30 +1000,25 @@
 
       btn.addEventListener('click', function (e) {
           if (moved) { moved = false; e.stopImmediatePropagation(); e.preventDefault(); return; }
-          
-          // Hide tooltip if it's currently visible
           if (tooltip && tooltip.classList.contains('show')) {
               tooltip.classList.remove('show');
               sessionStorage.setItem('mp_ai_tooltip_seen', '1');
           }
-          
           toggleAIWindow();
       });
 
-      /* ── Draggable Chat Window ─────────────────────────────── */
       var isWinDragging = false;
       var winStartX = 0, winStartY = 0, winStartL = 0, winStartT = 0;
 
       header.addEventListener('pointerdown', function (e) {
-          // Ignore clicks on buttons or the close 'X'
           if (e.target.tagName.toLowerCase() === 'button' || e.target.tagName.toLowerCase() === 'span') return; 
           if (e.pointerType === 'mouse' && e.button !== 0) return;
-          
+
           isWinDragging = true;
           winStartX = e.clientX; winStartY = e.clientY;
           var rect = win.getBoundingClientRect();
           winStartL = rect.left; winStartT = rect.top;
-          
+
           win.style.right = 'auto';
           win.style.bottom = 'auto';
           win.style.left = winStartL + 'px';
@@ -1002,29 +1038,49 @@
           if (isWinDragging) isWinDragging = false;
       });
 
-      /* ── Chat Helpers ────────────────────────────────────── */
       function escapeHtml(s) {
           return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
               return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
           });
       }
 
+      // ── FIX: strip horizontal rules, echoed context markers, and collapse <br> runs ──
       function formatContent(s) {
           var cleaned = String(s == null ? '' : s).replace(/\[Image attached:[^\]]*\]\s*/g, '');
           var html = escapeHtml(cleaned);
-          
+
+          // 1) Strip echoed context markers
+          html = html.replace(/-{2,}\s*USER DATA CONTEXT[^\n]*-{2,}/gi, '');
+          html = html.replace(/-{2,}\s*END OF CONTEXT[^\n]*-{2,}/gi, '');
+
+          // 2) Remove standalone horizontal rules (---, ***, ___, ===)
+          html = html.replace(/^[ \t]*([-*_=])(?:[ \t]*\1){2,}[ \t]*$/gm, '');
+
+          // 3) Collapse blank-line runs
+          html = html.replace(/\n{3,}/g, '\n\n');
+
+          // 4) Headers
           html = html.replace(/^### (.*$)/gim, '<h4 style="margin: 12px 0 4px; font-weight: 700; font-size: 15px;">$1</h4>');
           html = html.replace(/^## (.*$)/gim, '<h3 style="margin: 14px 0 6px; font-weight: 700; font-size: 16px;">$1</h3>');
           html = html.replace(/^# (.*$)/gim, '<h2 style="margin: 16px 0 8px; font-weight: 700; font-size: 18px;">$1</h2>');
+
+          // 5) Bold
           html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-          
+
+          // 6) Bullets
           html = html.replace(/^\s*[\-\*]\s+(.*$)/gim, '<li style="margin-left: 16px; margin-bottom: 4px;">$1</li>');
           html = html.replace(/(<li.*<\/li>)/gim, '<ul style="margin: 6px 0 10px; padding-left: 0;">$1</ul>');
           html = html.replace(/^\s*\d+\.\s+(.*$)/gim, '<li style="margin-left: 16px; margin-bottom: 4px;">$1</li>');
 
+          // 7) Newlines
           html = html.replace(/\n/g, '<br>');
           html = html.replace(/<br><ul/g, '<ul').replace(/<\/ul><br>/g, '</ul>');
-          
+
+          // 8) Final cleanup — no triple <br>, no leading/trailing <br>
+          html = html.replace(/(<br\s*\/?>){3,}/gi, '<br><br>');
+          html = html.replace(/^(<br\s*\/?>)+/i, '');
+          html = html.replace(/(<br\s*\/?>)+$/i, '');
+
           return html;
       }
 
@@ -1157,16 +1213,21 @@
           }
       }
 
+      // ── FIX: res.ok check, 60s AbortController, retry button, specific error messages ──
       window.sendAIMessage = async function () {
           var text = input.value.trim();
           var hasImage = !!pendingImageB64;
           if (!text && !hasImage) return;
           input.value = '';
 
-          /* ── Render user bubble ───── */
+          // Snapshot for retry
+          var retryText = text;
+          var retryImage = pendingImageB64;
+          var retryMime = pendingImageMime;
+          var retryName = pendingImageName;
+
           var userBubble = '<div class="mp-ai-msg user">';
           if (text) userBubble += escapeHtml(text);
-          
           if (hasImage) {
               if (text) userBubble += '<br>';
               if (pendingImageMime.startsWith('image/')) {
@@ -1179,7 +1240,6 @@
           body.innerHTML += userBubble;
           body.scrollTop = body.scrollHeight;
 
-          /* ── Dynamic Typing Indicator ───── */
           var typingId = 'typing-' + Date.now();
           body.innerHTML += '<div class="mp-ai-msg bot" id="' + typingId + '"><span style="opacity:0.6;" class="mp-typing-text">Thinking…</span></div>';
           body.scrollTop = body.scrollHeight;
@@ -1192,12 +1252,11 @@
           var typingTextEl = document.querySelector('#' + typingId + ' .mp-typing-text');
           if (typingTextEl) typingTextEl.textContent = statuses[0];
 
-          // Increasing delays so it doesn't loop infinitely
           var delays = [4000, 7000, 10000, 15000];
           var statusTimer = null;
 
           function nextStatus() {
-              if (statusIndex >= statuses.length - 1) return; // Stop at "Almost there..."
+              if (statusIndex >= statuses.length - 1) return;
               statusIndex++;
               var el = document.querySelector('#' + typingId + ' .mp-typing-text');
               if (el) el.textContent = statuses[statusIndex];
@@ -1207,10 +1266,38 @@
           }
           statusTimer = setTimeout(nextStatus, delays[0]);
 
+          function removeTyping() {
+              clearTimeout(statusTimer);
+              var el = document.getElementById(typingId);
+              if (el) el.remove();
+          }
+
+          function appendError(msg) {
+              var errId = 'err-' + Date.now();
+              var errHtml =
+                  '<div class="mp-ai-msg bot" id="' + errId + '" style="color:#b91c1c; background:#fef2f2; border-color:#fecaca;">'
+                + escapeHtml(msg)
+                + '<br><button type="button" style="margin-top:8px; background:#dc2626; color:#fff; border:0; border-radius:6px; padding:6px 12px; font-size:12px; font-weight:600; cursor:pointer;" '
+                + 'onclick="(function(b){var p=b.closest(\'.mp-ai-msg\'); if(p) p.remove(); '
+                + 'document.getElementById(\'mp-ai-input\').value=' + JSON.stringify(retryText) + ';'
+                + 'window.sendAIMessage();})(this)">🔄 Retry</button>'
+                + '</div>';
+              body.innerHTML += errHtml;
+              body.scrollTop = body.scrollHeight;
+          }
+
           var sendImageB64  = pendingImageB64;
           var sendImageMime = pendingImageMime;
           var sendImageName = pendingImageName;
           clearPendingImage();
+
+          // 60-second client-side timeout via AbortController
+          var controller = null;
+          var abortTimer = null;
+          if (typeof AbortController !== 'undefined') {
+              controller = new AbortController();
+              abortTimer = setTimeout(function () { controller.abort(); }, 60000);
+          }
 
           try {
               var csrfToken = '';
@@ -1227,36 +1314,60 @@
                   payload.image_name = sendImageName || 'file';
               }
 
-              var res = await fetch('/api/ai/chat/', {
+              var fetchOpts = {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
                   body: JSON.stringify(payload)
-              });
-              var data = await res.json();
-              
-              // Stop the timer and show "Ready." briefly
-              clearTimeout(statusTimer);
-              var typingEl = document.getElementById(typingId);
-              if (typingEl) {
-                  var readyEl = typingEl.querySelector('.mp-typing-text');
-                  if (readyEl) readyEl.textContent = 'Ready.';
-                  setTimeout(function() { if (typingEl) typingEl.remove(); }, 400);
+              };
+              if (controller) fetchOpts.signal = controller.signal;
+
+              var res = await fetch('/api/ai/chat/', fetchOpts);
+              if (abortTimer) clearTimeout(abortTimer);
+
+              // Server returned non-2xx — read the JSON error if possible
+              if (!res.ok) {
+                  var errMsg = 'Server error (' + res.status + '). Please try again.';
+                  try {
+                      var errData = await res.json();
+                      if (errData && errData.error) errMsg = errData.error;
+                  } catch (_) {
+                      if (res.status === 403) errMsg = 'Your session expired. Please log in again.';
+                      else if (res.status === 502 || res.status === 504) errMsg = 'The AI server timed out. Please try a shorter message.';
+                  }
+                  removeTyping();
+                  appendError(errMsg);
+                  return;
               }
+
+              // Try to parse JSON
+              var data;
+              try {
+                  data = await res.json();
+              } catch (jsonErr) {
+                  removeTyping();
+                  appendError('The server sent an unexpected response. Please try again.');
+                  return;
+              }
+
+              removeTyping();
 
               if (data && data.success) {
                   if (data.session_id) currentSessionId = data.session_id;
-                  setTimeout(function() {
-                      body.innerHTML += '<div class="mp-ai-msg bot">' + formatContent(data.reply) + '</div>';
-                      body.scrollTop = body.scrollHeight;
-                  }, 400); // Wait for the "Ready." text to show
+                  body.innerHTML += '<div class="mp-ai-msg bot">' + formatContent(data.reply) + '</div>';
+                  body.scrollTop = body.scrollHeight;
               } else {
-                  body.innerHTML += '<div class="mp-ai-msg bot" style="color:red;">Error: ' + escapeHtml((data && data.error) || 'Unknown error') + '</div>';
+                  appendError((data && data.error) || 'Unknown error from AI server.');
               }
           } catch (err) {
-              clearTimeout(statusTimer);
-              var typingEl2 = document.getElementById(typingId);
-              if (typingEl2) typingEl2.remove();
-              body.innerHTML += '<div class="mp-ai-msg bot" style="color:red;">Network error. Could not reach the AI server.</div>';
+              if (abortTimer) clearTimeout(abortTimer);
+              removeTyping();
+              if (err && err.name === 'AbortError') {
+                  appendError('The AI took too long to respond (>60s). Please try a shorter question or try again.');
+              } else if (err && err.message && err.message.toLowerCase().indexOf('network') !== -1) {
+                  appendError('Network connection lost. Check your internet and try again.');
+              } else {
+                  appendError('Could not reach the AI server. Please try again.');
+              }
           }
           body.scrollTop = body.scrollHeight;
       };
@@ -1268,42 +1379,40 @@
   {% if user.is_authenticated %}
   <div id="mp-welcome-overlay">
     <div style="background: #fff; border-radius: 20px; max-width: 600px; width: 100%; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); animation: welcomePop 0.4s ease-out; position: relative;">
-      
-      <!-- Header -->
+
       <div style="background: linear-gradient(135deg, #047857, #10b981); padding: 24px; text-align: center; color: white;">
         <div style="font-size: 40px; margin-bottom: 8px;">👋</div>
         <h2 style="margin: 0; font-size: 24px; font-weight: 800;">Welcome to MedPracticum Studio!</h2>
         <p style="margin: 8px 0 0; opacity: 0.9; font-size: 14px;">Your all-in-one platform for COHY practicum management.</p>
       </div>
 
-      <!-- Body -->
       <div style="padding: 24px;">
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
-          
+
           <div style="background: #f9fafb; padding: 16px; border-radius: 12px; border: 1px solid #e5e7eb;">
             <div style="font-size: 24px; margin-bottom: 8px;">📝</div>
             <h3 style="margin: 0 0 4px; font-size: 15px; font-weight: 700; color: #1f2937;">Log Activities</h3>
             <p style="margin: 0; font-size: 12px; color: #6b7280;">Record units, skills, and challenges in seconds.</p>
           </div>
-          
+
           <div style="background: #f9fafb; padding: 16px; border-radius: 12px; border: 1px solid #e5e7eb;">
             <div style="font-size: 24px; margin-bottom: 8px;">📊</div>
             <h3 style="margin: 0 0 4px; font-size: 15px; font-weight: 700; color: #1f2937;">Auto-Generate Reports</h3>
             <p style="margin: 0; font-size: 12px; color: #6b7280;">Let AI draft your PDF and Word reports instantly.</p>
           </div>
-          
+
           <div style="background: #f9fafb; padding: 16px; border-radius: 12px; border: 1px solid #e5e7eb;">
             <div style="font-size: 24px; margin-bottom: 8px;">🖥️</div>
             <h3 style="margin: 0 0 4px; font-size: 15px; font-weight: 700; color: #1f2937;">Build Presentations</h3>
             <p style="margin: 0; font-size: 12px; color: #6b7280;">Create stunning slides with speaker notes.</p>
           </div>
-          
+
           <div style="background: #f9fafb; padding: 16px; border-radius: 12px; border: 1px solid #e5e7eb;">
             <div style="font-size: 24px; margin-bottom: 8px;">🩺</div>
             <h3 style="margin: 0 0 4px; font-size: 15px; font-weight: 700; color: #1f2937;">24/7 AI Assistant</h3>
             <p style="margin: 0; font-size: 12px; color: #6b7280;">Ask questions, transcribe images, get writing help.</p>
           </div>
-          
+
         </div>
 
         <div style="display: flex; gap: 12px;">
@@ -1317,18 +1426,17 @@
       </div>
     </div>
   </div>
-  
+
   <script>
     document.addEventListener('DOMContentLoaded', function() {
       var welcomeOverlay = document.getElementById('mp-welcome-overlay');
       var skipBtn = document.getElementById('welcome-skip');
       var continueBtn = document.getElementById('welcome-continue');
 
-      // Check if user has seen the welcome overlay
       if (!localStorage.getItem('mp_welcome_seen')) {
         setTimeout(function() {
           welcomeOverlay.style.display = 'flex';
-        }, 1000); // Slight delay so the page loads first
+        }, 1000);
       }
 
       function closeWelcome() {

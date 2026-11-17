@@ -6,6 +6,9 @@ import logging
 import os
 from pathlib import Path
 import dj_database_url
+from dotenv import load_dotenv
+
+load_dotenv()  # Must run before DATABASES is defined
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -145,9 +148,11 @@ DATABASES = {
     'default': dj_database_url.config(
         default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
         conn_max_age=600,
-        ssl_require=True
     )
 }
+# Postgres needs sslmode=require; SQLite doesn't accept the kwarg at all
+if DATABASES['default']['ENGINE'].endswith('postgresql'):
+    DATABASES['default'].setdefault('OPTIONS', {})['sslmode'] = 'require'
 
 
 # Custom user model

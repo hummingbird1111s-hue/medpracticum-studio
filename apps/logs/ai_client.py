@@ -65,11 +65,11 @@ except Exception as e:
 
 
 # ---------- Model catalogs ----------
+# FIX: real Gemini model names (previous 'gemini-3.5-flash' etc. 404 on every call)
 PREFERRED_MODELS = [
-    'gemini-3.5-flash',
-    'gemini-3.6-flash',
-    'gemini-3.5-flash-lite',
-    'gemini-3.8-flash',
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-lite',
+    'gemini-2.0-flash',
 ]
 GROQ_MODEL = 'openai/gpt-oss-120b'
 GROQ_FALLBACK_MODEL = 'openai/gpt-oss-20b'
@@ -177,7 +177,7 @@ def _try_groq(prompt, model=GROQ_MODEL):
             model=model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
-            max_tokens=2048,
+            max_tokens=1024,   # FIX: was 2048 — halves token budget → faster responses
         )
         return (response.choices[0].message.content or '').strip() or None
     except Exception as exc:
@@ -193,7 +193,7 @@ def _try_openrouter(prompt, model=OPENROUTER_MODEL):
             model=model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
-            max_tokens=1024, 
+            max_tokens=1024,
         )
         return (response.choices[0].message.content or '').strip() or None
     except Exception as exc:

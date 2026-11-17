@@ -16,3 +16,14 @@ venv/
 db.sqlite3
 __pycache__/
 staticfiles/
+
+# Seed data & local utility scripts
+seed_*.py
+fast_update.py
+check_dupes.py
+merge_profiles.py
+patch_missing_profiles.py
+parse_hefra.py
+generate_seed.py
+*.csv
+FACILITIES-WITH-VALID-LICENCES-*.pdf

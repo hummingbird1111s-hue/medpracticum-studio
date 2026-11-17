@@ -11,12 +11,14 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_POST
 
-try:
-    from google import genai
-    from google.genai import errors as genai_errors
-except ImportError:
-    genai = None
-    genai_errors = None
+# ─────────────────────────────────────────────────────────────────────────
+# CRITICAL FOR RENDER FREE TIER:
+# Do NOT import `google.genai` at module level. The SDK builds an
+# enormous Pydantic model tree on import (~200 MB) and causes Gunicorn
+# workers to be SIGKILL'd for OOM during startup. Instead, we check
+# `settings.GEMINI_API_KEY` (cheap) and let `.ai_client` load the SDK
+# lazily inside `ai_chat()` only when an actual AI request comes in.
+# ─────────────────────────────────────────────────────────────────────────
 
 from .department_config import COMMON_TEXT_FIELDS, get_department_config
 from .forms import AttachmentSessionForm
@@ -28,12 +30,10 @@ from .models import (
 MAX_LOGS_PER_SYNC = 100
 MAX_TAGS = 20
 
-try:
-    _gemini_key = getattr(settings, 'GEMINI_API_KEY', None)
-    ai_client = genai.Client(api_key=_gemini_key) if (_gemini_key and genai) else None
-except Exception as e:
-    print(f"AI Client Init Error: {e}")
-    ai_client = None
+
+def _ai_is_configured():
+    """Cheap check — does not touch the heavy google.genai SDK."""
+    return bool(getattr(settings, 'GEMINI_API_KEY', None))
 
 
 def _get_active_session(request):
@@ -60,23 +60,21 @@ def _get_active_session(request):
 def dashboard(request):
     session = _get_active_session(request)
     all_attachments = request.user.attachments.filter(is_deleted=False).order_by('-start_date', '-id')
-    
+
     recent_logs = []
     total_logs = 0
-    session_competencies = [] # NEW
-    
+    session_competencies = []
+
     if session:
         recent_logs = session.daily_logs.filter(is_deleted=False).order_by('-date')[:3]
         total_logs = session.daily_logs.filter(is_deleted=False).count()
-        session_competencies = session.competencies.all() # NEW
-        
-    # Stats for the dashboard cards
+        session_competencies = session.competencies.all()
+
     active_attachments_count = all_attachments.count()
-    
-    # Only count logs that are active AND belong to an active attachment
+
     active_logs_count = DailyLog.objects.filter(
-        attachment__user=request.user, 
-        attachment__is_deleted=False, 
+        attachment__user=request.user,
+        attachment__is_deleted=False,
         is_deleted=False
     ).count()
 
@@ -87,18 +85,19 @@ def dashboard(request):
         'total_logs': total_logs,
         'active_attachments_count': active_attachments_count,
         'active_logs_count': active_logs_count,
-        'session_competencies': session_competencies, # NEW
+        'session_competencies': session_competencies,
     })
 
-@login_required
+
 def how_to_use(request):
-    """Renders the detailed user guide."""
+    """Renders the detailed user guide. Public — reachable while logged out."""
     return render(request, 'logs/how_to_use.html')
 
-@login_required
+
 def terms_and_conditions(request):
-    """Renders the platform Terms & Conditions page."""
+    """Renders the platform Terms, Conditions & Privacy Policy page. Public."""
     return render(request, 'logs/terms.html')
+
 
 @login_required
 def start_attachment(request):
@@ -161,7 +160,7 @@ def new_log(request):
     session = _get_active_session(request)
     if session is None:
         return redirect('start_attachment')
-        
+
     dept = get_department_config(request.user.department)
     existing = None
     edit_id = request.GET.get('edit_id')
@@ -192,13 +191,12 @@ def new_log(request):
         'dashboard_url': reverse('dashboard'),
         'existing': existing,
     }
-    
-    # NEW: Fetch all attachments for the switcher dropdown in the template
+
     all_attachments = request.user.attachments.filter(is_deleted=False).order_by('-start_date', '-id')
-    
+
     return render(request, 'logs/new_log.html', {
         'session': session,
-        'all_attachments': all_attachments,  # Passed to template
+        'all_attachments': all_attachments,
         'dept': dept,
         'text_fields': COMMON_TEXT_FIELDS,
         'config': config,
@@ -207,12 +205,11 @@ def new_log(request):
 
 @login_required
 def attachments_list(request):
-    # Prefetch only active logs so the attachment page count is accurate
     active_logs = DailyLog.objects.filter(is_deleted=False)
     attachments = request.user.attachments.filter(is_deleted=False).prefetch_related(
         Prefetch('daily_logs', queryset=active_logs, to_attr='active_logs')
     ).order_by('-start_date', '-id')
-    
+
     return render(request, 'logs/attachments_list.html', {
         'attachments': attachments,
         'active_id': request.session.get('active_attachment_id')
@@ -221,7 +218,6 @@ def attachments_list(request):
 
 @login_required
 def logs_list(request):
-    # Prefetch only active logs so deleted logs don't show up in the list
     active_logs = DailyLog.objects.filter(is_deleted=False)
     attachments = request.user.attachments.filter(is_deleted=False).prefetch_related(
         Prefetch('daily_logs', queryset=active_logs, to_attr='active_logs')
@@ -296,7 +292,6 @@ def delete_attachment(request, pk):
             del request.session['active_attachment_id']
         attachment.is_deleted = True
         attachment.save()
-        # Soft-delete all logs under this attachment so they don't linger
         attachment.daily_logs.update(is_deleted=True)
         messages.success(request, 'Attachment moved to archive.')
     else:
@@ -311,7 +306,6 @@ def restore_attachment(request, pk):
     if attachment:
         attachment.is_deleted = False
         attachment.save()
-        # Restore all logs under this attachment
         attachment.daily_logs.update(is_deleted=False)
         messages.success(request, 'Attachment restored successfully.')
     else:
@@ -456,21 +450,23 @@ def sync_logs(request):
 
 
 # ==========================================
-# AI CHAT — conversation-based + VISION UPGRADE
+# AI CHAT — conversation-based + VISION
 # ==========================================
+# The actual SDK is only imported when an AI request comes in
+# (via `.ai_client` inside the function body). This keeps Gunicorn
+# worker startup light and prevents OOM crashes on Render's free tier.
 
 @login_required
 @require_POST
 def ai_chat(request):
-    if not ai_client:
+    if not _ai_is_configured():
         return JsonResponse({'success': False, 'error': 'AI is not configured.'}, status=500)
 
     try:
         data = json.loads(request.body)
         user_message = data.get('message', '').strip()
         session_id = data.get('session_id')
-        
-        # Extract image data
+
         image_b64  = data.get('image')
         image_mime = data.get('image_mime') or 'image/jpeg'
         image_name = (data.get('image_name') or 'file')[:80]
@@ -487,106 +483,117 @@ def ai_chat(request):
         else:
             chat_session = AIChatSession.objects.create(user=user)
 
-        # Set title based on message or image
         title_text = user_message if user_message else f"Image: {image_name}"
         if not chat_session.title:
             chat_session.title = title_text[:80]
         chat_session.save(update_fields=['title', 'updated_at'])
 
-        # Save user message (with marker for history)
         stored_user_content = user_message
         if image_b64:
             stored_user_content = f"[Image attached: {image_name}]\n{user_message}".strip()
-            
+
         AIChatMessage.objects.create(
             session=chat_session, user=user, role='user', content=stored_user_content,
         )
 
+        # ── Compact context: last 30 logs only, trimmed fields ───────────
         active_session = _get_active_session(request)
-        context = f"STUDENT PROFILE:\n"
+        context = "STUDENT PROFILE:\n"
         context += f"Name: {user.get_full_name() or user.username}\n"
         context += f"Index Number: {user.index_number}\n"
         context += f"Department: {user.get_department_display()}\n"
         context += f"Level: {user.level}\n"
 
         if active_session:
-            context += f"\nCURRENT ATTACHMENT:\n"
+            context += "\nCURRENT ATTACHMENT:\n"
             context += f"Facility: {active_session.facility.name}\n"
             context += f"Dates: {active_session.start_date.strftime('%d %B %Y')} to {active_session.end_date.strftime('%d %B %Y')}\n"
             context += f"Supervisor: {active_session.assigned_supervisor_name or 'Not specified'}\n"
-            logs = active_session.daily_logs.filter(is_deleted=False).order_by('date')
-            context += f"Total Logs Recorded: {logs.count()}\n\n"
-            context += "RECENT ACTIVITIES:\n"
-            for log in logs:
-                context += f"- Date: {log.date.strftime('%d %b %Y')} | Unit: {log.unit_sub_department}\n"
-                context += f"  Activity: {log.activity_summary}\n"
-                if log.skills_acquired.strip():
-                    context += f"  Skills Acquired: {log.skills_acquired}\n"
-                if log.challenges_faced.strip():
-                    context += f"  Challenges: {log.challenges_faced}\n"
-                if log.solutions_applied.strip():
-                    context += f"  Solutions: {log.solutions_applied}\n"
-                context += "\n"
-            workshops = active_session.workshops.all()
+
+            logs_qs = active_session.daily_logs.filter(is_deleted=False).order_by('-date')
+            total_logs = logs_qs.count()
+            context += f"Total Logs Recorded: {total_logs}\n\n"
+
+            # Only the most recent 30 to keep the prompt light and fast
+            recent_logs = list(logs_qs[:30])
+            if recent_logs:
+                context += f"RECENT ACTIVITIES (latest {len(recent_logs)}):\n"
+                for log in recent_logs:
+                    context += f"- {log.date.strftime('%d %b %Y')} | {log.unit_sub_department}: {log.activity_summary[:200]}\n"
+                    if log.skills_acquired.strip():
+                        context += f"  Skills: {log.skills_acquired[:150]}\n"
+                    if log.challenges_faced.strip():
+                        context += f"  Challenges: {log.challenges_faced[:150]}\n"
+
+            workshops = active_session.workshops.all()[:10]
             if workshops:
-                context += "WORKSHOPS ATTENDED:\n"
+                context += "\nWORKSHOPS ATTENDED:\n"
                 for w in workshops:
-                    context += f"- {w.date.strftime('%d %b %Y')}: {w.activity} ({w.type})\n"
-            competencies = active_session.competencies.all()
+                    context += f"- {w.date.strftime('%d %b %Y')}: {w.activity[:120]} ({w.type})\n"
+
+            competencies = active_session.competencies.all()[:15]
             if competencies:
-                context += "\nCOMPETENCY AREAS (target skills for this attachment):\n"
+                context += "\nCOMPETENCY AREAS (target skills):\n"
                 for c in competencies:
-                    context += f"- {c.text}\n"
+                    context += f"- {c.text[:150]}\n"
         else:
             context += "\n(No active attachment found.)\n"
 
-        prior = chat_session.messages.exclude(role='').order_by('created_at')[:20]
+        # Only last 10 prior messages (was 20), each trimmed to 300 chars
+        prior = chat_session.messages.exclude(role='').order_by('-created_at')[:10]
         if prior:
             context += "\nPREVIOUS MESSAGES IN THIS CHAT:\n"
-            for m in prior:
+            for m in reversed(list(prior)):
                 label = "You" if m.role == 'user' else "Assistant"
-                # Hide image markers from history context to save tokens
-                clean_content = m.content.replace('[Image attached:', '[Image:').split(']')[-1].strip()
-                context += f"{label}: {clean_content[:400]}\n"
+                clean = m.content.replace('[Image attached:', '[Image:').split(']')[-1].strip()
+                context += f"{label}: {clean[:300]}\n"
             context += "\n"
 
-        # --- DYNAMIC PROMPT ---
+        # ── Strict output format rules (kills dash lines) ───────────────
+        format_rules = (
+            "OUTPUT FORMAT (STRICT — follow exactly):\n"
+            "1. Do NOT use horizontal rules or section dividers of any kind.\n"
+            "   Never output ---, ***, ___, ===, or any line of dashes/underscores.\n"
+            "2. Do NOT echo the 'USER DATA CONTEXT' header or any '--- ... ---' marker.\n"
+            "3. Use short Markdown headings: ### Heading (3 hashes max).\n"
+            "4. Use bullet points with a single '* ' prefix. No nested bullets.\n"
+            "5. Keep paragraphs short (2-4 sentences). Leave one blank line between sections.\n"
+            "6. Use **bold** for emphasis. Never bold entire sentences.\n"
+            "7. No emojis unless the user used emojis first.\n\n"
+        )
+
         if image_b64:
-            # If there's an image, DO NOT drown the AI in logs.
             system_prompt = (
                 "You are the MedPracticum Studio AI Assistant, an expert academic advisor.\n"
-                "The user has uploaded an image/document and asked a question.\n\n"
-                "RULES:\n"
-                "1. PRIORITIZE analyzing the uploaded image. Describe it, transcribe it, or answer their specific question based on the image.\n"
-                "2. Do not give a generic summary of their logs unless they specifically ask about their logs.\n"
-                "3. Format your output beautifully using Markdown (### Headers, * Bullet points, **Bold text**).\n"
+                "The user uploaded an image/document and asked a question.\n\n"
+                + format_rules +
+                "PRIORITY: Analyze the uploaded image first (describe, transcribe, or answer from it).\n"
+                "Do not give a generic summary of the user's logs unless they explicitly ask.\n\n"
                 f"User Question: {user_message}\n"
             )
         else:
-            # Normal text chat
             system_prompt = (
-                "You are the MedPracticum Studio AI Assistant. You are an expert academic advisor for "
+                "You are the MedPracticum Studio AI Assistant, an expert academic advisor for "
                 "health students at Yamfo College of Health.\n\n"
-                "YOUR GOAL: Help the user understand their data and help them write their practicum reports.\n"
-                "RULES:\n"
-                "1. Format your output beautifully using Markdown (### Headers, * Bullet points, **Bold text**).\n"
-                "2. If the user asks for help writing a report section, use the data provided below to draft it. Write in a formal, academic tone.\n"
-                "3. If they ask about their data, give exact numbers based on the context.\n"
-                "4. If the student has competency areas listed, prioritise them — every chapter must visibly support at least one competency.\n"
-                "5. Be encouraging, concise, and professional.\n\n"
-                f"--- USER DATA CONTEXT ---\n{context}\n-------------------------\n\n"
+                "GOAL: Help the user understand their data and write their practicum reports.\n\n"
+                + format_rules +
+                "CONTENT RULES:\n"
+                "- When drafting report sections, use formal academic tone.\n"
+                "- When asked about data, give exact numbers from the context.\n"
+                "  If only recent activities are listed, mention that they are the latest entries.\n"
+                "- Prioritize the listed competency areas; each chapter should support at least one.\n"
+                "- Be encouraging, concise, and professional.\n\n"
+                "USER DATA CONTEXT (do not repeat or rephrase this header):\n"
+                f"{context}\n\n"
                 f"User Question: {user_message}\n"
             )
 
-        # --- AI CALL ---
         raw_reply = None
         if image_b64:
             from .ai_client import get_ai_reply_with_image
             try:
                 image_bytes = base64.b64decode(image_b64)
-                raw_reply = get_ai_reply_with_image(
-                    system_prompt, image_bytes, mime=image_mime
-                )
+                raw_reply = get_ai_reply_with_image(system_prompt, image_bytes, mime=image_mime)
             except Exception as vision_exc:
                 print(f"Vision OCR Error: {vision_exc}")
                 raw_reply = None
@@ -601,7 +608,7 @@ def ai_chat(request):
             reply = raw_reply
         else:
             if image_b64:
-                reply = "I couldn't read that image right now — the vision AI is temporarily unavailable. Try typing your question instead."
+                reply = "I couldn't read that image right now — the vision AI is temporarily unavailable. Please try typing your question instead."
             else:
                 reply = "I couldn't generate a response. Please try again in a moment."
 

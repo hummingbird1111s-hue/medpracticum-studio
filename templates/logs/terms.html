@@ -1,12 +1,12 @@
 {% extends 'base.html' %}
-{% block title %}Terms & Conditions · MedPracticum Studio{% endblock %}
+{% block title %}Terms, Conditions &amp; Privacy Policy · MedPracticum Studio{% endblock %}
 
 {% block content %}
 <div class="max-w-4xl mx-auto pb-12">
   
   <!-- Header -->
   <div class="mb-8 text-center mt-4">
-    <h1 class="text-3xl font-bold text-gray-900 mb-2">Terms &amp; Conditions</h1>
+    <h1 class="text-3xl font-bold text-gray-900 mb-2">Terms, Conditions &amp; Privacy Policy</h1>
     <p class="text-sm text-gray-500 font-medium">Last Updated: November 2026</p>
   </div>
 
@@ -30,6 +30,12 @@
   <!-- Terms Content -->
   <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 md:p-10 space-y-8 text-gray-700 leading-relaxed">
     
+    <!-- ==================== PART A: TERMS & CONDITIONS ==================== -->
+    <div class="mb-2">
+      <h2 class="text-2xl font-extrabold text-emerald-800 mb-1">Part A — Terms &amp; Conditions</h2>
+      <p class="text-sm text-gray-500">The rules for using the platform.</p>
+    </div>
+
     <section>
       <h2 class="text-xl font-bold text-gray-900 mb-3 flex items-center gap-2">
         <span class="bg-emerald-100 text-emerald-800 w-8 h-8 rounded-full flex items-center justify-center text-sm flex-shrink-0">1</span>
@@ -123,10 +129,84 @@
       </p>
     </section>
 
+    <!-- ==================== PART B: PRIVACY POLICY ==================== -->
+    <div class="border-t-4 border-emerald-500 pt-10 mt-10 mb-2">
+      <h2 class="text-2xl font-extrabold text-emerald-800 mb-1">Part B — Privacy Policy</h2>
+      <p class="text-sm text-gray-500">How we collect, use, store, and protect your data.</p>
+    </div>
+
+    <section>
+      <h2 class="text-xl font-bold text-gray-900 mb-3 flex items-center gap-2">
+        <span class="bg-emerald-100 text-emerald-800 w-8 h-8 rounded-full flex items-center justify-center text-sm flex-shrink-0">7</span>
+        Information We Collect
+      </h2>
+      <p class="mb-3 text-sm">To run the platform, we collect:</p>
+      <ul class="list-disc pl-5 space-y-2 text-sm">
+        <li><strong>Account details:</strong> Your name, username, email, student ID, and department as provided during registration.</li>
+        <li><strong>Practicum data:</strong> Facility details, daily logs, units, skills, challenges, and workshop records you enter.</li>
+        <li><strong>AI conversation data:</strong> Messages, attached files, and images you send to the AI Assistant.</li>
+        <li><strong>Technical data:</strong> Browser type, device information, IP address, and timestamps used for security and debugging.</li>
+        <li><strong>Session &amp; cookies:</strong> A session cookie to keep you logged in, and a CSRF token to protect against cross-site attacks.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 class="text-xl font-bold text-gray-900 mb-3 flex items-center gap-2">
+        <span class="bg-emerald-100 text-emerald-800 w-8 h-8 rounded-full flex items-center justify-center text-sm flex-shrink-0">8</span>
+        How We Use &amp; Share Your Data
+      </h2>
+      <p class="mb-3 text-sm">We use your data only for the following purposes:</p>
+      <ul class="list-disc pl-5 space-y-2 text-sm">
+        <li>To authenticate you and secure your account.</li>
+        <li>To generate your reports, presentations, and AI drafts based on the content you submit.</li>
+        <li>To let authorized COHY faculty review your practicum progress.</li>
+        <li>To detect abuse, rate-limit AI usage, and prevent fraud.</li>
+      </ul>
+      <p class="text-sm mt-3">
+        <strong>We do not sell your data.</strong> Your logs and conversations are never used to train public AI models. 
+        We share data only with our AI provider (for the sole purpose of generating your response) and with authorized COHY faculty as required for your practicum.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-xl font-bold text-gray-900 mb-3 flex items-center gap-2">
+        <span class="bg-emerald-100 text-emerald-800 w-8 h-8 rounded-full flex items-center justify-center text-sm flex-shrink-0">9</span>
+        Data Retention &amp; Your Rights
+      </h2>
+      <ul class="list-disc pl-5 space-y-2 text-sm">
+        <li><strong>Retention:</strong> Your practicum data is kept for the duration of your course and archived thereafter as required by COHY policy. AI chat history can be deleted at any time from the History panel.</li>
+        <li><strong>Access:</strong> You can view, download, and edit all data you have entered.</li>
+        <li><strong>Deletion:</strong> You can delete individual AI chats or all chat history from the History panel. To delete your account or permanent records, contact platform support.</li>
+        <li><strong>Export:</strong> You can export your reports and logs as PDF or Word documents at any time.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 class="text-xl font-bold text-gray-900 mb-3 flex items-center gap-2">
+        <span class="bg-emerald-100 text-emerald-800 w-8 h-8 rounded-full flex items-center justify-center text-sm flex-shrink-0">10</span>
+        Cookies &amp; Session Data
+      </h2>
+      <p class="text-sm">
+        MedPracticum Studio uses only <strong>strictly necessary cookies</strong> — a session cookie to keep you logged in, and a CSRF token for security. 
+        We do not use advertising or tracking cookies. Clearing your browser cookies will log you out.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-xl font-bold text-gray-900 mb-3 flex items-center gap-2">
+        <span class="bg-emerald-100 text-emerald-800 w-8 h-8 rounded-full flex items-center justify-center text-sm flex-shrink-0">11</span>
+        Contact for Privacy Concerns
+      </h2>
+      <p class="text-sm">
+        If you have questions about how your data is handled, want to exercise your data rights, or believe your privacy has been compromised, 
+        contact platform support using the button below. We aim to respond within 5 working days.
+      </p>
+    </section>
+
     <!-- Contact -->
     <div class="border-t border-gray-100 pt-8 mt-8 text-center">
       <p class="text-sm text-gray-500">
-        If you have any questions regarding these Terms or need technical support, please contact the platform providers.
+        If you have any questions regarding these Terms, the Privacy Policy, or need technical support, please contact the platform providers.
       </p>
       <div class="mt-4">
         <a href="{% url 'contact' %}" class="inline-flex items-center justify-center bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-6 py-2.5 transition-colors">

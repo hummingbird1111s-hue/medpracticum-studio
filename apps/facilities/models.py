@@ -2,6 +2,10 @@ from django.db import models
 
 
 class Facility(models.Model):
+    ownership = models.CharField(max_length=50, blank=True, default="")
+    town = models.CharField(max_length=100, blank=True, default="")
+    date_expiry = models.CharField(max_length=20, blank=True, default="")
+
     name = models.CharField(max_length=255)  # e.g., Holy Family Hospital, Berekum
     region = models.CharField(max_length=100)
     district = models.CharField(max_length=100)
