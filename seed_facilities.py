@@ -188,12 +188,16 @@ FACILITIES_DATA = [
     },
 ]
 
+
 def run():
     print(f"Starting seeding process for {len(FACILITIES_DATA)} facilities...")
     created_count = 0
     updated_count = 0
-    
+
     for data in FACILITIES_DATA:
+        # Mark every facility as verified so they appear in dropdowns
+        data.setdefault('is_verified', True)
+
         facility, created = Facility.objects.update_or_create(
             name=data['name'],
             defaults=data
@@ -203,13 +207,14 @@ def run():
         else:
             updated_count += 1
 
-    print("="*50)
-    print(f"Seeding complete!")
+    print("=" * 50)
+    print("Seeding complete!")
     print(f"Facilities created: {created_count}")
     print(f"Facilities updated: {updated_count}")
     print(f"Total facilities in DB: {Facility.objects.count()}")
     print(f"Verified facilities: {Facility.objects.filter(is_verified=True).count()}")
-    print("="*50)
+    print("=" * 50)
 
-if __name__ == "__main__":
-    run()
+
+# Plain call — works when piped via `python manage.py shell < seed_facilities.py`
+run()
