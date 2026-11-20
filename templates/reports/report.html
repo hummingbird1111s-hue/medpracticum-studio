@@ -105,24 +105,8 @@
   .cover-name { font-size: 14pt; font-weight: bold; margin-top: 1.5in !important; }
   .cover-index { font-size: 13pt; font-weight: bold; }
 
-  /* ✅ NEW: Abstract page (front matter, roman numerals) */
-  .abstract-page {
-    page: front;
-    page-break-after: always;
-  }
-  .abstract-heading {
-    text-align: center;
-    font-size: 14pt;
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    margin: 0 0 1em;
-  }
-  .abstract-keywords {
-    margin-top: 0.8em;
-    font-style: italic;
-    text-align: justify;
-  }
+  /* ✅ PHASE 2 — Abstract page CSS removed.
+     TOC now starts at page ii (front matter uses @page front → lower-roman). */
 
   .toc-page { 
     page: front; 
@@ -261,20 +245,15 @@
   <p class="cover-index">{{ student.index_number|upper }}</p>
 </section>
 
-<!-- ============ ABSTRACT (front matter, roman numerals) ============ -->
-{% if f.abstract and abstract_paras %}
-<section class="abstract-page">
-  <h1 id="abstract" class="abstract-heading">Abstract</h1>
-  {% for para in abstract_paras %}<p>{{ para }}</p>{% endfor %}
-  {% if keywords %}<p class="abstract-keywords"><b>Keywords:</b> {{ keywords }}</p>{% endif %}
-</section>
-{% endif %}
+<!-- ✅ PHASE 2 — Abstract page removed.
+     Generated PDF now goes: Cover → TOC (ii) → Introduction (1).
+     The abstract is still available in the on-page preview overlay,
+     but is NOT embedded in the downloaded/generated PDF. -->
 
 <!-- ============ TABLE OF CONTENTS ============ -->
 <section class="toc-page">
   <h1 class="toc-heading">TABLE OF CONTENTS</h1>
   <div class="toc">
-    {% if f.abstract and abstract_paras %}<a href="#abstract">Abstract</a>{% endif %}
     <a href="#ch1">Introduction</a>
     <a href="#ch2">Facility Profile</a>
     <a href="#ch3">Activities Performed</a>

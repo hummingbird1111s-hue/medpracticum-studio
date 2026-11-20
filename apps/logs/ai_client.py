@@ -97,18 +97,14 @@ except Exception as e:
 
 
 # ---------- Model catalogs ----------
+# Updated Nov 2026 — 2.5 models are limited to pre-existing keys.
+# New keys must use 3.x models. Order: strongest first, cheapest last.
 PREFERRED_MODELS = [
-    'gemini-2.5-flash',
-    'gemini-2.5-flash-lite',
-    'gemini-2.5-pro',
-    'gemini-2.0-flash',
-    'gemini-2.0-flash-001',
-    'gemini-2.0-flash-lite',
-    'gemini-2.0-flash-exp',
-    'gemini-1.5-flash',
-    'gemini-1.5-flash-002',
-    'gemini-1.5-pro',
-    'gemini-1.5-pro-002',
+    'gemini-3.8-flash',        # current flagship, best quality + vision
+    'gemini-3.6-flash',        # stable fallback
+    'gemini-3.5-flash',        # stable, routes to 3.6-flash if not available
+    'gemini-3.5-flash-lite',   # fast, cheap, good for OCR
+    'gemini-3.1-flash-lite',   # cheapest, still supports vision
 ]
 GROQ_MODEL = 'openai/gpt-oss-120b'
 GROQ_FALLBACK_MODEL = 'openai/gpt-oss-20b'

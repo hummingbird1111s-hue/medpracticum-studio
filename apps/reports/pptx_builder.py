@@ -441,19 +441,33 @@ class PracticumPptxBuilder:
             items = ['(No content available for this slide)']
 
         body_top = Inches(1.35)
-        body_h = H - body_top - Inches(0.8)
-        body_tb = slide.shapes.add_textbox(Inches(0.9), body_top, W - Inches(1.8), body_h)
-        body_tf = body_tb.text_frame
-        body_tf.word_wrap = True
+        full_body_h = H - body_top - Inches(0.8)
 
         estimated_chars = sum(len(i) for i in items)
         center_vertically = len(items) <= 3 and estimated_chars < 400
+
+        # ✅ PHASE 7 — cap the centering box so short-bullet slides don't drift down.
+        # Previously, centering happened in a ~5.35in tall box, so the middle of
+        # that box sat at ~4.0in — well below the heading — leaving a huge gap.
+        # Now the box height scales with font size: ~2.6in at 18pt, ~4.0in at 28pt,
+        # ~1.44in at 10pt. Bullets start right below the divider.
+        body_font_size = self._font_size()
+        if center_vertically:
+            base_cap_in = 2.6
+            capped_in = base_cap_in * (body_font_size / 18.0)
+            body_h = min(full_body_h, Inches(capped_in))
+        else:
+            body_h = full_body_h
+
+        body_tb = slide.shapes.add_textbox(Inches(0.9), body_top, W - Inches(1.8), body_h)
+        body_tf = body_tb.text_frame
+        body_tf.word_wrap = True
         body_tf.vertical_anchor = MSO_ANCHOR.MIDDLE if center_vertically else MSO_ANCHOR.TOP
 
         bullet = bool(data.get('bullet'))
         body_color = t.get('text_color', '1A1A1A')
         # ✅ NEW: use the user-configured body font size (defaults to 18 pt)
-        body_size = self._font_size()
+        body_size = body_font_size
 
         for i, item in enumerate(items):
             _add_para(body_tf, item, size=body_size,

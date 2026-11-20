@@ -13,7 +13,7 @@
   }
   .logo-form-side {
     width: 100%;
-    min-width: 0; /* Prevents text from squishing */
+    min-width: 0;
   }
   .logo-preview-side {
     width: 100%;
@@ -27,19 +27,13 @@
     padding: 16px;
   }
 
-  /* Side-by-side on desktop screens */
   @media (min-width: 768px) {
     .logo-upload-wrapper {
       flex-direction: row;
       align-items: flex-start;
     }
-    .logo-form-side {
-      flex: 1;
-    }
-    .logo-preview-side {
-      width: 240px;
-      flex-shrink: 0;
-    }
+    .logo-form-side { flex: 1; }
+    .logo-preview-side { width: 240px; flex-shrink: 0; }
   }
 
   /* Inline sample gallery */
@@ -74,7 +68,7 @@
     .mp-action-grid { grid-template-columns: 1fr 1fr; }
   }
 
-  /* ===== Generating overlay (progress bar) ===== */
+  /* ===== Generating overlay ===== */
   #gen-overlay {
     display: none;
     position: fixed;
@@ -117,7 +111,6 @@
     min-height: 42px;
   }
 
-  /* Progress Bar */
   .progress-track {
     width: 100%;
     height: 12px;
@@ -171,7 +164,9 @@
     text-align: center;
   }
 
-  /* ===== ✅ Report abstract preview overlay ===== */
+  /* ============================================================
+     ✅ PHASE 4 — Sample report preview (6 pages, vertical auto-swipe)
+     ============================================================ */
   #report-preview-overlay {
     display: none;
     position: fixed;
@@ -209,6 +204,7 @@
     background: #f9fafb;
     gap: 12px;
     flex-wrap: wrap;
+    flex-shrink: 0;
   }
   #report-preview-overlay .preview-header h3 {
     margin: 0;
@@ -234,61 +230,173 @@
     color: #374151;
   }
   #report-preview-overlay .preview-btn.close:hover { background: #e5e7eb; }
+
+  /* Info banner below header */
+  #report-preview-overlay .preview-info-banner {
+    padding: 10px 16px;
+    background: #ecfdf5;
+    border-bottom: 1px solid #a7f3d0;
+    color: #065f46;
+    font-size: 12px;
+    line-height: 1.5;
+    flex-shrink: 0;
+  }
+  #report-preview-overlay .preview-info-banner strong { color: #047857; }
+
+  /* Page viewport */
   #report-preview-overlay .preview-body {
     flex: 1;
-    overflow-y: auto;
+    position: relative;
+    overflow: hidden;
     background: #d1d5db;
-    padding: 24px;
+    min-height: 0;
+  }
+  #report-preview-overlay .report-page-track {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    transition: transform 0.55s cubic-bezier(0.4, 0.0, 0.2, 1);
+    will-change: transform;
+  }
+  #report-preview-overlay .report-page {
+    flex: 0 0 100%;
+    height: 100%;
+    padding: 20px;
     display: flex;
     justify-content: center;
+    overflow-y: auto;
   }
-  #report-preview-overlay .preview-page {
+
+  /* A4-ish sheet */
+  #report-preview-overlay .report-sheet {
     background: #fff;
     width: 100%;
-    max-width: 700px;
-    padding: 1in;
+    max-width: 640px;
+    padding: 40px 40px 36px;
     font-family: "Times New Roman", Times, serif;
-    font-size: 12pt;
-    line-height: 1.5;
+    font-size: 11pt;
+    line-height: 1.65;
     color: #000;
     box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
     align-self: flex-start;
   }
-  #report-preview-overlay .preview-page h2 {
-    text-align: center;
-    font-size: 14pt;
-    text-transform: uppercase;
-    margin: 0 0 0.75em;
-    letter-spacing: 0.1em;
-    font-weight: bold;
-  }
-  #report-preview-overlay .preview-page p {
-    margin: 0 0 0.6em;
+  #report-preview-overlay .report-sheet p {
+    margin: 0 0 0.65em;
     text-align: justify;
-    text-indent: 0;
   }
-  #report-preview-overlay .preview-page .keywords-line {
-    margin-top: 0.8em;
-    font-style: italic;
-    text-align: left;
-  }
-  #report-preview-overlay .preview-page .preview-meta {
-    margin-top: 1.2em;
-    padding-top: 0.8em;
-    border-top: 1px solid #e5e7eb;
-    font-size: 10pt;
-    color: #6b7280;
-    font-style: italic;
+  #report-preview-overlay .report-sheet h2 {
     text-align: center;
+    font-size: 12pt;
+    text-transform: uppercase;
+    font-weight: bold;
+    letter-spacing: 0.12em;
+    margin: 0 0 1em;
   }
-  #report-preview-overlay .preview-hint {
+  #report-preview-overlay .report-sheet h3 {
+    font-size: 11pt;
+    font-weight: bold;
+    text-transform: capitalize;
+    margin: 0.9em 0 0.4em;
+  }
+  #report-preview-overlay .report-sheet ul {
+    padding-left: 18px;
+    margin: 0 0 0.6em;
+  }
+  #report-preview-overlay .report-sheet li {
+    margin-bottom: 5px;
+    text-align: justify;
+  }
+
+  /* Cover sheet */
+  #report-preview-overlay .report-sheet--cover {
+    text-align: center;
+    padding-top: 30px;
+  }
+  #report-preview-overlay .report-sheet--cover p { text-align: center; }
+  #report-preview-overlay .cover-school {
+    font-size: 14pt; font-weight: bold; letter-spacing: 0.05em; margin-bottom: 3px;
+  }
+  #report-preview-overlay .cover-dept {
+    font-size: 11pt; font-weight: bold; margin-bottom: 28px;
+  }
+  #report-preview-overlay .cover-logo-box {
+    width: 92px; height: 92px;
+    border: 1.5px dashed #d1d5db;
+    border-radius: 50%;
+    margin: 0 auto 26px;
+    display: flex; align-items: center; justify-content: center;
+    color: #9ca3af; font-size: 9pt; font-family: Arial, sans-serif;
+    letter-spacing: 0.1em;
+  }
+  #report-preview-overlay .cover-title {
+    font-size: 13pt; font-weight: bold; margin: 26px 0 4px;
+    letter-spacing: 0.05em;
+  }
+  #report-preview-overlay .cover-code {
+    font-size: 11pt; font-weight: bold; margin: 0 0 4px;
+  }
+  #report-preview-overlay .cover-level {
+    font-size: 11pt; font-weight: bold; margin-bottom: 40px;
+  }
+  #report-preview-overlay .cover-name {
+    font-size: 13pt; font-weight: bold; margin-top: 30px;
+  }
+  #report-preview-overlay .cover-index {
+    font-size: 11pt; font-weight: bold;
+  }
+
+  /* TOC lines with dot leaders */
+  #report-preview-overlay .toc-line {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    margin-bottom: 6px;
+    font-size: 11pt;
+  }
+  #report-preview-overlay .toc-line .toc-title { white-space: nowrap; }
+  #report-preview-overlay .toc-line .toc-dots {
+    flex: 1;
+    border-bottom: 1px dotted #6b7280;
+    min-height: 1px;
+  }
+  #report-preview-overlay .toc-line .toc-page {
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Footer: dots + hint */
+  #report-preview-overlay .preview-footer {
     padding: 10px 16px;
-    font-size: 12px;
+    background: #f9fafb;
+    border-top: 1px solid #e5e7eb;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  #report-preview-overlay .preview-dots {
+    display: flex;
+    gap: 6px;
+  }
+  #report-preview-overlay .preview-dots span {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #d1d5db;
+    transition: background 0.2s, transform 0.2s;
+    cursor: pointer;
+  }
+  #report-preview-overlay .preview-dots span.active {
+    background: #059669;
+    transform: scale(1.25);
+  }
+  #report-preview-overlay .preview-hint-text {
+    font-size: 11px;
     color: #6b7280;
     text-align: center;
-    border-top: 1px solid #e5e7eb;
-    background: #f9fafb;
+    margin: 0;
   }
+
   @media (max-width: 640px) {
     #report-preview-overlay { padding: 0; }
     #report-preview-overlay .preview-shell {
@@ -296,8 +404,8 @@
       height: 100vh;
       max-width: 100%;
     }
-    #report-preview-overlay .preview-body { padding: 12px; }
-    #report-preview-overlay .preview-page { padding: 24px; font-size: 11pt; }
+    #report-preview-overlay .report-sheet { padding: 24px 20px; font-size: 10.5pt; }
+    #report-preview-overlay .report-page { padding: 12px; }
   }
 </style>
 
@@ -314,8 +422,6 @@
         Last generated: {{ session.report.generated_at|date:"j M Y, H:i" }} · {{ session.report.options.last_page_count|default:"?" }} pages
       </p>
     </div>
-
-    <!-- BUTTONS -->
     <div class="flex flex-wrap items-center gap-2">
       <a href="{% url 'view_report' %}?attachment_id={{ session.id }}" target="_blank" class="bg-white text-emerald-800 font-semibold rounded-lg px-4 py-2 text-sm hover:bg-emerald-50 transition-colors shadow-sm">
         View / Print PDF
@@ -354,14 +460,11 @@
 <!-- ===== CUSTOM LOGO UPLOAD & PREVIEW ===== -->
 <div class="bg-white rounded-2xl shadow p-5 mb-4">
   <div class="logo-upload-wrapper">
-
-    <!-- Left Side: Form -->
     <div class="logo-form-side">
       <h2 class="font-semibold text-gray-900 mb-1">Cover Page Logo</h2>
       <p class="text-sm text-gray-600 mb-4">
         By default, your report uses the official school logo. You can upload a specific facility logo to appear on your cover page instead.
       </p>
-
       <form method="post" enctype="multipart/form-data" action="{% url 'report_options' %}?attachment_id={{ session.id }}">
         {% csrf_token %}
         <div class="flex flex-col gap-2 mb-4">
@@ -380,16 +483,12 @@
       </form>
     </div>
 
-    <!-- Right Side: Preview Box -->
     <div class="logo-preview-side">
       <p style="font-size: 10px; font-weight: bold; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 12px;">Cover Preview</p>
-
       <div style="background: white; border: 1px solid #d1d5db; box-shadow: 0 1px 3px rgba(0,0,0,0.1); width: 130px; display: flex; flex-direction: column; align-items: center; padding-top: 20px; padding-left: 12px; padding-right: 12px; aspect-ratio: 1/1.414;">
         <span style="font-size: 6px; font-weight: bold; color: #1f2937; text-align: center; line-height: 1.2; margin-bottom: 4px;">YAMFO COLLEGE OF HEALTH</span>
         <span style="font-size: 5px; color: #4b5563; text-align: center; margin-bottom: 16px;">DEPT OF {{ user.get_department_display|upper }}</span>
-
         <div style="width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px;">
-          {# ── Logo fallback chain: custom → school (DB) → static (git) ── #}
           {% if session.report.custom_logo %}
             <img src="{{ session.report.custom_logo.url }}" alt="Custom Logo"
                  style="max-width: 100%; max-height: 100%; object-fit: contain;"
@@ -403,14 +502,11 @@
                  style="max-width: 100%; max-height: 100%; object-fit: contain;">
           {% endif %}
         </div>
-
         <span style="font-size: 7px; font-weight: bold; text-align: center; margin-top: 4px; line-height: 1.2;">VACATION PRACTICUM REPORT</span>
         <span style="font-size: 6px; text-align: center; margin-top: 4px;">LEVEL {{ user.level }}</span>
       </div>
-
       <p style="font-size: 10px; color: #6b7280; text-align: center; margin-top: 12px; line-height: 1.3;">Logo appears exactly as shown here on the cover page.</p>
     </div>
-
   </div>
 </div>
 
@@ -451,7 +547,6 @@
 
 <!-- ===== GENERATE / EDIT ACTION GRID ===== -->
 <div class="mp-action-grid mb-4">
-  <!-- Official Generation -->
   <form method="post" id="gen-official-form" class="bg-emerald-600 rounded-2xl p-5 text-white shadow-lg">
     {% csrf_token %}
     <input type="hidden" name="attachment_id" value="{{ session.id }}">
@@ -472,7 +567,6 @@
         Review the AI draft, tweak the wording, then rebuild the PDF with your changes.
       </p>
     </div>
-    
     {% if can_edit %}
       <a href="{% url 'report_content' %}?attachment_id={{ session.id }}"
          class="block text-center bg-emerald-600 text-white font-semibold rounded-lg py-2.5 hover:bg-emerald-700 transition">
@@ -511,7 +605,6 @@
     <span>Or customise your report format (Optional)</span>
     <span class="text-gray-400 group-open:rotate-180 transition-transform">▼</span>
   </summary>
-  
   <p class="text-sm text-gray-600 mt-2 mb-4">If your department or supervisor requires a specific format different from the official standard, change it here.</p>
 
   <form method="post" id="gen-custom-form">
@@ -524,7 +617,6 @@
         <p class="text-xs">Your custom settings could not be saved. Check the fields marked in red.</p>
       </div>
     {% endif %}
-
     {% if form.non_field_errors %}
       <div class="bg-red-50 border-l-4 border-red-500 p-4 mb-4 text-red-700">
         {{ form.non_field_errors }}
@@ -566,15 +658,12 @@
   Building a report can take up to a few minutes. The AI reads your logs, analyzes your competencies, and writes the text from scratch. Keep this page open.
 </p>
 
-<!-- ============================================================ -->
-<!-- Log book format samples modal (staff management only)         -->
-<!-- ============================================================ -->
+<!-- ===== Samples modal ===== -->
 <div id="samples-modal"
      style="display:none; position:fixed; inset:0; z-index:100;
             background:rgba(0,0,0,0.6); align-items:center; justify-content:center; padding:16px;">
   <div style="background:#fff; border-radius:14px; max-width:760px; width:100%;
               max-height:90vh; display:flex; flex-direction:column; overflow:hidden;">
-
     <div style="padding:16px; border-bottom:1px solid #e5e7eb;
                 display:flex; align-items:center; justify-content:space-between;">
       <h3 style="margin:0; font-size:16px; font-weight:600; color:#065f46;">
@@ -584,11 +673,8 @@
               style="background:none; border:0; font-size:24px; line-height:1;
                      cursor:pointer; color:#6b7280; padding:4px 8px;">&times;</button>
     </div>
-
     <div style="flex:1; overflow-y:auto; padding:16px;">
-
       {% if user.is_staff %}
-      <!-- Staff-only upload form -->
       <form id="sample-upload-form" enctype="multipart/form-data"
             style="margin-bottom:20px; padding:12px; background:#f9fafb;
                    border:1px dashed #d1d5db; border-radius:10px;">
@@ -613,8 +699,6 @@
         </button>
       </form>
       {% endif %}
-
-      <!-- Sample grid -->
       <div id="sample-grid"
            style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:12px;">
         {% for sample in school_format_samples %}
@@ -649,7 +733,6 @@
         {% endfor %}
       </div>
     </div>
-
     <div style="padding:10px 16px; border-top:1px solid #e5e7eb; background:#f9fafb;
                 font-size:12px; color:#6b7280; text-align:center;">
       These are the official format guidelines from your log book. Match your report to these.
@@ -657,54 +740,139 @@
   </div>
 </div>
 
-<!-- ============================================================ -->
-<!-- Generating overlay (Progress Bar)                             -->
-<!-- ============================================================ -->
+<!-- ===== Generating overlay ===== -->
 <div id="gen-overlay" aria-hidden="true" role="status" aria-live="polite">
   <div class="gen-card">
     <h3>Building your report</h3>
     <p class="gen-status" id="gen-status-text">Drafting sections with AI...</p>
-    
-    <div class="progress-track">
-      <div class="progress-fill" id="gen-progress-fill"></div>
-    </div>
-    
+    <div class="progress-track"><div class="progress-fill" id="gen-progress-fill"></div></div>
     <p class="gen-hint">This takes 1&ndash;3 minutes. Keep this page open.</p>
   </div>
 </div>
 
-<!-- ============================================================ -->
-<!-- Switching Overlay                                             -->
-<!-- ============================================================ -->
+<!-- ===== Switching overlay ===== -->
 <div id="switch-overlay">
   <div class="spinner"></div>
   <p>Setting report engine to read all data from this attachment...</p>
 </div>
 
-{# ✅ Preview overlay — abstract styled as it will appear in the report #}
-{% if abstract_paragraphs %}
-<div id="report-preview-overlay" aria-hidden="true" role="dialog">
+{# ✅ PHASE 4 — Sample report preview: 6 pages, vertical auto-swipe. #}
+{% if not generated %}
+<div id="report-preview-overlay" data-auto-open="1" aria-hidden="true" role="dialog">
   <div class="preview-shell">
+
     <div class="preview-header">
       <div>
-        <h3>Report preview — Abstract</h3>
-        <p>This is how your report will look. Formatting matches the final PDF exactly.</p>
+        <h3>Sample report preview</h3>
+        <p>This is what your actual report will look like. Auto-scrolling every 4 seconds.</p>
       </div>
       <button type="button" class="preview-btn close" onclick="closeReportPreview()">Close</button>
     </div>
-    <div class="preview-body">
-      <div class="preview-page">
-        <h2>Abstract</h2>
-        {% for para in abstract_paragraphs %}<p>{{ para }}</p>{% endfor %}
-        {% if preview_keywords %}
-          <p class="keywords-line"><b>Keywords:</b> {{ preview_keywords }}</p>
-        {% endif %}
-        <p class="preview-meta">— Body chapters (Introduction, Facility Profile, Activities, Skills, Challenges, Recommendations, Conclusion) follow the same font, spacing, and margins. —</p>
+
+    <div class="preview-info-banner">
+      📖 <strong>Your report is 100% original.</strong> AI-drafted from your own logs, plagiarism-checked, and formatted to COHY standards. This is a sample layout, not your data.
+    </div>
+
+    <div class="preview-body" id="report-preview-scroller">
+      <div class="report-page-track" id="report-page-track">
+
+        <!-- Page 1 — Cover -->
+        <div class="report-page" data-page="1">
+          <div class="report-sheet report-sheet--cover">
+            <p class="cover-school">COLLEGE OF HEALTH, YAMFO</p>
+            <p class="cover-dept">DEPARTMENT OF HEALTH INFORMATION MANAGEMENT</p>
+            <div class="cover-logo-box">LOGO</div>
+            <p class="cover-title">VACATION PRACTICUM REPORT</p>
+            <p class="cover-code">HIM 301</p>
+            <p class="cover-level">LEVEL 300 &nbsp; FIRST SEMESTER</p>
+            <p class="cover-name">JOHN DOE</p>
+            <p class="cover-index">COHY/HIM/24/001</p>
+          </div>
+        </div>
+
+        <!-- Page 2 — TOC -->
+        <div class="report-page" data-page="2">
+          <div class="report-sheet">
+            <h2>Table of Contents</h2>
+            <div class="toc-line"><span class="toc-title">Introduction</span><span class="toc-dots"></span><span class="toc-page">1</span></div>
+            <div class="toc-line"><span class="toc-title">Facility Profile</span><span class="toc-dots"></span><span class="toc-page">2</span></div>
+            <div class="toc-line"><span class="toc-title">Activities Performed</span><span class="toc-dots"></span><span class="toc-page">3</span></div>
+            <div class="toc-line"><span class="toc-title">Skills Acquired</span><span class="toc-dots"></span><span class="toc-page">5</span></div>
+            <div class="toc-line"><span class="toc-title">Workshops</span><span class="toc-dots"></span><span class="toc-page">6</span></div>
+            <div class="toc-line"><span class="toc-title">Lessons Learnt</span><span class="toc-dots"></span><span class="toc-page">7</span></div>
+            <div class="toc-line"><span class="toc-title">Observations</span><span class="toc-dots"></span><span class="toc-page">8</span></div>
+            <div class="toc-line"><span class="toc-title">Challenges</span><span class="toc-dots"></span><span class="toc-page">9</span></div>
+            <div class="toc-line"><span class="toc-title">Recommendations</span><span class="toc-dots"></span><span class="toc-page">10</span></div>
+            <div class="toc-line"><span class="toc-title">Conclusion</span><span class="toc-dots"></span><span class="toc-page">11</span></div>
+            <div class="toc-line"><span class="toc-title">Signature and Date</span><span class="toc-dots"></span><span class="toc-page">12</span></div>
+          </div>
+        </div>
+
+        <!-- Page 3 — Introduction -->
+        <div class="report-page" data-page="3">
+          <div class="report-sheet">
+            <h2>Chapter One — Introduction</h2>
+            <p>This report presents the vacation practicum experience of John Doe, a Level 300 student of the Department of Health Information Management at the College of Health, Yamfo. The attachment took place at Adidome Government Hospital from 3<sup>rd</sup> July 2024 to 30<sup>th</sup> August 2024.</p>
+            <p>During the eight-week period, I rotated through the Outpatient Department (OPD), the Records Unit, the Reproductive and Child Health (RCH) Unit, the Laboratory, and the Pharmacy. Each rotation exposed me to different workflows for managing patient records, processing insurance claims, and supporting clinical decision-making through accurate health information.</p>
+            <p>The purpose of this attachment was to bridge the gap between classroom theory and professional practice, and to develop the competencies required for a career in health information management.</p>
+          </div>
+        </div>
+
+        <!-- Page 4 — Facility Profile -->
+        <div class="report-page" data-page="4">
+          <div class="report-sheet">
+            <h2>Chapter Two — Facility Profile</h2>
+            <p>Adidome Government Hospital is a district hospital located in the Adidome municipality of the Volta Region, Ghana. It serves as the primary referral centre for the surrounding communities, providing general medical care, maternal and child health services, and public health interventions.</p>
+            <p>The hospital operates an Outpatient Department, an inpatient ward, a 24-hour maternity unit, a laboratory, a pharmacy, and a dedicated Health Information Management department. The HIM unit is responsible for patient registration, folder retrieval and filing, medical coding, and the processing of National Health Insurance Scheme (NHIS) claims.</p>
+            <p>Administratively, the hospital is organised into clinical services, nursing, pharmacy, laboratory, records, and administration. Each unit works closely with the HIM department to ensure continuity of patient care and accurate documentation.</p>
+          </div>
+        </div>
+
+        <!-- Page 5 — Activities Performed -->
+        <div class="report-page" data-page="5">
+          <div class="report-sheet">
+            <h2>Chapter Three — Activities Performed</h2>
+            <h3>Outpatient Department</h3>
+            <p>I assisted in registering new patients, capturing their demographics into the hospital's electronic health information system, and issuing outpatient cards. I also retrieved and filed patient folders for each consultation.</p>
+            <h3>Records Unit</h3>
+            <p>I managed the processing of NHIS claims, verified patient insurance details, and reconciled daily claims submissions. I supported the coding of diagnoses and procedures for accurate billing.</p>
+            <h3>Reproductive and Child Health Unit</h3>
+            <p>I assisted in booking antenatal appointments, registering newborns, and maintaining the maternal health register. I observed the workflow for tracking immunisation schedules and follow-up visits.</p>
+          </div>
+        </div>
+
+        <!-- Page 6 — Skills Acquired + Conclusion -->
+        <div class="report-page" data-page="6">
+          <div class="report-sheet">
+            <h2>Chapter Four — Skills Acquired</h2>
+            <ul>
+              <li>Patient registration and electronic data entry</li>
+              <li>Folder retrieval, filing, and record management</li>
+              <li>NHIS claims processing and reconciliation</li>
+              <li>Medical coding for diagnoses and procedures</li>
+              <li>Maternal and child health record keeping</li>
+            </ul>
+            <h2 style="margin-top: 1.5em;">Chapter Ten — Conclusion</h2>
+            <p>The eight-week practicum at Adidome Government Hospital provided me with hands-on exposure to the daily operations of a Health Information Management department. I developed practical skills in patient registration, records management, and claims processing, and gained a deeper appreciation for the role of accurate documentation in patient care.</p>
+            <p>I am now better prepared for professional practice and more confident in my ability to contribute to health information systems in Ghana.</p>
+          </div>
+        </div>
+
       </div>
     </div>
-    <div class="preview-hint">
-      Close this preview when you're ready — it will appear again the next time you visit this page.
+
+    <div class="preview-footer">
+      <div class="preview-dots" id="report-preview-dots">
+        <span data-dot="0" class="active"></span>
+        <span data-dot="1"></span>
+        <span data-dot="2"></span>
+        <span data-dot="3"></span>
+        <span data-dot="4"></span>
+        <span data-dot="5"></span>
+      </div>
+      <p class="preview-hint-text">Auto-playing · 4s per page · Swipe or use arrow keys to navigate</p>
     </div>
+
   </div>
 </div>
 {% endif %}
@@ -719,7 +887,7 @@
   }
 
   // ============================================================
-  // 1) AUTO-FILL OFFICIAL DEFAULTS (Into the Custom Form)
+  // 1) AUTO-FILL OFFICIAL DEFAULTS
   // ============================================================
   window.applyOfficialDefaults = function () {
     var form = document.getElementById('gen-custom-form');
@@ -869,7 +1037,7 @@
   })();
 
   // ============================================================
-  // 3) GENERATING OVERLAY (With Progress Bar)
+  // 3) GENERATING OVERLAY
   // ============================================================
   (function () {
     var overlay    = document.getElementById('gen-overlay');
@@ -913,17 +1081,6 @@
       }, 10000);
     }
 
-    function finishProgress() {
-      clearInterval(progressTimer);
-      clearInterval(stepTimer);
-      progressBar.style.width = '100%';
-      statusText.textContent = 'Done!';
-      setTimeout(function() {
-        overlay.classList.remove('show');
-        overlay.setAttribute('aria-hidden', 'true');
-      }, 500);
-    }
-
     var FORM_TO_BTN = {
       'gen-official-form': 'gen-official-btn',
       'gen-custom-form':   'gen-custom-btn'
@@ -954,7 +1111,7 @@
   })();
 
   // ============================================================
-  // ✅ 4) REPORT ABSTRACT PREVIEW — auto-show on every page load
+  // ✅ PHASE 4 — SAMPLE REPORT PREVIEW (6 pages, vertical auto-swipe)
   // ============================================================
   window.closeReportPreview = function () {
     var ov = document.getElementById('report-preview-overlay');
@@ -962,20 +1119,101 @@
       ov.classList.remove('show');
       ov.setAttribute('aria-hidden', 'true');
     }
+    if (window._reportPreviewTimer) {
+      clearInterval(window._reportPreviewTimer);
+      window._reportPreviewTimer = null;
+    }
   };
 
   (function () {
     var ov = document.getElementById('report-preview-overlay');
     if (!ov) return;
-    // Show on every page load (mirrors presentation preview behaviour)
+    if (ov.dataset.autoOpen !== '1') return;
+
+    var track    = document.getElementById('report-page-track');
+    var dotsWrap = document.getElementById('report-preview-dots');
+    var scroller = document.getElementById('report-preview-scroller');
+    if (!track) return;
+
+    var pages   = track.querySelectorAll('.report-page');
+    var dotEls  = dotsWrap ? dotsWrap.querySelectorAll('span') : [];
+    var total   = pages.length;
+    var current = 0;
+    var timer   = null;
+    var paused  = false;
+    var INTERVAL_MS = 4000;
+
+    function goto(index) {
+      current = ((index % total) + total) % total;
+      track.style.transform = 'translateY(-' + (current * 100) + '%)';
+      dotEls.forEach(function (d, i) {
+        d.classList.toggle('active', i === current);
+      });
+    }
+
+    function startTimer() {
+      stopTimer();
+      timer = setInterval(function () {
+        if (!paused) goto(current + 1);
+      }, INTERVAL_MS);
+      window._reportPreviewTimer = timer;
+    }
+    function stopTimer() {
+      if (timer) { clearInterval(timer); timer = null; }
+      window._reportPreviewTimer = null;
+    }
+    function restartTimer() { startTimer(); }
+
+    dotEls.forEach(function (d, i) {
+      d.addEventListener('click', function () {
+        goto(i);
+        restartTimer();
+      });
+    });
+
     ov.classList.add('show');
     ov.setAttribute('aria-hidden', 'false');
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && ov.classList.contains('show')) closeReportPreview();
-    });
+    goto(0);
+    startTimer();
+
     ov.addEventListener('click', function (e) {
       if (e.target === ov) closeReportPreview();
     });
+
+    document.addEventListener('keydown', function (e) {
+      if (!ov.classList.contains('show')) return;
+      if (e.key === 'Escape') closeReportPreview();
+      else if (e.key === 'ArrowDown' || e.key === 'ArrowRight') { goto(current + 1); restartTimer(); }
+      else if (e.key === 'ArrowUp'   || e.key === 'ArrowLeft')  { goto(current - 1); restartTimer(); }
+    });
+
+    // Vertical touch swipe
+    var touchStartY = 0;
+    var touchMoved  = false;
+    if (scroller) {
+      scroller.addEventListener('touchstart', function (e) {
+        if (e.touches.length !== 1) return;
+        touchStartY = e.touches[0].clientY;
+        touchMoved  = false;
+      }, { passive: true });
+
+      scroller.addEventListener('touchmove', function () {
+        touchMoved = true;
+      }, { passive: true });
+
+      scroller.addEventListener('touchend', function (e) {
+        if (!touchMoved) return;
+        var endY = e.changedTouches[0].clientY;
+        var dy = endY - touchStartY;
+        if (Math.abs(dy) < 40) return;
+        if (dy < 0) goto(current + 1);
+        else        goto(current - 1);
+        restartTimer();
+      }, { passive: true });
+    }
+
+    ov.addEventListener('mouseenter', function () { paused = true; });
+    ov.addEventListener('mouseleave', function () { paused = false; });
   })();
 </script>
 

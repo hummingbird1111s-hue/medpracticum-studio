@@ -79,7 +79,9 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   #switch-overlay p { color: #fff; font-size: 16px; font-weight: 500; text-align: center; }
 
-  /* ✅ preview overlay */
+  /* ============================================================
+     ✅ PHASE 5 — Sample presentation preview (7 slides, auto-swipe)
+     ============================================================ */
   #pptx-preview-overlay {
     display: none; position: fixed; inset: 0; z-index: 1000000;
     background: rgba(17, 24, 39, 0.94); backdrop-filter: blur(4px);
@@ -88,14 +90,19 @@
   #pptx-preview-overlay.show { display: flex; }
   #pptx-preview-overlay .preview-shell {
     background: #fff; border-radius: 16px; overflow: hidden;
-    width: 100%; max-width: 1200px;
+    width: 100%; max-width: 1100px;
     display: flex; flex-direction: column;
     height: 92vh; box-shadow: 0 24px 80px rgba(0,0,0,0.5);
+    animation: pp-pop 0.25s ease-out;
+  }
+  @keyframes pp-pop {
+    from { opacity: 0; transform: translateY(8px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
   }
   #pptx-preview-overlay .preview-header {
     display: flex; align-items: center; justify-content: space-between;
     padding: 12px 16px; border-bottom: 1px solid #e5e7eb; background: #f9fafb;
-    gap: 12px; flex-wrap: wrap;
+    gap: 12px; flex-wrap: wrap; flex-shrink: 0;
   }
   #pptx-preview-overlay .preview-header h3 {
     margin: 0; font-size: 15px; font-weight: 700; color: #065f46;
@@ -116,31 +123,138 @@
     background: #f3f4f6; color: #374151;
   }
   #pptx-preview-overlay .preview-btn.close:hover { background: #e5e7eb; }
+
+  /* Info banner below header */
+  #pptx-preview-overlay .preview-info-banner {
+    padding: 10px 16px; background: #ecfdf5;
+    border-bottom: 1px solid #a7f3d0;
+    color: #065f46; font-size: 12px; line-height: 1.5; flex-shrink: 0;
+  }
+  #pptx-preview-overlay .preview-info-banner strong { color: #047857; }
+
+  /* Horizontal slide viewport */
   #pptx-preview-overlay .preview-body {
-    flex: 1; position: relative; background: #e5e7eb; overflow: hidden;
+    flex: 1; position: relative; background: #1f2937; overflow: hidden; min-height: 0;
   }
-  #pptx-preview-overlay .preview-frame {
-    width: 100%; height: 100%; border: 0; display: block;
+  #pptx-preview-overlay .pptx-slide-track {
+    display: flex; flex-direction: row;
+    width: 100%; height: 100%;
+    transition: transform 0.55s cubic-bezier(0.4, 0.0, 0.2, 1);
+    will-change: transform;
   }
-  #pptx-preview-overlay .preview-loading {
-    position: absolute; inset: 0;
-    display: flex; align-items: center; justify-content: center; flex-direction: column;
-    background: #f9fafb; color: #6b7280; font-size: 14px; gap: 12px;
-    transition: opacity 0.25s;
+  #pptx-preview-overlay .pptx-slide {
+    flex: 0 0 100%;
+    height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
   }
-  #pptx-preview-overlay .preview-loading .spinner {
-    width: 40px; height: 40px; border: 4px solid #a7f3d0;
-    border-top-color: #10b981; border-radius: 50%;
-    animation: spin 1s linear infinite;
+
+  /* Slide sheet — COHY Classic */
+  #pptx-preview-overlay .pptx-slide-sheet {
+    background: #fff;
+    width: 100%;
+    max-width: 900px;
+    aspect-ratio: 16 / 9;
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+    position: relative;
+    overflow: hidden;
+    font-family: 'Times New Roman', Times, serif;
+    color: #1a1a1a;
+    font-size: clamp(10px, 1.4vw + 4px, 15px);
+    line-height: 1.4;
   }
-  #pptx-preview-overlay .preview-loading.hidden { opacity: 0; pointer-events: none; }
-  #pptx-preview-overlay .preview-hint {
-    padding: 10px 16px; font-size: 12px; color: #6b7280; text-align: center;
-    border-top: 1px solid #e5e7eb; background: #f9fafb;
+
+  /* Maroon/gold/brown bars at bottom */
+  #pptx-preview-overlay .slide-deco { position: absolute; left: 0; right: 0; }
+  #pptx-preview-overlay .slide-bot-wine  { bottom: 6%; height: 2.67%; background: #800000; }
+  #pptx-preview-overlay .slide-bot-black { bottom: 3.33%; height: 1.33%; background: #000; }
+  #pptx-preview-overlay .slide-bot-brown { bottom: 0; height: 4.67%; background: #8B4513; }
+
+  /* Cover maroon rules */
+  #pptx-preview-overlay .slide-cover-line1 { top: 28%; left: 5%; right: 5%; height: 1.07%; background: #800000; }
+  #pptx-preview-overlay .slide-cover-line2 { top: 45%; left: 5%; right: 5%; height: 1.07%; background: #800000; }
+
+  /* Cover content */
+  #pptx-preview-overlay .slide-logo {
+    position: absolute; top: 6%; left: 50%; transform: translateX(-50%);
+    width: 12%; aspect-ratio: 1/1;
+    border: 1.5px dashed #d1d5db; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: Arial, sans-serif; font-size: 0.6em;
+    color: #9ca3af; letter-spacing: 0.1em;
   }
+  #pptx-preview-overlay .slide-cover-school {
+    position: absolute; top: 30%; left: 5%; right: 5%;
+    text-align: center; font-weight: 700; font-size: 2.4em;
+    letter-spacing: 0.04em;
+  }
+  #pptx-preview-overlay .slide-cover-dept {
+    position: absolute; top: 38%; left: 5%; right: 5%;
+    text-align: center; font-weight: 700; font-size: 1.5em;
+  }
+  #pptx-preview-overlay .slide-cover-meta {
+    position: absolute; top: 52%; left: 5%; right: 5%;
+    text-align: center; color: #808080;
+  }
+  #pptx-preview-overlay .slide-cover-name  { font-size: 1.9em; font-weight: 700; margin-bottom: 0.4em; }
+  #pptx-preview-overlay .slide-cover-index { font-size: 1.55em; margin-bottom: 0.3em; }
+  #pptx-preview-overlay .slide-cover-level { font-size: 1.55em; }
+
+  /* Content slides */
+  #pptx-preview-overlay .slide-corner-logo {
+    position: absolute; top: 2%; width: 8%; aspect-ratio: 1/1;
+    border: 1px dashed #d1d5db; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: Arial, sans-serif; font-size: 0.55em;
+    color: #9ca3af;
+  }
+  #pptx-preview-overlay .slide-corner-logo.left  { left: 3%; }
+  #pptx-preview-overlay .slide-corner-logo.right { right: 3%; }
+
+  #pptx-preview-overlay .slide-heading {
+    position: absolute; top: 4%; left: 15%; right: 15%;
+    text-align: center; font-weight: 700; font-size: 2.2em;
+    letter-spacing: 0.06em;
+  }
+  #pptx-preview-overlay .slide-rule {
+    position: absolute; top: 17%; left: 7%; right: 7%;
+    height: 1%; background: #800000;
+  }
+  #pptx-preview-overlay .slide-body {
+    position: absolute; top: 21%; left: 8%; right: 8%; bottom: 12%;
+    display: flex; flex-direction: column; justify-content: flex-start;
+    padding-left: 0.4em;
+  }
+  #pptx-preview-overlay .slide-body.v-center { justify-content: center; }
+  #pptx-preview-overlay .slide-body ul {
+    list-style: disc; padding-left: 1em; margin: 0;
+  }
+  #pptx-preview-overlay .slide-body li {
+    font-size: 1em; margin-bottom: 0.55em; line-height: 1.4;
+  }
+
+  /* Footer: dots + hint */
+  #pptx-preview-overlay .preview-footer {
+    padding: 10px 16px; background: #f9fafb; border-top: 1px solid #e5e7eb;
+    display: flex; flex-direction: column; align-items: center; gap: 6px; flex-shrink: 0;
+  }
+  #pptx-preview-overlay .preview-dots { display: flex; gap: 6px; }
+  #pptx-preview-overlay .preview-dots span {
+    width: 8px; height: 8px; border-radius: 50%; background: #d1d5db;
+    transition: background 0.2s, transform 0.2s; cursor: pointer;
+  }
+  #pptx-preview-overlay .preview-dots span.active {
+    background: #059669; transform: scale(1.25);
+  }
+  #pptx-preview-overlay .preview-hint-text {
+    font-size: 11px; color: #6b7280; text-align: center; margin: 0;
+  }
+
   @media (max-width: 640px) {
     #pptx-preview-overlay { padding: 0; }
     #pptx-preview-overlay .preview-shell { border-radius: 0; height: 100vh; max-width: 100%; }
+    #pptx-preview-overlay .pptx-slide { padding: 10px; }
   }
 </style>
 
@@ -268,7 +382,8 @@
 </div>
 
 <div class="mp-action-grid mb-4" style="display:grid; grid-template-columns:1fr; gap:12px;">
-  <form method="post" id="gen-official-form" class="bg-emerald-600 rounded-2xl p-5 text-white shadow-lg">
+  <form method="post" id="gen-official-form" class="bg-emerald-600 rounded-2xl p-5 text-white shadow-lg"
+        {% if selected_pptx_template != 'cohy_classic' %}style="display:none;"{% endif %}>
     {% csrf_token %}
     <input type="hidden" name="attachment_id" value="{{ session.id }}">
     <input type="hidden" name="action" value="build_official">
@@ -302,7 +417,6 @@
       {% endif %}
     </div>
 
-    {# ✅ NEW: font size picker #}
     <div class="mb-4">
       <label for="{{ custom_form.font_size.id_for_label }}" class="block text-sm font-semibold text-gray-700 mb-1">
         {{ custom_form.font_size.label }}
@@ -402,37 +516,193 @@
   <p>Setting the presentation engine to read all data from this attachment...</p>
 </div>
 
+{# ✅ PHASE 5 — Sample presentation preview. Renders only when a deck exists.
+   `data-auto-open="1"` tells the JS to show it on fresh page load. #}
 {% if has_pptx_pdf %}
-<div id="pptx-preview-overlay" aria-hidden="true" role="dialog">
+<div id="pptx-preview-overlay"
+     data-auto-open="{% if not generated %}1{% else %}0{% endif %}"
+     aria-hidden="true" role="dialog">
   <div class="preview-shell">
+
     <div class="preview-header">
       <div>
-        <h3>Presentation preview</h3>
-        <p>{{ report.pptx_template }} — swipe, scroll, or use arrow keys to view all slides.</p>
+        <h3>Sample presentation preview</h3>
+        <p>This is what your deck will look like. Auto-scrolling every 4 seconds.</p>
       </div>
       <div class="preview-actions">
         <a class="preview-btn open-new"
            href="{% url 'view_pptx_pdf' %}?attachment_id={{ session.id }}"
            target="_blank" rel="noopener">
-          Open fullscreen
+          Open full PDF
         </a>
         <button type="button" class="preview-btn close" onclick="closePptxPreview()">Close</button>
       </div>
     </div>
-    <div class="preview-body">
-      <div class="preview-loading" id="preview-loading">
-        <div class="spinner"></div>
-        <p style="margin:0;">Loading preview…</p>
+
+    <div class="preview-info-banner">
+      📊 <strong>Your deck is 100% original.</strong> AI-drafted from your own logs, formatted to COHY standards. This is a sample layout, not your data.
+    </div>
+
+    <div class="preview-body" id="pptx-preview-scroller">
+      <div class="pptx-slide-track" id="pptx-slide-track">
+
+        <!-- Slide 1 — Cover -->
+        <div class="pptx-slide" data-slide="1">
+          <div class="pptx-slide-sheet">
+            <div class="slide-deco slide-bot-wine"></div>
+            <div class="slide-deco slide-bot-black"></div>
+            <div class="slide-deco slide-bot-brown"></div>
+            <div class="slide-deco slide-cover-line1"></div>
+            <div class="slide-deco slide-cover-line2"></div>
+            <div class="slide-logo">LOGO</div>
+            <div class="slide-cover-school">COLLEGE OF HEALTH, YAMFO</div>
+            <div class="slide-cover-dept">Department of Health Information Management</div>
+            <div class="slide-cover-meta">
+              <div class="slide-cover-name">JOHN DOE</div>
+              <div class="slide-cover-index">COHY/HIM/24/001</div>
+              <div class="slide-cover-level">LEVEL 300</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Slide 2 — Introduction -->
+        <div class="pptx-slide" data-slide="2">
+          <div class="pptx-slide-sheet">
+            <div class="slide-deco slide-bot-wine"></div>
+            <div class="slide-deco slide-bot-black"></div>
+            <div class="slide-deco slide-bot-brown"></div>
+            <div class="slide-corner-logo left">LOGO</div>
+            <div class="slide-corner-logo right">LOGO</div>
+            <div class="slide-heading">INTRODUCTION</div>
+            <div class="slide-rule"></div>
+            <div class="slide-body v-center">
+              <ul>
+                <li>Attached to Adidome Government Hospital for eight weeks</li>
+                <li>Rotated through OPD, Records, RCH, Laboratory, Pharmacy</li>
+                <li>Focused on patient registration, claims, and data management</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Slide 3 — Facility Profile -->
+        <div class="pptx-slide" data-slide="3">
+          <div class="pptx-slide-sheet">
+            <div class="slide-deco slide-bot-wine"></div>
+            <div class="slide-deco slide-bot-black"></div>
+            <div class="slide-deco slide-bot-brown"></div>
+            <div class="slide-corner-logo left">LOGO</div>
+            <div class="slide-corner-logo right">LOGO</div>
+            <div class="slide-heading">FACILITY PROFILE</div>
+            <div class="slide-rule"></div>
+            <div class="slide-body v-center">
+              <ul>
+                <li>District hospital in Central Tongu, Volta Region</li>
+                <li>Offers OPD, RCH, Laboratory, Pharmacy, Maternity</li>
+                <li>NHIS claims desk and DHIMS data entry in HIM department</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Slide 4 — Activities Performed -->
+        <div class="pptx-slide" data-slide="4">
+          <div class="pptx-slide-sheet">
+            <div class="slide-deco slide-bot-wine"></div>
+            <div class="slide-deco slide-bot-black"></div>
+            <div class="slide-deco slide-bot-brown"></div>
+            <div class="slide-corner-logo left">LOGO</div>
+            <div class="slide-corner-logo right">LOGO</div>
+            <div class="slide-heading">ACTIVITIES PERFORMED</div>
+            <div class="slide-rule"></div>
+            <div class="slide-body">
+              <ul>
+                <li>OPD — registered patients and issued outpatient cards</li>
+                <li>Records Unit — processed NHIS claims and reconciled submissions</li>
+                <li>RCH — booked antenatal appointments and registered newborns</li>
+                <li>Pharmacy — verified patient prescriptions and updated records</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Slide 5 — Skills Acquired -->
+        <div class="pptx-slide" data-slide="5">
+          <div class="pptx-slide-sheet">
+            <div class="slide-deco slide-bot-wine"></div>
+            <div class="slide-deco slide-bot-black"></div>
+            <div class="slide-deco slide-bot-brown"></div>
+            <div class="slide-corner-logo left">LOGO</div>
+            <div class="slide-corner-logo right">LOGO</div>
+            <div class="slide-heading">SKILLS ACQUIRED</div>
+            <div class="slide-rule"></div>
+            <div class="slide-body">
+              <ul>
+                <li>Patient registration and electronic data entry</li>
+                <li>Folder retrieval, filing, and record management</li>
+                <li>NHIS claims processing and reconciliation</li>
+                <li>Medical coding for diagnoses and procedures</li>
+                <li>Maternal and child health record keeping</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Slide 6 — Challenges Faced -->
+        <div class="pptx-slide" data-slide="6">
+          <div class="pptx-slide-sheet">
+            <div class="slide-deco slide-bot-wine"></div>
+            <div class="slide-deco slide-bot-black"></div>
+            <div class="slide-deco slide-bot-brown"></div>
+            <div class="slide-corner-logo left">LOGO</div>
+            <div class="slide-corner-logo right">LOGO</div>
+            <div class="slide-heading">CHALLENGES FACED</div>
+            <div class="slide-rule"></div>
+            <div class="slide-body v-center">
+              <ul>
+                <li>High patient volume caused records-desk congestion and delays</li>
+                <li>Illegible handwriting complicated NHIS claims entry</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Slide 7 — Conclusion -->
+        <div class="pptx-slide" data-slide="7">
+          <div class="pptx-slide-sheet">
+            <div class="slide-deco slide-bot-wine"></div>
+            <div class="slide-deco slide-bot-black"></div>
+            <div class="slide-deco slide-bot-brown"></div>
+            <div class="slide-corner-logo left">LOGO</div>
+            <div class="slide-corner-logo right">LOGO</div>
+            <div class="slide-heading">CONCLUSION</div>
+            <div class="slide-rule"></div>
+            <div class="slide-body v-center">
+              <ul>
+                <li>Gained hands-on HIM experience at a district hospital</li>
+                <li>Developed practical skills in registration and claims</li>
+                <li>Ready for professional practice in health information</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
       </div>
-      <iframe class="preview-frame"
-              id="preview-iframe"
-              src="{% url 'view_pptx_pdf' %}?attachment_id={{ session.id }}"
-              title="Presentation PDF preview"
-              onload="document.getElementById('preview-loading').classList.add('hidden')"></iframe>
     </div>
-    <div class="preview-hint">
-      Tap inside the viewer and scroll or swipe to see every slide.
+
+    <div class="preview-footer">
+      <div class="preview-dots" id="pptx-preview-dots">
+        <span data-dot="0" class="active"></span>
+        <span data-dot="1"></span>
+        <span data-dot="2"></span>
+        <span data-dot="3"></span>
+        <span data-dot="4"></span>
+        <span data-dot="5"></span>
+        <span data-dot="6"></span>
+      </div>
+      <p class="preview-hint-text">Auto-playing · 4s per slide · Swipe or use arrow keys to navigate</p>
     </div>
+
   </div>
 </div>
 {% endif %}
@@ -452,6 +722,13 @@
   function showSwitchOverlay() {
     document.getElementById('switch-overlay').classList.add('show');
     document.getElementById('switch-att-form').submit();
+  }
+
+  // ---- Show/hide the "Build Official" card based on selected template ----
+  function updateOfficialCardVisibility(templateKey) {
+    var officialForm = document.getElementById('gen-official-form');
+    if (!officialForm) return;
+    officialForm.style.display = (templateKey === 'cohy_classic') ? '' : 'none';
   }
 
   // ---- Template selection + live preview ----
@@ -519,6 +796,7 @@
     currentKey = card.dataset.key;
     if (templateSelect) templateSelect.value = currentKey;
     renderPreview(card);
+    updateOfficialCardVisibility(currentKey);
   }
 
   cards.forEach(function (card) {
@@ -526,31 +804,28 @@
     if (card.dataset.key === currentKey) renderPreview(card);
   });
 
-  // ✅ Auto-fill: fills the form AND resets font_size to default 18
+  updateOfficialCardVisibility(currentKey);
+
+  // ---- Auto-fill: COHY Classic + default settings ----
   window.pickOfficialTemplate = function () {
-    // 1. Select the HIM card (updates live preview + template dropdown)
     var official = document.querySelector('.pptx-card[data-key="cohy_classic"]');
     if (official) selectCard(official);
 
-    // 2. Grab the custom form
     var form = document.getElementById('gen-custom-form');
     if (!form) return;
 
-    // 3. Template dropdown → COHY Classic
     var templateSel = form.querySelector('[name="pptx_template"]');
     if (templateSel) {
       templateSel.value = 'cohy_classic';
       templateSel.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
-    // 4. Font size → 18pt (default)
     var fontSize = form.querySelector('[name="font_size"]');
     if (fontSize) {
       fontSize.value = '18';
       fontSize.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
-    // 5. Layout controls → official defaults (6 bullets / 220 chars)
     var maxBullets = form.querySelector('[name="max_bullets"]');
     if (maxBullets) {
       maxBullets.value = '6';
@@ -562,21 +837,17 @@
       maxChars.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
-    // 6. Speaker notes on
     var notesToggle = form.querySelector('[name="include_speaker_notes"]');
     if (notesToggle) notesToggle.checked = true;
 
-    // 7. Every slide_* section checkbox → ON
     form.querySelectorAll('input[type="checkbox"][name^="slide_"]').forEach(function (box) {
       box.checked = true;
     });
 
-    // 8. Scroll the custom form into view
     var target = form.closest('.mp-action-grid') || form;
     if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  // Sync dropdown → cards
   if (templateSelect) {
     templateSelect.addEventListener('change', function () {
       var card = document.querySelector('.pptx-card[data-key="' + this.value + '"]');
@@ -646,32 +917,108 @@
     });
   })();
 
-  // ---- Preview overlay ----
+  // ---- PHASE 5: Sample slide carousel ----
   window.closePptxPreview = function () {
     var ov = document.getElementById('pptx-preview-overlay');
     if (ov) {
       ov.classList.remove('show');
       ov.setAttribute('aria-hidden', 'true');
     }
+    if (window._pptxPreviewTimer) {
+      clearInterval(window._pptxPreviewTimer);
+      window._pptxPreviewTimer = null;
+    }
   };
 
   (function () {
     var ov = document.getElementById('pptx-preview-overlay');
     if (!ov) return;
-    // Show on every page load (per requirement: "all opens same")
+    if (ov.dataset.autoOpen !== '1') return;
+
+    var track    = document.getElementById('pptx-slide-track');
+    var dotsWrap = document.getElementById('pptx-preview-dots');
+    var scroller = document.getElementById('pptx-preview-scroller');
+    if (!track) return;
+
+    var slides  = track.querySelectorAll('.pptx-slide');
+    var dotEls  = dotsWrap ? dotsWrap.querySelectorAll('span') : [];
+    var total   = slides.length;
+    var current = 0;
+    var timer   = null;
+    var paused  = false;
+    var INTERVAL_MS = 4000;
+
+    function goto(index) {
+      current = ((index % total) + total) % total;
+      track.style.transform = 'translateX(-' + (current * 100) + '%)';
+      dotEls.forEach(function (d, i) {
+        d.classList.toggle('active', i === current);
+      });
+    }
+
+    function startTimer() {
+      stopTimer();
+      timer = setInterval(function () {
+        if (!paused) goto(current + 1);
+      }, INTERVAL_MS);
+      window._pptxPreviewTimer = timer;
+    }
+    function stopTimer() {
+      if (timer) { clearInterval(timer); timer = null; }
+      window._pptxPreviewTimer = null;
+    }
+    function restartTimer() { startTimer(); }
+
+    dotEls.forEach(function (d, i) {
+      d.addEventListener('click', function () {
+        goto(i);
+        restartTimer();
+      });
+    });
+
     ov.classList.add('show');
     ov.setAttribute('aria-hidden', 'false');
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && ov.classList.contains('show')) closePptxPreview();
-    });
+    goto(0);
+    startTimer();
+
     ov.addEventListener('click', function (e) {
       if (e.target === ov) closePptxPreview();
     });
-    // Fallback: if the PDF takes longer than 8s to signal onload, hide the spinner
-    setTimeout(function () {
-      var ld = document.getElementById('preview-loading');
-      if (ld) ld.classList.add('hidden');
-    }, 8000);
+
+    document.addEventListener('keydown', function (e) {
+      if (!ov.classList.contains('show')) return;
+      if (e.key === 'Escape') closePptxPreview();
+      else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { goto(current + 1); restartTimer(); }
+      else if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   { goto(current - 1); restartTimer(); }
+    });
+
+    // Horizontal touch swipe
+    var touchStartX = 0;
+    var touchMoved  = false;
+    if (scroller) {
+      scroller.addEventListener('touchstart', function (e) {
+        if (e.touches.length !== 1) return;
+        touchStartX = e.touches[0].clientX;
+        touchMoved  = false;
+      }, { passive: true });
+
+      scroller.addEventListener('touchmove', function () {
+        touchMoved = true;
+      }, { passive: true });
+
+      scroller.addEventListener('touchend', function (e) {
+        if (!touchMoved) return;
+        var endX = e.changedTouches[0].clientX;
+        var dx = endX - touchStartX;
+        if (Math.abs(dx) < 40) return;
+        if (dx < 0) goto(current + 1);
+        else        goto(current - 1);
+        restartTimer();
+      }, { passive: true });
+    }
+
+    ov.addEventListener('mouseenter', function () { paused = true; });
+    ov.addEventListener('mouseleave', function () { paused = false; });
   })();
 </script>
 {% endblock %}

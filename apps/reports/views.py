@@ -29,6 +29,17 @@ from .standards import MIN_PAGES_GUIDELINE, SCHOOL_STANDARD, normalize_options
 logger = logging.getLogger(__name__)
 
 
+# ✅ PHASE 3 — single helper for "post-generation" redirects.
+# Adds ?attachment_id=<id>&generated=1 so options.html / pptx_options.html
+# can skip the auto-show overlay after a POST build.
+def _redirect_after_generation(request, view_name, session, **extra):
+    base = reverse(view_name)
+    params = {'attachment_id': session.id, 'generated': '1'}
+    params.update(extra)
+    qs = '&'.join(f'{k}={v}' for k, v in params.items())
+    return redirect(f'{base}?{qs}')
+
+
 def _get_session(request):
     attachment_id = request.GET.get('attachment_id') or request.POST.get('attachment_id')
     if attachment_id:
@@ -139,7 +150,8 @@ def generate_report(request):
     if bounce:
         return bounce
     _build(request, session, use_ai=True, force_ai=True)
-    return redirect(f"{reverse('report_options')}?attachment_id={session.id}")
+    # ✅ PHASE 3 — adds generated=1 so options.html skips the overlay
+    return _redirect_after_generation(request, 'report_options', session)
 
 
 @login_required
@@ -157,7 +169,8 @@ def report_options(request):
             report.custom_logo = request.FILES['custom_logo']
             report.save(update_fields=['custom_logo'])
             messages.success(request, 'Cover logo updated.')
-            return redirect(f"{reverse('report_options')}?attachment_id={session.id}")
+            # ✅ PHASE 3
+            return _redirect_after_generation(request, 'report_options', session)
 
         if 'remove_logo' in request.POST:
             if report.custom_logo:
@@ -165,7 +178,8 @@ def report_options(request):
             report.custom_logo = None
             report.save(update_fields=['custom_logo'])
             messages.success(request, 'Custom logo removed.')
-            return redirect(f"{reverse('report_options')}?attachment_id={session.id}")
+            # ✅ PHASE 3
+            return _redirect_after_generation(request, 'report_options', session)
 
         if request.POST.get('action') == 'build_pptx':
             template_key = request.POST.get('pptx_template') or 'cohy_classic'
@@ -178,7 +192,8 @@ def report_options(request):
             except Exception as exc:
                 logger.exception('PPTX build failed for session %s', session.pk)
                 messages.error(request, f'Could not build the presentation: {exc}')
-            return redirect(f"{reverse('report_options')}?attachment_id={session.id}")
+            # ✅ PHASE 3
+            return _redirect_after_generation(request, 'report_options', session)
 
         if request.POST.get('action') == 'generate':
             form = ReportOptionsForm(request.POST)
@@ -189,7 +204,8 @@ def report_options(request):
                 report.options = normalize_options(cleaned_data)
                 report.save(update_fields=['options'])
                 _build(request, session, use_ai=True, force_ai=True)
-                return redirect(f"{reverse('report_options')}?attachment_id={session.id}")
+                # ✅ PHASE 3
+                return _redirect_after_generation(request, 'report_options', session)
             else:
                 messages.error(request, "Your custom settings couldn't be saved. Please check the form for errors below.")
         else:
@@ -197,7 +213,8 @@ def report_options(request):
             report.options['include_signoff'] = False
             report.save(update_fields=['options'])
             _build(request, session, use_ai=True, force_ai=True)
-            return redirect(f"{reverse('report_options')}?attachment_id={session.id}")
+            # ✅ PHASE 3
+            return _redirect_after_generation(request, 'report_options', session)
 
     if form is None and allow_custom:
         form = ReportOptionsForm(initial=normalize_options(report.options))
@@ -242,6 +259,8 @@ def report_options(request):
         # ✅ NEW context keys for the abstract preview overlay:
         'abstract_paragraphs': abstract_paragraphs,
         'preview_keywords': preview_keywords,
+        # ✅ PHASE 3 — pass to template so JS can decide overlay visibility
+        'generated': request.GET.get('generated') == '1',
     })
 
 
@@ -273,7 +292,8 @@ def report_content(request):
             report.save(update_fields=['content'])
             _build(request, session, use_ai=True, force_ai=True)
             messages.success(request, 'Report reset to a fresh AI draft.')
-            return redirect(f"{reverse('report_options')}?attachment_id={session.id}")
+            # ✅ PHASE 3
+            return _redirect_after_generation(request, 'report_options', session)
 
         form = ReportContentForm(request.POST)
         if form.is_valid():
@@ -286,7 +306,8 @@ def report_content(request):
 
             if action == 'regenerate':
                 _build(request, session, use_ai=False)
-                return redirect(f"{reverse('report_options')}?attachment_id={session.id}")
+                # ✅ PHASE 3
+                return _redirect_after_generation(request, 'report_options', session)
 
             messages.success(request, 'Your text has been saved.')
             return redirect(f"{reverse('report_content')}?attachment_id={session.id}")
@@ -509,7 +530,8 @@ def pptx_options(request):
         if action == 'build_official':
             # Official always uses COHY Classic, but keeps any saved options
             _build_pptx_from_scratch(request, session, 'cohy_classic', force_ai=False)
-            return redirect(f"{reverse('pptx_options')}?attachment_id={session.id}")
+            # ✅ PHASE 3
+            return _redirect_after_generation(request, 'pptx_options', session)
 
         if action == 'build_custom':
             # ✅ FIX v3: honor the full custom form, not just the template key
@@ -526,7 +548,8 @@ def pptx_options(request):
                     "Your custom presentation settings couldn't be saved. "
                     "Check the form for errors below.",
                 )
-            return redirect(f"{reverse('pptx_options')}?attachment_id={session.id}")
+            # ✅ PHASE 3
+            return _redirect_after_generation(request, 'pptx_options', session)
 
         if action == 'regenerate':
             template_key = (
@@ -537,7 +560,8 @@ def pptx_options(request):
             if template_key not in PPTX_TEMPLATES:
                 template_key = 'cohy_classic'
             _build_pptx_from_scratch(request, session, template_key, force_ai=True)
-            return redirect(f"{reverse('pptx_options')}?attachment_id={session.id}")
+            # ✅ PHASE 3
+            return _redirect_after_generation(request, 'pptx_options', session)
 
     selected = request.GET.get('template') or report.pptx_template or 'cohy_classic'
     if selected not in PPTX_TEMPLATES:
@@ -574,6 +598,8 @@ def pptx_options(request):
         'has_pptx_pdf': bool(report.pptx_pdf_file),
         'custom_form': custom_form,
         'pptx_section_fields': PPTX_SECTION_FIELDS,
+        # ✅ PHASE 3 — pass to template so JS can decide overlay visibility
+        'generated': request.GET.get('generated') == '1',
     })
 
 
@@ -610,7 +636,8 @@ def pptx_content(request):
             template_key = report.pptx_template or 'cohy_classic'
             _build_pptx_from_scratch(request, session, template_key, force_ai=True)
             messages.success(request, 'Presentation reset to a fresh AI draft.')
-            return redirect(f"{reverse('pptx_options')}?attachment_id={session.id}")
+            # ✅ PHASE 3
+            return _redirect_after_generation(request, 'pptx_options', session)
 
         form = PptxContentForm(request.POST)
         if form.is_valid():
@@ -624,7 +651,8 @@ def pptx_content(request):
             if action == 'regenerate':
                 template_key = report.pptx_template or 'cohy_classic'
                 _build_pptx_from_scratch(request, session, template_key, force_ai=False)
-                return redirect(f"{reverse('pptx_options')}?attachment_id={session.id}")
+                # ✅ PHASE 3
+                return _redirect_after_generation(request, 'pptx_options', session)
 
             messages.success(request, 'Your slide text has been saved.')
             return redirect(f"{reverse('pptx_content')}?attachment_id={session.id}")
