@@ -70,7 +70,38 @@ class PracticumPptxBuilder:
         self.template_key = self.template['key']
         self.prs_w = None
         self.prs_h = None
+        self.show_logo = bool(self.template.get('has_logo') or self.template.get('is_him'))
 
+    # ---------------- pptx_options accessors ----------------
+    def _opts(self):
+        return (self.rb.report_obj.pptx_options
+                if self.rb.report_obj and self.rb.report_obj.pptx_options
+                else {}) or {}
+
+    def _max_bullets(self):
+        try:
+            return max(1, int(self._opts().get('max_bullets', 6)))
+        except (TypeError, ValueError):
+            return 6
+
+    def _max_chars(self):
+        try:
+            return max(40, int(self._opts().get('max_chars_per_bullet', 220)))
+        except (TypeError, ValueError):
+            return 220
+
+    # ✅ NEW: body font size for content-slide bullets (10–28 pt, default 18)
+    def _font_size(self):
+        try:
+            return max(10, min(28, int(self._opts().get('font_size', 18))))
+        except (TypeError, ValueError):
+            return 18
+
+    def _section_enabled(self, key):
+        sections = (self._opts().get('sections') or {})
+        return bool(sections.get(key, True))
+
+    # ---------------- content helpers (unchanged) ----------------
     def _clean_list(self, text):
         out = []
         for line in (text or '').splitlines():
@@ -84,21 +115,28 @@ class PracticumPptxBuilder:
                 if self.rb.report_obj and self.rb.report_obj.pptx_content
                 else {}) or {}
 
-    def _bullets(self, key, fallback_items, max_items=6):
+    def _bullets(self, key, fallback_items, max_items=None):
+        max_items = max_items or self._max_bullets()
+        max_items = min(max_items, self._max_bullets())
+        max_chars = self._max_chars()
         raw = (self._pptx_content().get(key) or '').strip()
         if raw:
             out = []
             for line in raw.splitlines():
                 line = re.sub(r'^[\-\*\u2022\d\.\)]+\s*', '', line.strip())
+                if len(line) > max_chars:
+                    line = line[:max_chars].rstrip() + '…'
                 if line:
                     out.append(line)
                 if len(out) >= max_items:
                     break
             if out:
                 return out
-        return _trim_to_slide(fallback_items, max_items=max_items)
+        return _trim_to_slide(fallback_items, max_items=max_items, max_chars=max_chars)
 
     def _parse_speaker_notes(self):
+        if not self._opts().get('include_speaker_notes', True):
+            return {}
         raw = (self._pptx_content().get('pptx_speaker_notes') or '').strip()
         notes = {}
         for line in raw.splitlines():
@@ -118,68 +156,72 @@ class PracticumPptxBuilder:
 
         specs = []
 
-        specs.append({
-            'type': 'cover',
-            'data': {
-                'school_name': school['name'],
-                'dept_name': self.rb.user.get_department_display(),
-                'student_name': d['name'],
-                'index_number': self.rb.user.index_number,
-                'level': self.rb.user.level,
-                'logo': school.get('title_logo'),
-            },
-        })
+        if self._section_enabled('slide_cover'):
+            specs.append({
+                'type': 'cover',
+                'data': {
+                    'school_name': school['name'],
+                    'dept_name': self.rb.user.get_department_display(),
+                    'student_name': d['name'],
+                    'index_number': self.rb.user.index_number,
+                    'level': self.rb.user.level,
+                    'logo': school.get('title_logo'),
+                },
+            })
 
-        specs.append({
-            'type': 'title',
-            'data': {
-                'title': 'VACATION PRACTICUM PRESENTATION',
-                'logo': school.get('title_logo'),
-            },
-        })
+        if self._section_enabled('slide_title'):
+            specs.append({
+                'type': 'title',
+                'data': {
+                    'title': 'VACATION PRACTICUM PRESENTATION',
+                    'logo': school.get('title_logo'),
+                },
+            })
 
         content_blocks = [
-            ('INTRODUCTION',
+            ('slide_intro', 'INTRODUCTION',
                 self._bullets('pptx_intro_bullets', content.get('introduction', '').split('\n\n')),
                 True),
-            ('FACILITY PROFILE',
+            ('slide_facility', 'FACILITY PROFILE',
                 self._bullets('pptx_facility_bullets', content.get('facility_profile', '').split('\n\n')),
                 True),
-            ('ACTIVITIES PERFORMED',
+            ('slide_activities', 'ACTIVITIES PERFORMED',
                 self._bullets('pptx_activities_bullets', [g['narrative'] for g in d['unit_activities']]),
                 True),
-            ('SKILLS ACQUIRED',
+            ('slide_skills', 'SKILLS ACQUIRED',
                 self._bullets('pptx_skills_bullets', self._clean_list(content.get('skills_acquired', ''))),
                 True),
-            ('CHALLENGES FACED',
+            ('slide_challenges', 'CHALLENGES FACED',
                 self._bullets('pptx_challenges_bullets', content.get('challenges', '').split('\n\n'), max_items=2),
                 True),
-            # Combined Observation & Recommendation
-            ('OBSERVATION AND RECOMMENDATION',
+            ('slide_observation', 'OBSERVATION AND RECOMMENDATION',
                 self._bullets('pptx_observation_recommendation_bullets',
                               content.get('observation', '').split('\n\n')
                               + self._clean_list(content.get('facility_recs', ''))
                               + self._clean_list(content.get('academic_recs', '')),
                               max_items=4),
                 True),
-            ('CONCLUSION',
+            ('slide_conclusion', 'CONCLUSION',
                 self._bullets('pptx_conclusion_bullets', content.get('conclusion', '').split('\n\n')),
                 True),
         ]
 
-        for heading, items, bullet in content_blocks:
+        for toggle_key, heading, items, bullet in content_blocks:
+            if not self._section_enabled(toggle_key):
+                continue
             specs.append({
                 'type': 'content',
                 'data': {'heading': heading, 'items': items, 'bullet': bullet},
             })
 
-        specs.append({
-            'type': 'thankyou',
-            'data': {
-                'title': 'THANK YOU',
-                'logo': school.get('title_logo'),
-            },
-        })
+        if self._section_enabled('slide_thankyou'):
+            specs.append({
+                'type': 'thankyou',
+                'data': {
+                    'title': 'THANK YOU',
+                    'logo': school.get('title_logo'),
+                },
+            })
 
         return specs
 
@@ -198,7 +240,7 @@ class PracticumPptxBuilder:
         for spec in self._slide_specs():
             slide = prs.slides.add_slide(prs.slide_layouts[6])
             self._bg(slide)
-            
+
             if spec['type'] == 'cover':
                 self._render_cover(slide, spec['data'])
             elif spec['type'] == 'title':
@@ -229,7 +271,12 @@ class PracticumPptxBuilder:
         specs = self._slide_specs()
         html = render_to_string(
             'reports/pptx_slide_preview.html',
-            {'specs': specs, 'template': self.template},
+            {
+                'specs': specs,
+                'template': self.template,
+                # ✅ NEW: font size for the HTML preview so it matches the .pptx
+                'body_font_size': self._font_size(),
+            },
         )
         return HTML(string=html, base_url=str(settings.BASE_DIR)).write_pdf()
 
@@ -247,117 +294,147 @@ class PracticumPptxBuilder:
         except Exception:
             return None
 
+    def _add_logo(self, slide, data, x, y, size, align='center'):
+        if not self.show_logo:
+            return
+        logo_data = data.get('logo') if isinstance(data, dict) else None
+        stream = self._logo_stream({'title_logo': logo_data})
+        if not stream:
+            return
+        try:
+            lw = Inches(size)
+            left = (self.prs_w - lw) // 2 if align == 'center' else x
+            slide.shapes.add_picture(stream, left, y, lw, lw)
+        except Exception:
+            pass
+
     def _draw_frame(self, slide):
-        """Bottom bands: Wine/Red, Black, Thick Deep Brown (No top line)."""
         W, H = self.prs_w, self.prs_h
         t = self.template
-        
-        # Bottom bands layout (Total 0.65 inches high)
-        # Wine/Red: 0.20 in
-        # Black: 0.10 in
-        # Brown/Gold (Thickest & Deepest): 0.35 in
-        _fill_rect(slide, 0, H - Inches(0.65), W, Inches(0.20), t['primary_color'])
-        _fill_rect(slide, 0, H - Inches(0.45), W, Inches(0.10), '000000')
-        _fill_rect(slide, 0, H - Inches(0.35), W, Inches(0.35), '8B4513') # Deep Brown
+        style = t.get('style', 'side_accent')
+
+        if style == 'classic_bar':
+            _fill_rect(slide, 0, H - Inches(0.65), W, Inches(0.20), t['primary_color'])
+            _fill_rect(slide, 0, H - Inches(0.45), W, Inches(0.10), '000000')
+            _fill_rect(slide, 0, H - Inches(0.35), W, Inches(0.35), '8B4513')
+
+        elif style == 'side_accent':
+            _fill_rect(slide, 0, 0, Inches(0.35), H, t['primary_color'])
+            _fill_rect(slide, 0, H - Inches(0.14), W, Inches(0.14), t['secondary_color'])
+
+        elif style == 'top_band':
+            _fill_rect(slide, 0, 0, W, Inches(0.95), t['primary_color'])
+            _fill_rect(slide, 0, Inches(0.95), W, Inches(0.08), t['secondary_color'])
+
+        elif style == 'minimal_line':
+            _fill_rect(slide, Inches(1.0), H - Inches(0.45), W - Inches(2.0),
+                       Inches(0.06), t['primary_color'])
+
+        elif style == 'full_bg':
+            _fill_rect(slide, 0, H - Inches(0.20), W, Inches(0.20), t['secondary_color'])
+
+        elif style == 'corner_triangle':
+            size = Inches(1.8)
+            tri = slide.shapes.add_shape(MSO_SHAPE.RIGHT_TRIANGLE, W - size, 0, size, size)
+            tri.rotation = 180
+            tri.fill.solid()
+            tri.fill.fore_color.rgb = _rgb(t['primary_color'])
+            tri.line.fill.background()
+            _fill_rect(slide, 0, H - Inches(0.12), W, Inches(0.12), t['primary_color'])
+
+        else:
+            _fill_rect(slide, 0, H - Inches(0.10), W, Inches(0.10), t['primary_color'])
+
+    def _cover_colors(self):
+        t = self.template
+        if t.get('style') == 'classic_bar':
+            return '1A1A1A', '808080'
+        return t.get('title_color', '1A1A1A'), t.get('primary_color', '1A1A1A')
 
     def _render_cover(self, slide, data):
         W, H = self.prs_w, self.prs_h
         t = self.template
         self._draw_frame(slide)
+        self._add_logo(slide, data, 0, Inches(0.5), 1.5)
+        title_color, info_color = self._cover_colors()
 
-        logo = self._logo_stream({'title_logo': data.get('logo')})
-        if logo:
-            try:
-                lw = Inches(1.5)
-                slide.shapes.add_picture(logo, (W - lw) // 2, Inches(0.5), lw, lw)
-            except Exception:
-                pass
-
-        # Line 1 (Thicker)
         _fill_rect(slide, Inches(0.5), Inches(2.1), W - Inches(1.0), Inches(0.08), t['primary_color'])
-
-        # College Name & Dept (Size 40 & 28)
         tb = slide.shapes.add_textbox(Inches(0.5), Inches(2.2), W - Inches(1.0), Inches(1.2))
         tb.text_frame.word_wrap = True
         _add_para(tb.text_frame, data['school_name'].upper(), size=40, bold=True,
-                  color='1A1A1A', font=t['heading_font'],
-                  align=PP_ALIGN.CENTER, first=True, space_after=4)
+                  color=title_color, font=t['heading_font'], align=PP_ALIGN.CENTER,
+                  first=True, space_after=4)
         _add_para(tb.text_frame, f"Department of {data['dept_name']}", size=28, bold=True,
-                  color='1A1A1A', font=t['heading_font'], align=PP_ALIGN.CENTER, space_after=0)
-
-        # Line 2 (Thicker)
+                  color=title_color, font=t['heading_font'], align=PP_ALIGN.CENTER, space_after=0)
         _fill_rect(slide, Inches(0.5), Inches(3.4), W - Inches(1.0), Inches(0.08), t['primary_color'])
-
-        # Student Info (Size 32, Bold, Ash color)
-        ash_color = '808080' 
         tb = slide.shapes.add_textbox(Inches(0.6), Inches(4.2), W - Inches(1.2), Inches(2.0))
         tb.text_frame.word_wrap = True
-        
         _add_para(tb.text_frame, data['student_name'].upper(), size=32, bold=True,
-                  color=ash_color, font=t['body_font'],
-                  align=PP_ALIGN.CENTER, first=True, space_after=12)
-        
-        _add_para(tb.text_frame, data['index_number'].upper() or '', size=28,
-                  color=ash_color, font=t['body_font'],
-                  align=PP_ALIGN.CENTER, space_after=8)
-        
+                  color=info_color, font=t['body_font'], align=PP_ALIGN.CENTER,
+                  first=True, space_after=12)
+        _add_para(tb.text_frame, (data['index_number'] or '').upper(), size=28,
+                  color=info_color, font=t['body_font'], align=PP_ALIGN.CENTER, space_after=8)
         _add_para(tb.text_frame, f"LEVEL {data['level']}".upper(), size=28,
-                  color=ash_color, font=t['body_font'],
-                  align=PP_ALIGN.CENTER, space_after=0)
+                  color=info_color, font=t['body_font'], align=PP_ALIGN.CENTER, space_after=0)
 
     def _render_title(self, slide, data):
         W, H = self.prs_w, self.prs_h
         t = self.template
         self._draw_frame(slide)
-
-        logo = self._logo_stream({'title_logo': data.get('logo')})
-        if logo:
-            try:
-                lw = Inches(1.5)
-                slide.shapes.add_picture(logo, (W - lw) // 2, Inches(0.5), lw, lw)
-            except Exception:
-                pass
-
+        self._add_logo(slide, data, 0, Inches(0.5), 1.5)
+        title_color = '1A1A1A' if t.get('style') == 'classic_bar' else t.get('title_color', '1A1A1A')
         tb = slide.shapes.add_textbox(Inches(0.6), Inches(3.0), W - Inches(1.2), Inches(1.5))
         tb.text_frame.word_wrap = True
         tb.text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
-        _add_para(tb.text_frame, data['title'].upper(), size=44, bold=True, color='1A1A1A',
-                  font=t['heading_font'], align=PP_ALIGN.CENTER, first=True, space_after=0)
+        _add_para(tb.text_frame, data['title'].upper(), size=44, bold=True,
+                  color=title_color, font=t['heading_font'], align=PP_ALIGN.CENTER,
+                  first=True, space_after=0)
 
     def _render_content(self, slide, data):
         W, H = self.prs_w, self.prs_h
         t = self.template
+        style = t.get('style', 'side_accent')
+        is_him = (style == 'classic_bar')
+
         self._draw_frame(slide)
 
-        # Corner logos
-        logo_data = self.rb._school().get('title_logo')
-        if logo_data and logo_data.startswith('data:image'):
-            lw = Inches(0.65)
-            left_stream = self._logo_stream({'title_logo': logo_data})
-            if left_stream:
-                try:
-                    slide.shapes.add_picture(left_stream, Inches(0.35), Inches(0.15), lw, lw)
-                except Exception:
-                    pass
-            right_stream = self._logo_stream({'title_logo': logo_data})
-            if right_stream:
-                try:
-                    slide.shapes.add_picture(right_stream, W - lw - Inches(0.35), Inches(0.15), lw, lw)
-                except Exception:
-                    pass
+        if self.show_logo:
+            logo_data = self.rb._school().get('title_logo')
+            if logo_data and logo_data.startswith('data:image'):
+                lw = Inches(0.65)
+                ls = self._logo_stream({'title_logo': logo_data})
+                if ls:
+                    try:
+                        slide.shapes.add_picture(ls, Inches(0.35), Inches(0.15), lw, lw)
+                    except Exception:
+                        pass
+                rs = self._logo_stream({'title_logo': logo_data})
+                if rs:
+                    try:
+                        slide.shapes.add_picture(rs, W - lw - Inches(0.35), Inches(0.15), lw, lw)
+                    except Exception:
+                        pass
 
-        # Heading
-        tb = slide.shapes.add_textbox(Inches(1.4), Inches(0.2), W - Inches(2.8), Inches(0.8))
+        if style == 'top_band':
+            heading_top = Inches(0.15)
+            heading_box_h = Inches(0.70)
+            heading_color = 'FFFFFF'
+        else:
+            heading_top = Inches(0.20)
+            heading_box_h = Inches(0.80)
+            heading_color = '1A1A1A' if is_him else t.get('title_color', '1A1A1A')
+
+        tb = slide.shapes.add_textbox(Inches(1.4), heading_top, W - Inches(2.8), heading_box_h)
         tb.text_frame.word_wrap = True
         tb.text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
         _add_para(tb.text_frame, data['heading'].upper(), size=32, bold=True,
-                  color='1A1A1A', font=t['heading_font'],
-                  align=PP_ALIGN.CENTER, first=True, space_after=0)
+                  color=heading_color, font=t['heading_font'], align=PP_ALIGN.CENTER,
+                  first=True, space_after=0)
 
-        # Thin maroon rule under heading
-        _fill_rect(slide, Inches(0.9), Inches(1.15), W - Inches(1.8), Inches(0.06), t['primary_color'])
+        if is_him:
+            _fill_rect(slide, Inches(0.9), Inches(1.15), W - Inches(1.8),
+                       Inches(0.06), t['primary_color'])
 
-        # Body
         raw_items = data.get('items') or []
         items = [str(i).strip() for i in raw_items if str(i or '').strip()]
         if not items:
@@ -369,28 +446,30 @@ class PracticumPptxBuilder:
         body_tf = body_tb.text_frame
         body_tf.word_wrap = True
 
+        estimated_chars = sum(len(i) for i in items)
+        center_vertically = len(items) <= 3 and estimated_chars < 400
+        body_tf.vertical_anchor = MSO_ANCHOR.MIDDLE if center_vertically else MSO_ANCHOR.TOP
+
         bullet = bool(data.get('bullet'))
+        body_color = t.get('text_color', '1A1A1A')
+        # ✅ NEW: use the user-configured body font size (defaults to 18 pt)
+        body_size = self._font_size()
+
         for i, item in enumerate(items):
-            _add_para(body_tf, item, size=18 if bullet else 17,
-                      color='1A1A1A', font=t['body_font'],
-                      first=(i == 0), bullet=bullet, space_after=14)
+            _add_para(body_tf, item, size=body_size,
+                      color=body_color, font=t['body_font'],
+                      first=(i == 0), bullet=bullet,
+                      space_after=16 if center_vertically else 14)
 
     def _render_thankyou(self, slide, data):
         W, H = self.prs_w, self.prs_h
         t = self.template
         self._draw_frame(slide)
-
-        logo = self._logo_stream({'title_logo': data.get('logo')})
-        if logo:
-            try:
-                lw = Inches(1.5)
-                slide.shapes.add_picture(logo, (W - lw) // 2, Inches(0.5), lw, lw)
-            except Exception:
-                pass
-
-        # Black text, no subtitle
+        self._add_logo(slide, data, 0, Inches(0.5), 1.5)
+        title_color = '1A1A1A' if t.get('style') == 'classic_bar' else t.get('title_color', '1A1A1A')
         tb = slide.shapes.add_textbox(Inches(0.6), Inches(3.0), W - Inches(1.2), Inches(1.5))
         tb.text_frame.word_wrap = True
         tb.text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
-        _add_para(tb.text_frame, data['title'], size=54, bold=True, color='1A1A1A',
-                  font=t['heading_font'], align=PP_ALIGN.CENTER, first=True, space_after=0)
+        _add_para(tb.text_frame, data['title'], size=54, bold=True,
+                  color=title_color, font=t['heading_font'], align=PP_ALIGN.CENTER,
+                  first=True, space_after=0)

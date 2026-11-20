@@ -13,6 +13,7 @@ from django.utils.text import slugify
 from docx import Document
 from docx.shared import Pt, Inches, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 
 from apps.logs.department_config import get_department_config
@@ -1004,6 +1005,48 @@ class PracticumReportBuilder:
         self._add_rich_paragraph(doc, "Student's Signature")
         self._add_rich_paragraph(doc, "\n\n______________________________________")
         self._add_rich_paragraph(doc, "Date")
+
+        # ---- ✅ Page numbers in the footer (bottom-centre), if enabled ----
+        # Uses a real Word PAGE field so it recalculates on open and after
+        # pagination. The cover page is suppressed (different first page) so
+        # numbering starts from the body — standard academic convention.
+        if self.options.get('page_numbers', True):
+            section = doc.sections[0]
+            section.different_first_page_header_footer = True   # cover has no footer
+
+            # Regular footer (body pages)
+            footer = section.footer
+            footer.is_linked_to_previous = False
+            fp = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
+            fp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            for r in list(fp.runs):
+                r._r.getparent().remove(r._r)
+
+            run = fp.add_run()
+            run.font.name = 'Times New Roman'
+            run.font.size = Pt(10)
+            run.font.color.rgb = RGBColor(0, 0, 0)
+
+            fld_begin = OxmlElement('w:fldChar')
+            fld_begin.set(qn('w:fldCharType'), 'begin')
+
+            instr = OxmlElement('w:instrText')
+            instr.set(qn('xml:space'), 'preserve')
+            instr.text = 'PAGE'
+
+            fld_end = OxmlElement('w:fldChar')
+            fld_end.set(qn('w:fldCharType'), 'end')
+
+            run._r.append(fld_begin)
+            run._r.append(instr)
+            run._r.append(fld_end)
+
+            # Leave the first-page footer empty (cover has no number)
+            first_footer = section.first_page_footer
+            first_footer.is_linked_to_previous = False
+            if first_footer.paragraphs:
+                for r in list(first_footer.paragraphs[0].runs):
+                    r._r.getparent().remove(r._r)
 
         buffer = io.BytesIO()
         doc.save(buffer)

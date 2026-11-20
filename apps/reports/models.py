@@ -94,14 +94,16 @@ class GeneratedReport(models.Model):
     )
 
     # ----- PowerPoint slide content (drafted lazily on first PPTX build) -----
-    # Slide-specific AI output (short bullets + speaker notes). Kept separate
-    # from `content` (the report prose) so that:
-    #   1. Rebuilding the PPTX in a different template doesn't touch the report.
-    #   2. Report regeneration stays fast — PPTX drafting only runs on demand.
     # Shape: {'pptx_intro_bullets': 'line1\nline2\n…', …, 'pptx_speaker_notes': '…'}
     pptx_content = models.JSONField(default=dict, blank=True)
 
-    options = models.JSONField(default=dict, blank=True)   # format choices
+    # ----- ✅ FIX v3: Custom presentation settings (mirrors report `options`) -----
+    # Shape: {'max_bullets': 6, 'max_chars_per_bullet': 220,
+    #         'include_speaker_notes': True,
+    #         'sections': {'slide_cover': True, 'slide_intro': True, ...}}
+    pptx_options = models.JSONField(default=dict, blank=True)
+
+    options = models.JSONField(default=dict, blank=True)   # report format choices
     content = models.JSONField(default=dict, blank=True)   # AI drafts + student edits
     generated_at = models.DateTimeField(auto_now=True)
     is_signed_off = models.BooleanField(default=False)
@@ -110,13 +112,10 @@ class GeneratedReport(models.Model):
     def __str__(self):
         return f"Report for {self.attachment}"
 
-    # ---- Template-friendly aliases (do NOT change the underlying fields) ----
     @property
     def signed_off(self):
-        """Read-only alias so PDF/preview templates can use `signed_off`."""
         return self.is_signed_off
 
     @property
     def signed_date(self):
-        """Read-only alias so PDF/preview templates can use `signed_date`."""
         return self.supervisor_signature_date

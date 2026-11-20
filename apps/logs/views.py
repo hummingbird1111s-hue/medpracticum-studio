@@ -104,11 +104,8 @@ def start_attachment(request):
     if request.method == 'POST':
         form = AttachmentSessionForm(request.POST)
         if form.is_valid():
-            session = form.save(commit=False)
-            session.user = request.user
-            session.save()
-
-            # ── Save competencies (optional, best-effort) ────────
+            # ── ✅ FIX v2: Parse competencies BEFORE saving the session ─────
+            # This lets us gate attachment creation on "at least one competency".
             raw = request.POST.get('competencies_json') or '[]'
             try:
                 items = json.loads(raw)
@@ -133,13 +130,24 @@ def start_attachment(request):
                         source = AttachmentCompetency.SOURCE_MANUAL
                     cleaned.append((text, source))
 
-            if cleaned:
-                AttachmentCompetency.objects.bulk_create([
-                    AttachmentCompetency(
-                        attachment_session=session,
-                        text=t, source=s, order=i,
-                    ) for i, (t, s) in enumerate(cleaned)
-                ])
+            # ✅ GATE: block attachment creation if no competency was provided.
+            if not cleaned:
+                form.add_error(
+                    None,
+                    'You must add at least one competency area before starting your attachment.',
+                )
+                return render(request, 'logs/start_attachment.html', {'form': form})
+
+            session = form.save(commit=False)
+            session.user = request.user
+            session.save()
+
+            AttachmentCompetency.objects.bulk_create([
+                AttachmentCompetency(
+                    attachment_session=session,
+                    text=t, source=s, order=i,
+                ) for i, (t, s) in enumerate(cleaned)
+            ])
 
             request.session['active_attachment_id'] = session.id
             return redirect('dashboard')
@@ -326,6 +334,73 @@ def delete_log(request, pk):
     return redirect('logs_list')
 
 
+# ============================================================
+# ✅ FIX v3 — Competency area file upload (hybrid OCR)
+# ============================================================
+# Used by both start_attachment.html and attachments_list.html.
+# Routing inside the view:
+#   - .txt / .docx / .pdf-with-text → local extraction (system, no AI)
+#   - scanned .pdf / image/*        → AI vision first → Tesseract fallback
+
+@login_required
+@require_POST
+def upload_competency_image(request):
+    """
+    Competency-area file upload → returns {lines: [...]}.
+
+    No AI needed for txt/docx/text-PDF. For images and scanned PDFs,
+    AI vision (Gemini) is tried first, then local Tesseract as fallback.
+    """
+    # Lazy import — same OOM-safe pattern as ai_chat()
+    from .ai_client import (
+        _normalize_mime,
+        TEXT_EXTRACTABLE_MIMES,
+        SUPPORTED_VISION_MIMES,
+        extract_text_from_attachment,
+        get_ai_reply_with_image_or_ocr,
+    )
+
+    f = request.FILES.get('image') or request.FILES.get('file')
+    if not f:
+        return JsonResponse({'error': 'No file provided.'}, status=400)
+    if f.size > 10 * 1024 * 1024:
+        return JsonResponse({'error': 'File too large (max 10 MB).'}, status=400)
+
+    mime = _normalize_mime(f.content_type or 'image/jpeg')
+    data = f.read()
+
+    # ── Path 1: text-extractable (txt / docx / pdf-with-text) → local only ──
+    if mime in TEXT_EXTRACTABLE_MIMES:
+        text, err = extract_text_from_attachment(mime, data)
+        if err:
+            return JsonResponse({'error': err}, status=400)
+        if text:
+            lines = [l.strip() for l in text.splitlines() if l.strip()][:50]
+            return JsonResponse({'lines': lines})
+        # pdf with no text layer → fall through to AI → Tesseract
+
+    # ── Path 2: images / scanned PDFs → AI vision → Tesseract ──
+    if mime not in SUPPORTED_VISION_MIMES:
+        return JsonResponse({'error': f'Unsupported file type: {mime}.'}, status=400)
+
+    prompt = (
+        "Transcribe the competency areas / skills shown in this document. "
+        "Return ONLY the list, one per line, no numbering, no commentary. "
+        "If none are visible, respond with exactly: NONE"
+    )
+    text, err = get_ai_reply_with_image_or_ocr(prompt, data, mime=mime)
+    if err or not text:
+        return JsonResponse({'error': err or 'Could not transcribe the file.'}, status=400)
+
+    if text.strip().upper() == 'NONE':
+        return JsonResponse({'lines': []})
+
+    lines = [
+        l.strip(' *-•·\t') for l in text.splitlines() if l.strip(' *-•·\t')
+    ][:50]
+    return JsonResponse({'lines': lines})
+
+
 # ---------- Sync API ----------
 
 def _to_int(value):
@@ -450,7 +525,7 @@ def sync_logs(request):
 
 
 # ==========================================
-# AI CHAT — conversation-based + VISION
+# AI CHAT — conversation-based + ATTACHMENT
 # ==========================================
 # The actual SDK is only imported when an AI request comes in
 # (via `.ai_client` inside the function body). This keeps Gunicorn
@@ -472,7 +547,7 @@ def ai_chat(request):
         image_name = (data.get('image_name') or 'file')[:80]
 
         if not user_message and not image_b64:
-            return JsonResponse({'success': False, 'error': 'Message or image is required.'}, status=400)
+            return JsonResponse({'success': False, 'error': 'Message or file is required.'}, status=400)
 
         user = request.user
 
@@ -483,14 +558,16 @@ def ai_chat(request):
         else:
             chat_session = AIChatSession.objects.create(user=user)
 
-        title_text = user_message if user_message else f"Image: {image_name}"
+        # ✅ FIX v2: "File:" not "Image:" since we now accept PDF / DOCX / TXT too
+        title_text = user_message if user_message else f"File: {image_name}"
         if not chat_session.title:
             chat_session.title = title_text[:80]
         chat_session.save(update_fields=['title', 'updated_at'])
 
+        # ✅ FIX v2: "[File attached:" label (was "[Image attached:")
         stored_user_content = user_message
         if image_b64:
-            stored_user_content = f"[Image attached: {image_name}]\n{user_message}".strip()
+            stored_user_content = f"[File attached: {image_name}]\n{user_message}".strip()
 
         AIChatMessage.objects.create(
             session=chat_session, user=user, role='user', content=stored_user_content,
@@ -539,13 +616,19 @@ def ai_chat(request):
         else:
             context += "\n(No active attachment found.)\n"
 
-        # Only last 10 prior messages (was 20), each trimmed to 300 chars
+        # Only last 10 prior messages, each trimmed to 300 chars
         prior = chat_session.messages.exclude(role='').order_by('-created_at')[:10]
         if prior:
             context += "\nPREVIOUS MESSAGES IN THIS CHAT:\n"
             for m in reversed(list(prior)):
                 label = "You" if m.role == 'user' else "Assistant"
-                clean = m.content.replace('[Image attached:', '[Image:').split(']')[-1].strip()
+                # ✅ FIX v2: handle both legacy "[Image attached:" and new "[File attached:"
+                _raw = m.content or ''
+                if _raw.startswith('[File attached:') or _raw.startswith('[Image attached:'):
+                    _close = _raw.find(']')
+                    clean = _raw[_close + 1:].strip() if _close != -1 else _raw.strip()
+                else:
+                    clean = _raw.strip()
                 context += f"{label}: {clean[:300]}\n"
             context += "\n"
 
@@ -565,9 +648,9 @@ def ai_chat(request):
         if image_b64:
             system_prompt = (
                 "You are the MedPracticum Studio AI Assistant, an expert academic advisor.\n"
-                "The user uploaded an image/document and asked a question.\n\n"
+                "The user uploaded an image, PDF, .docx, or .txt file and asked a question.\n\n"
                 + format_rules +
-                "PRIORITY: Analyze the uploaded image first (describe, transcribe, or answer from it).\n"
+                "PRIORITY: Analyze the uploaded file first (describe, transcribe, or answer from it).\n"
                 "Do not give a generic summary of the user's logs unless they explicitly ask.\n\n"
                 f"User Question: {user_message}\n"
             )
@@ -590,12 +673,23 @@ def ai_chat(request):
 
         raw_reply = None
         if image_b64:
-            from .ai_client import get_ai_reply_with_image
+            # ✅ FIX v2: unified attachment API — routes images → vision,
+            # PDF/DOCX/TXT → local extraction, scanned PDF → vision fallback.
+            from .ai_client import get_ai_reply_with_attachment
             try:
-                image_bytes = base64.b64decode(image_b64)
-                raw_reply = get_ai_reply_with_image(system_prompt, image_bytes, mime=image_mime)
-            except Exception as vision_exc:
-                print(f"Vision OCR Error: {vision_exc}")
+                file_bytes = base64.b64decode(image_b64)
+                raw_reply, attach_err = get_ai_reply_with_attachment(
+                    system_prompt,
+                    file_bytes,
+                    mime=image_mime,
+                    filename=image_name,
+                )
+                # If extraction or AI failed with a specific error, surface it
+                # to the user as the assistant message (and save it for history).
+                if not raw_reply and attach_err:
+                    raw_reply = attach_err
+            except Exception as attach_exc:
+                print(f"Attachment Error: {attach_exc}")
                 raw_reply = None
         else:
             from .ai_client import get_ai_reply
@@ -608,7 +702,11 @@ def ai_chat(request):
             reply = raw_reply
         else:
             if image_b64:
-                reply = "I couldn't read that image right now — the vision AI is temporarily unavailable. Please try typing your question instead."
+                reply = (
+                    "I couldn't read that attachment right now — the AI is temporarily "
+                    "unavailable. Try again in a moment, or upload a different version "
+                    "(image, PDF, .docx, or .txt)."
+                )
             else:
                 reply = "I couldn't generate a response. Please try again in a moment."
 
@@ -635,7 +733,16 @@ def ai_chat_sessions(request):
     for s in sessions:
         last_msg = s.messages.order_by('-created_at').first()
         msg_count = s.messages.count()
-        preview_text = last_msg.content.replace('[Image attached:', '').split(']')[-1].strip() if last_msg else ''
+        # ✅ FIX v2: strip BOTH legacy "[Image attached:" and new "[File attached:"
+        if last_msg:
+            _raw = last_msg.content or ''
+            if _raw.startswith('[File attached:') or _raw.startswith('[Image attached:'):
+                _close = _raw.find(']')
+                preview_text = _raw[_close + 1:].strip() if _close != -1 else _raw.strip()
+            else:
+                preview_text = _raw.strip()
+        else:
+            preview_text = ''
         data.append({
             'id': s.id,
             'title': s.title or 'Untitled chat',

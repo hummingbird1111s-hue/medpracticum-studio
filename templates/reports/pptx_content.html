@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+{% block title %}Edit presentation slides · MedPracticum Studio{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-4">
+
+  <div>
+    <h1 class="text-2xl font-bold mb-1">Edit presentation slides</h1>
+    <p class="text-sm text-gray-600">
+      Adjust the bullets that appear on each slide. Leave a field blank to fall back to the AI draft for that slide.
+      One bullet per line.
+    </p>
+  </div>
+
+  {% if messages %}
+    {% for m in messages %}
+      <div class="rounded-lg px-4 py-3 text-sm
+                  {% if m.tags == 'error' %}bg-red-50 border border-red-200 text-red-700
+                  {% else %}bg-emerald-50 border border-emerald-200 text-emerald-700{% endif %}">
+        {{ m }}
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <form method="post" class="bg-white rounded-2xl shadow p-6 space-y-5">
+    {% csrf_token %}
+    <input type="hidden" name="attachment_id" value="{{ session.id }}">
+
+    {% if form.non_field_errors %}
+      <div class="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
+        {{ form.non_field_errors }}
+      </div>
+    {% endif %}
+
+    {% for field in form %}
+      <div>
+        <label for="{{ field.id_for_label }}" class="block text-sm font-semibold text-gray-800 mb-1">
+          {{ field.label }}
+        </label>
+        {{ field }}
+        {% if field.help_text %}
+          <p class="text-xs text-gray-500 mt-1">{{ field.help_text }}</p>
+        {% endif %}
+        {% for error in field.errors %}
+          <p class="text-xs text-red-600 mt-1">{{ error }}</p>
+        {% endfor %}
+      </div>
+    {% endfor %}
+
+    <div class="pt-4 border-t border-gray-100 flex flex-col md:flex-row gap-2">
+      <button type="submit" name="action" value="save"
+              class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg py-2.5">
+        Save changes
+      </button>
+      <button type="submit" name="action" value="regenerate"
+              class="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-lg py-2.5">
+        Save &amp; Rebuild slides
+      </button>
+      <a href="{% url 'pptx_options' %}?attachment_id={{ session.id }}"
+         class="flex-1 text-center bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-lg py-2.5">
+        Cancel
+      </a>
+    </div>
+  </form>
+
+  <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <div>
+        <p class="text-sm font-semibold text-amber-900">Want a fresh AI draft?</p>
+        <p class="text-xs text-amber-800 mt-0.5">
+          Clears saved slide text and re-runs the AI. Takes 1–3 minutes.
+        </p>
+      </div>
+      <form method="post" class="flex-shrink-0">
+        {% csrf_token %}
+        <input type="hidden" name="attachment_id" value="{{ session.id }}">
+        <button type="submit" name="action" value="reset_ai"
+                class="bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg px-4 py-2 text-sm shadow-sm">
+          Reset AI &amp; Rebuild
+        </button>
+      </form>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

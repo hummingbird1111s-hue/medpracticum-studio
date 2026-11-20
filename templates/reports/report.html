@@ -3,30 +3,44 @@
 <head>
 <meta charset="utf-8">
 <title>Practicum Report - {{ student_name }}</title>
+{% if f.page_numbers %}
 <style>
-  /* ============= PAGE SETUP ============= */
+  /* ============= PAGE SETUP (page numbers ON) ============= */
   @page {
     margin: 1in 1in 1in 1.5in;
-    @top-right {
+    @bottom-center {
       content: counter(page);
       font-family: "Times New Roman", Times, serif;
       font-size: 12pt;
     }
   }
-  
+  @page front {
+    @top-right { content: none; }
+    @bottom-center {
+      content: counter(page, lower-roman);
+      font-family: "Times New Roman", Times, serif;
+      font-size: 12pt;
+    }
+  }
+</style>
+{% else %}
+<style>
+  /* ============= PAGE SETUP (page numbers OFF) ============= */
+  @page {
+    margin: 1in 1in 1in 1.5in;
+  }
+  @page front {
+    @top-right { content: none; }
+  }
+</style>
+{% endif %}
+
+<style>
+  /* ============= PAGE SETUP (unconditional) ============= */
   @page :first {
     margin: 1in;
     @top-right { content: none; }
     @bottom-center { content: none; }
-  }
-  
-  @page front {
-    @top-right { content: none; }
-    @bottom-center {
-      content: "ii";
-      font-family: "Times New Roman", Times, serif;
-      font-size: 12pt;
-    }
   }
 
   /* ============= BASE TYPOGRAPHY ============= */
@@ -90,6 +104,25 @@
   .cover-level { font-size: 13pt; font-weight: bold; margin-bottom: 1.5in !important; }
   .cover-name { font-size: 14pt; font-weight: bold; margin-top: 1.5in !important; }
   .cover-index { font-size: 13pt; font-weight: bold; }
+
+  /* ✅ NEW: Abstract page (front matter, roman numerals) */
+  .abstract-page {
+    page: front;
+    page-break-after: always;
+  }
+  .abstract-heading {
+    text-align: center;
+    font-size: 14pt;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin: 0 0 1em;
+  }
+  .abstract-keywords {
+    margin-top: 0.8em;
+    font-style: italic;
+    text-align: justify;
+  }
 
   .toc-page { 
     page: front; 
@@ -228,10 +261,20 @@
   <p class="cover-index">{{ student.index_number|upper }}</p>
 </section>
 
+<!-- ============ ABSTRACT (front matter, roman numerals) ============ -->
+{% if f.abstract and abstract_paras %}
+<section class="abstract-page">
+  <h1 id="abstract" class="abstract-heading">Abstract</h1>
+  {% for para in abstract_paras %}<p>{{ para }}</p>{% endfor %}
+  {% if keywords %}<p class="abstract-keywords"><b>Keywords:</b> {{ keywords }}</p>{% endif %}
+</section>
+{% endif %}
+
 <!-- ============ TABLE OF CONTENTS ============ -->
 <section class="toc-page">
   <h1 class="toc-heading">TABLE OF CONTENTS</h1>
   <div class="toc">
+    {% if f.abstract and abstract_paras %}<a href="#abstract">Abstract</a>{% endif %}
     <a href="#ch1">Introduction</a>
     <a href="#ch2">Facility Profile</a>
     <a href="#ch3">Activities Performed</a>

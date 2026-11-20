@@ -3,61 +3,38 @@
 
 {% block content %}
 <style>
-  /* ---- template gallery ---- */
   .pptx-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
     gap: 12px;
   }
   .pptx-card {
-    border: 2px solid #e5e7eb;
-    border-radius: 12px;
-    overflow: hidden;
-    background: #fff;
-    cursor: pointer;
-    transition: border-color .15s, box-shadow .15s, transform .15s;
-    padding: 0;
-    text-align: left;
-    font: inherit;
-    color: inherit;
+    border: 2px solid #e5e7eb; border-radius: 12px; overflow: hidden;
+    background: #fff; cursor: pointer; padding: 0; text-align: left;
+    font: inherit; color: inherit;
+    transition: border-color .15s, box-shadow .15s;
   }
   .pptx-card:hover { border-color: #10b981; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
   .pptx-card.selected { border-color: #059669; box-shadow: 0 0 0 3px rgba(5,150,105,0.15); }
-
-  /* Swatches */
   .pptx-card .swatches { height: 42px; display: flex; }
-  .pptx-card .swatches span {
-    flex: 1;
-    display: block;
-    background-color: #e5e7eb;
-    transition: background-color .2s;
-  }
+  .pptx-card .swatches span { flex: 1; display: block; }
   .pptx-card .swatches .swatch-bg { border-left: 1px solid #e5e7eb; }
-
   .pptx-card .body { padding: 10px 12px; }
   .pptx-card .name { font-weight: 700; font-size: 13px; color: #065f46; }
   .pptx-card .desc { font-size: 11px; color: #6b7280; margin-top: 3px; line-height: 1.35; }
   .pptx-card .badge-him {
     display: inline-block; background: #fef3c7; color: #92400e;
-    font-size: 10px; font-weight: 700; border-radius: 999px;
-    padding: 1px 8px; margin-left: 4px;
+    font-size: 10px; font-weight: 700; border-radius: 999px; padding: 1px 8px; margin-left: 4px;
   }
 
-  /* ---- live preview ---- */
   .live-preview-wrap {
-    display: flex; flex-direction: column; align-items: center;
-    gap: 8px; padding: 16px; background: #f9fafb;
-    border: 1px dashed #d1d5db; border-radius: 14px;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    padding: 16px; background: #f9fafb; border: 1px dashed #d1d5db; border-radius: 14px;
   }
   .live-preview {
-    width: 100%; max-width: 420px;
-    aspect-ratio: 16 / 9;
-    border-radius: 8px;
-    box-shadow: 0 6px 20px rgba(0,0,0,0.12);
-    position: relative;
-    overflow: hidden;
-    background: #FFFFFF;
-    font-family: 'Calibri', sans-serif;
+    width: 100%; max-width: 420px; aspect-ratio: 16/9; border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.12); position: relative; overflow: hidden;
+    background: #FFFFFF; font-family: 'Calibri', sans-serif;
   }
   .live-preview .lp-deco { position: absolute; }
   .live-preview .lp-logo {
@@ -65,20 +42,13 @@
     width: 14%; aspect-ratio: 1/1; display: flex; align-items: center; justify-content: center;
     background: rgba(0,0,0,0.04); border-radius: 6px; color: #9ca3af; font-size: 9px;
   }
-  .live-preview .lp-school {
-    position: absolute; top: 26%; left: 4%; right: 4%; text-align: center;
-    font-size: 14px; font-weight: 700; line-height: 1.2;
-  }
-  .live-preview .lp-dept {
-    position: absolute; top: 34%; left: 4%; right: 4%; text-align: center;
-    font-size: 10px; font-weight: 700;
-  }
-  .live-preview .lp-meta {
-    position: absolute; top: 50%; left: 4%; right: 4%; text-align: center;
-    font-size: 11px; font-weight: 700; line-height: 1.5; color: #808080;
-  }
+  .live-preview .lp-school { position: absolute; top: 26%; left: 4%; right: 4%; text-align: center;
+                             font-size: 14px; font-weight: 700; line-height: 1.2; }
+  .live-preview .lp-dept { position: absolute; top: 34%; left: 4%; right: 4%; text-align: center;
+                            font-size: 10px; font-weight: 700; }
+  .live-preview .lp-meta { position: absolute; top: 50%; left: 4%; right: 4%; text-align: center;
+                            font-size: 11px; font-weight: 700; line-height: 1.5; color: #808080; }
 
-  /* ---- overlays ---- */
   #gen-overlay {
     display: none; position: fixed; inset: 0; z-index: 999999;
     background: rgba(17, 24, 39, 0.72); backdrop-filter: blur(2px);
@@ -87,8 +57,7 @@
   #gen-overlay.show { display: flex; }
   #gen-overlay .gen-card {
     background: #fff; border-radius: 20px; padding: 32px 28px 28px;
-    max-width: 480px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.35);
-    text-align: center;
+    max-width: 480px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.35); text-align: center;
   }
   #gen-overlay h3 { margin: 0 0 12px; font-size: 18px; font-weight: 700; color: #065f46; }
   #gen-overlay .gen-status { margin: 0 0 20px; font-size: 14px; color: #6b7280; min-height: 42px; line-height: 1.5; }
@@ -109,6 +78,70 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
   #switch-overlay p { color: #fff; font-size: 16px; font-weight: 500; text-align: center; }
+
+  /* ✅ preview overlay */
+  #pptx-preview-overlay {
+    display: none; position: fixed; inset: 0; z-index: 1000000;
+    background: rgba(17, 24, 39, 0.94); backdrop-filter: blur(4px);
+    align-items: center; justify-content: center; padding: 16px;
+  }
+  #pptx-preview-overlay.show { display: flex; }
+  #pptx-preview-overlay .preview-shell {
+    background: #fff; border-radius: 16px; overflow: hidden;
+    width: 100%; max-width: 1200px;
+    display: flex; flex-direction: column;
+    height: 92vh; box-shadow: 0 24px 80px rgba(0,0,0,0.5);
+  }
+  #pptx-preview-overlay .preview-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; border-bottom: 1px solid #e5e7eb; background: #f9fafb;
+    gap: 12px; flex-wrap: wrap;
+  }
+  #pptx-preview-overlay .preview-header h3 {
+    margin: 0; font-size: 15px; font-weight: 700; color: #065f46;
+  }
+  #pptx-preview-overlay .preview-header p {
+    margin: 2px 0 0; font-size: 12px; color: #6b7280;
+  }
+  #pptx-preview-overlay .preview-actions { display: flex; gap: 8px; align-items: center; }
+  #pptx-preview-overlay .preview-btn {
+    border: 0; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600;
+    cursor: pointer; text-decoration: none; display: inline-block;
+  }
+  #pptx-preview-overlay .preview-btn.open-new {
+    background: #ecfdf5; color: #047857;
+  }
+  #pptx-preview-overlay .preview-btn.open-new:hover { background: #d1fae5; }
+  #pptx-preview-overlay .preview-btn.close {
+    background: #f3f4f6; color: #374151;
+  }
+  #pptx-preview-overlay .preview-btn.close:hover { background: #e5e7eb; }
+  #pptx-preview-overlay .preview-body {
+    flex: 1; position: relative; background: #e5e7eb; overflow: hidden;
+  }
+  #pptx-preview-overlay .preview-frame {
+    width: 100%; height: 100%; border: 0; display: block;
+  }
+  #pptx-preview-overlay .preview-loading {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center; flex-direction: column;
+    background: #f9fafb; color: #6b7280; font-size: 14px; gap: 12px;
+    transition: opacity 0.25s;
+  }
+  #pptx-preview-overlay .preview-loading .spinner {
+    width: 40px; height: 40px; border: 4px solid #a7f3d0;
+    border-top-color: #10b981; border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  #pptx-preview-overlay .preview-loading.hidden { opacity: 0; pointer-events: none; }
+  #pptx-preview-overlay .preview-hint {
+    padding: 10px 16px; font-size: 12px; color: #6b7280; text-align: center;
+    border-top: 1px solid #e5e7eb; background: #f9fafb;
+  }
+  @media (max-width: 640px) {
+    #pptx-preview-overlay { padding: 0; }
+    #pptx-preview-overlay .preview-shell { border-radius: 0; height: 100vh; max-width: 100%; }
+  }
 </style>
 
 <h1 class="text-2xl font-bold mb-1">Presentation builder</h1>
@@ -117,7 +150,6 @@
   your report content — nothing is copied verbatim from your logs.
 </p>
 
-<!-- ===== EXISTING PRESENTATION ACTIONS ===== -->
 {% if has_pptx %}
 <div class="bg-emerald-600 text-white rounded-2xl shadow-md p-5 mb-4">
   <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -128,6 +160,10 @@
       </p>
     </div>
     <div class="flex flex-wrap items-center gap-2">
+      <a href="{% url 'pptx_content' %}?attachment_id={{ session.id }}"
+         class="bg-white text-emerald-800 font-semibold rounded-lg px-4 py-2 text-sm hover:bg-emerald-50 shadow-sm">
+        ✏️ Edit slide text
+      </a>
       {% if has_pptx_pdf %}
         <a href="{% url 'view_pptx_pdf' %}?attachment_id={{ session.id }}" target="_blank"
            class="bg-white text-emerald-800 font-semibold rounded-lg px-4 py-2 text-sm hover:bg-emerald-50 shadow-sm">
@@ -147,7 +183,6 @@
 </div>
 {% endif %}
 
-<!-- ===== ATTACHMENT SWITCHER ===== -->
 <div class="bg-white rounded-2xl shadow p-5 mb-4 border border-emerald-100">
   <form method="get" action="{% url 'pptx_options' %}" id="switch-att-form">
     <label for="attachment_id" class="block text-sm font-semibold text-emerald-800 mb-2">
@@ -164,14 +199,13 @@
   </form>
 </div>
 
-<!-- ===== TEMPLATE GALLERY + LIVE PREVIEW ===== -->
 <div class="bg-white rounded-2xl shadow p-5 mb-4">
   <div class="flex items-start justify-between mb-3 gap-3 flex-wrap">
     <div>
       <h2 class="font-semibold text-gray-900 mb-1">Choose a template</h2>
       <p class="text-sm text-gray-600">
-        Click any card to select it. The preview updates live. The HIM official
-        template is marked with a badge.
+        Click any card to select it. The preview updates live. Only <strong>COHY Classic</strong>
+        shows the college logo — all other templates are pure designs.
       </p>
     </div>
   </div>
@@ -184,11 +218,12 @@
               data-bg="#{{ t.bg_color }}"
               data-primary="#{{ t.primary_color }}"
               data-secondary="#{{ t.secondary_color }}"
-              data-title-color="#{{ t.title_color|default:'1A3A6C' }}"
-              data-text-color="#{{ t.text_color|default:'1A1A1A' }}"
-              data-heading-font="{{ t.heading_font|default:'Calibri' }}"
-              data-body-font="{{ t.body_font|default:'Calibri' }}"
-              data-style="{{ t.style }}">
+              data-titleColor="#{{ t.title_color|default:'1A3A6C' }}"
+              data-textColor="#{{ t.text_color|default:'1A1A1A' }}"
+              data-headingFont="{{ t.heading_font|default:'Calibri' }}"
+              data-bodyFont="{{ t.body_font|default:'Calibri' }}"
+              data-style="{{ t.style }}"
+              data-has-logo="{{ t.has_logo|yesno:'1,0' }}">
         <div class="swatches"
              data-primary="#{{ t.primary_color }}"
              data-secondary="#{{ t.secondary_color }}"
@@ -210,14 +245,11 @@
 
   <div class="live-preview-wrap">
     <p class="text-xs font-bold uppercase tracking-wide text-gray-500">Live preview (cover slide)</p>
-    <div class="live-preview" id="live-preview">
-      <!-- updated by JS -->
-    </div>
+    <div class="live-preview" id="live-preview"></div>
     <p class="text-xs text-gray-500 text-center">This is exactly how the cover page will look.</p>
   </div>
 </div>
 
-<!-- ===== OFFICIAL FORMAT CARD ===== -->
 <div id="official-box"
      class="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 mb-4 cursor-pointer hover:bg-emerald-100 transition-colors shadow-sm"
      onclick="pickOfficialTemplate()">
@@ -235,7 +267,6 @@
   </div>
 </div>
 
-<!-- ===== BUILD ACTION GRID ===== -->
 <div class="mp-action-grid mb-4" style="display:grid; grid-template-columns:1fr; gap:12px;">
   <form method="post" id="gen-official-form" class="bg-emerald-600 rounded-2xl p-5 text-white shadow-lg">
     {% csrf_token %}
@@ -243,7 +274,7 @@
     <input type="hidden" name="action" value="build_official">
     <h2 class="text-lg font-bold mb-1">Build Official Presentation</h2>
     <p class="text-sm text-emerald-100 mb-4">
-      Uses the COHY Classic template with Times New Roman — no further choices needed.
+      Uses COHY Classic (Times New Roman, maroon/gold bars) with the default settings — no choices needed.
     </p>
     <button type="submit" id="gen-official-btn"
             class="w-full bg-white text-emerald-800 font-semibold rounded-lg py-2.5 hover:bg-emerald-50 transition disabled:opacity-70 disabled:cursor-wait">
@@ -255,15 +286,72 @@
     {% csrf_token %}
     <input type="hidden" name="attachment_id" value="{{ session.id }}">
     <input type="hidden" name="action" value="build_custom">
-    <input type="hidden" name="pptx_template" id="custom-template-input" value="{{ selected_pptx_template }}">
 
     <h2 class="text-lg font-bold mb-1 text-gray-900">Build Custom Presentation</h2>
     <p class="text-sm text-gray-600 mb-4">
-      Uses the template currently selected above.
+      Choose a template and adjust content settings. Leave fields as-is to keep the defaults.
     </p>
-    <p class="text-xs text-gray-500 mb-3">
-      Selected: <strong id="selected-template-label">{{ selected_pptx_template }}</strong>
-    </p>
+
+    <div class="mb-4">
+      <label for="{{ custom_form.pptx_template.id_for_label }}" class="block text-sm font-semibold text-gray-700 mb-1">
+        {{ custom_form.pptx_template.label }}
+      </label>
+      {{ custom_form.pptx_template }}
+      {% if custom_form.pptx_template.help_text %}
+        <p class="text-xs text-gray-500 mt-1">{{ custom_form.pptx_template.help_text }}</p>
+      {% endif %}
+    </div>
+
+    {# ✅ NEW: font size picker #}
+    <div class="mb-4">
+      <label for="{{ custom_form.font_size.id_for_label }}" class="block text-sm font-semibold text-gray-700 mb-1">
+        {{ custom_form.font_size.label }}
+      </label>
+      {{ custom_form.font_size }}
+      {% if custom_form.font_size.help_text %}
+        <p class="text-xs text-gray-500 mt-1">{{ custom_form.font_size.help_text }}</p>
+      {% endif %}
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+      <div>
+        <label for="{{ custom_form.max_bullets.id_for_label }}" class="block text-sm font-semibold text-gray-700 mb-1">
+          {{ custom_form.max_bullets.label }}
+        </label>
+        {{ custom_form.max_bullets }}
+        {% if custom_form.max_bullets.help_text %}
+          <p class="text-xs text-gray-500 mt-1">{{ custom_form.max_bullets.help_text }}</p>
+        {% endif %}
+      </div>
+      <div>
+        <label for="{{ custom_form.max_chars_per_bullet.id_for_label }}" class="block text-sm font-semibold text-gray-700 mb-1">
+          {{ custom_form.max_chars_per_bullet.label }}
+        </label>
+        {{ custom_form.max_chars_per_bullet }}
+      </div>
+    </div>
+
+    <div class="mb-4 flex items-center gap-2">
+      {{ custom_form.include_speaker_notes }}
+      <label for="{{ custom_form.include_speaker_notes.id_for_label }}" class="text-sm text-gray-700">
+        {{ custom_form.include_speaker_notes.label }}
+      </label>
+    </div>
+
+    <fieldset class="mb-4">
+      <legend class="text-sm font-semibold text-gray-700 mb-2">Which slides to include</legend>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+        {% for field in custom_form %}
+          {% if field.name|slice:":6" == "slide_" %}
+            <div class="flex items-center gap-2">
+              {{ field }}
+              <label for="{{ field.id_for_label }}" class="text-sm text-gray-700">{{ field.label }}</label>
+            </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </fieldset>
+
     <button type="submit" id="gen-custom-btn"
             class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg py-2.5 transition-colors disabled:opacity-70 disabled:cursor-wait">
       Build Custom Presentation
@@ -271,7 +359,6 @@
   </form>
 </div>
 
-<!-- ===== REGENERATE WITH FRESH AI ===== -->
 {% if has_pptx %}
 <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-4">
   <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -315,8 +402,43 @@
   <p>Setting the presentation engine to read all data from this attachment...</p>
 </div>
 
+{% if has_pptx_pdf %}
+<div id="pptx-preview-overlay" aria-hidden="true" role="dialog">
+  <div class="preview-shell">
+    <div class="preview-header">
+      <div>
+        <h3>Presentation preview</h3>
+        <p>{{ report.pptx_template }} — swipe, scroll, or use arrow keys to view all slides.</p>
+      </div>
+      <div class="preview-actions">
+        <a class="preview-btn open-new"
+           href="{% url 'view_pptx_pdf' %}?attachment_id={{ session.id }}"
+           target="_blank" rel="noopener">
+          Open fullscreen
+        </a>
+        <button type="button" class="preview-btn close" onclick="closePptxPreview()">Close</button>
+      </div>
+    </div>
+    <div class="preview-body">
+      <div class="preview-loading" id="preview-loading">
+        <div class="spinner"></div>
+        <p style="margin:0;">Loading preview…</p>
+      </div>
+      <iframe class="preview-frame"
+              id="preview-iframe"
+              src="{% url 'view_pptx_pdf' %}?attachment_id={{ session.id }}"
+              title="Presentation PDF preview"
+              onload="document.getElementById('preview-loading').classList.add('hidden')"></iframe>
+    </div>
+    <div class="preview-hint">
+      Tap inside the viewer and scroll or swipe to see every slide.
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <script>
-  // ---- 0) Colour the swatches from data attributes ----
+  // ---- Colour the swatches ----
   document.querySelectorAll('.swatches[data-primary]').forEach(function (sw) {
     var p = sw.querySelector('.swatch-primary');
     var s = sw.querySelector('.swatch-secondary');
@@ -326,70 +448,67 @@
     if (b) b.style.backgroundColor = sw.dataset.bg;
   });
 
-  // ---- 1) Switch attachment ----
+  // ---- Switch attachment ----
   function showSwitchOverlay() {
     document.getElementById('switch-overlay').classList.add('show');
     document.getElementById('switch-att-form').submit();
   }
 
-  // ---- 2) Template selection ----
+  // ---- Template selection + live preview ----
   let currentKey = "{{ selected_pptx_template|escapejs }}";
   const cards = document.querySelectorAll('.pptx-card');
   const livePreview = document.getElementById('live-preview');
-  const customInput = document.getElementById('custom-template-input');
-  const selectedLabel = document.getElementById('selected-template-label');
+  const templateSelect = document.getElementById('{{ custom_form.pptx_template.id_for_label }}');
 
   function renderPreview(card) {
-    const style      = card.dataset.style;
-    const bg         = card.dataset.bg;
-    const primary    = card.dataset.primary;
-    const secondary  = card.dataset.secondary;
-    const titleColor = card.dataset.titleColor;
-    const textColor  = card.dataset.textColor;
-    const headingFont = card.dataset.headingFont;
-    const bodyFont    = card.dataset.bodyFont;
+    const style       = card.dataset.style;
+    const bg          = card.dataset.bg;
+    const primary     = card.dataset.primary;
+    const secondary   = card.dataset.secondary;
+    const titleColor  = card.dataset.titleColor || '#1A3A6C';
+    const textColor   = card.dataset.textColor  || '#1A1A1A';
+    const headingFont = card.dataset.headingFont || 'Calibri';
+    const bodyFont    = card.dataset.bodyFont    || 'Calibri';
+    const hasLogo     = card.dataset.hasLogo === '1';
 
     let decos = '';
     livePreview.style.background = bg;
 
-    // HIM Template Live Preview Update
     if (style === 'classic_bar') {
-      // Bottom bands: Wine (Red), Black, Thick Brown
       decos += '<div class="lp-deco" style="bottom:6%;left:0;width:100%;height:3%;background:' + primary + ';"></div>';
       decos += '<div class="lp-deco" style="bottom:3%;left:0;width:100%;height:1.5%;background:#000;"></div>';
       decos += '<div class="lp-deco" style="bottom:0;left:0;width:100%;height:3%;background:#8B4513;"></div>';
-      
-      // Thick lines boxing the school name
       decos += '<div class="lp-deco" style="top:22%;left:5%;width:90%;height:1.5%;background:' + primary + ';"></div>';
       decos += '<div class="lp-deco" style="top:38%;left:5%;width:90%;height:1.5%;background:' + primary + ';"></div>';
     } else if (style === 'side_accent') {
       decos += '<div class="lp-deco" style="top:0;left:0;width:3.4%;height:100%;background:' + primary + ';"></div>';
+      decos += '<div class="lp-deco" style="bottom:0;left:0;width:100%;height:2%;background:' + secondary + ';"></div>';
     } else if (style === 'top_band') {
       decos += '<div class="lp-deco" style="top:0;left:0;width:100%;height:18%;background:' + primary + ';"></div>';
-      decos += '<div class="lp-deco" style="bottom:0;left:0;width:100%;height:4.5%;background:' + secondary + ';"></div>';
+      decos += '<div class="lp-deco" style="top:18%;left:0;width:100%;height:1.5%;background:' + secondary + ';"></div>';
     } else if (style === 'corner_triangle') {
-      decos += '<div class="lp-deco" style="top:0;left:0;width:0;height:0;border-top:40% solid ' + primary + ';border-right:30% solid transparent;"></div>';
-      decos += '<div class="lp-deco" style="bottom:0;right:0;width:0;height:0;border-bottom:40% solid ' + secondary + ';border-left:30% solid transparent;"></div>';
+      decos += '<div class="lp-deco" style="top:0;right:0;width:0;height:0;border-top:32% solid ' + primary + ';border-left:22% solid transparent;"></div>';
+      decos += '<div class="lp-deco" style="bottom:0;left:0;width:100%;height:2%;background:' + primary + ';"></div>';
     } else if (style === 'minimal_line') {
-      decos += '<div class="lp-deco" style="top:15%;left:6%;width:10%;height:1.5%;background:' + primary + ';"></div>';
+      decos += '<div class="lp-deco" style="bottom:6%;left:8%;width:84%;height:1.5%;background:' + primary + ';"></div>';
+    } else if (style === 'full_bg') {
+      decos += '<div class="lp-deco" style="bottom:0;left:0;width:100%;height:3%;background:' + secondary + ';"></div>';
     }
 
-    const schoolColor = (style === 'top_band' || style === 'full_bg') ? '#FFFFFF' : titleColor;
-    const bodyColor   = (style === 'full_bg') ? '#FFFFFF' : textColor;
-    const titleTextColor = (style === 'top_band') ? '#FFFFFF' : primary;
+    const titleTextColor = (style === 'top_band') ? '#FFFFFF' : titleColor;
+    const bodyColor = (style === 'full_bg') ? '#FFFFFF' : textColor;
 
-    // Cover content updates
-    let metaHtml = '';
-    if (style === 'classic_bar') {
-      metaHtml = '<div class="lp-meta" style="color:#808080; font-family:\'' + bodyFont + '\',sans-serif;">SHAIBU ALHASSAN<br>COHY/HIM/00/000<br>LEVEL 100</div>';
-    } else {
-      metaHtml = '<div class="lp-meta" style="color:' + bodyColor + '; font-family:\'' + bodyFont + '\',sans-serif;">Student Name<br>COHY/HIM/25/001<br>LEVEL 300</div>';
-    }
+    const logoHtml = hasLogo
+      ? '<div class="lp-logo" style="background:' + primary + '22;">LOGO</div>'
+      : '';
+
+    const metaHtml = '<div class="lp-meta" style="color:' +
+      (style === 'classic_bar' ? '#808080' : bodyColor) +
+      '; font-family:\'' + bodyFont + '\',sans-serif;">Student Name<br>COHY/HIM/25/001<br>LEVEL 300</div>';
 
     livePreview.innerHTML =
-      decos +
-      '<div class="lp-logo" style="background:' + primary + '22;">LOGO</div>' +
-      '<div class="lp-school" style="color:' + schoolColor + '; font-family:\'' + headingFont + '\',serif;">COLLEGE OF HEALTH, YAMFO</div>' +
+      decos + logoHtml +
+      '<div class="lp-school" style="color:' + titleTextColor + '; font-family:\'' + headingFont + '\',serif;">COLLEGE OF HEALTH, YAMFO</div>' +
       '<div class="lp-dept" style="color:' + bodyColor + '; font-family:\'' + headingFont + '\',serif;">DEPARTMENT OF HEALTH INFORMATION MANAGEMENT</div>' +
       metaHtml;
   }
@@ -398,8 +517,7 @@
     cards.forEach(function (c) { c.classList.remove('selected'); });
     card.classList.add('selected');
     currentKey = card.dataset.key;
-    if (customInput) customInput.value = currentKey;
-    if (selectedLabel) selectedLabel.textContent = currentKey;
+    if (templateSelect) templateSelect.value = currentKey;
     renderPreview(card);
   }
 
@@ -408,15 +526,65 @@
     if (card.dataset.key === currentKey) renderPreview(card);
   });
 
+  // ✅ Auto-fill: fills the form AND resets font_size to default 18
   window.pickOfficialTemplate = function () {
+    // 1. Select the HIM card (updates live preview + template dropdown)
     var official = document.querySelector('.pptx-card[data-key="cohy_classic"]');
-    if (official) {
-      selectCard(official);
-      official.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (official) selectCard(official);
+
+    // 2. Grab the custom form
+    var form = document.getElementById('gen-custom-form');
+    if (!form) return;
+
+    // 3. Template dropdown → COHY Classic
+    var templateSel = form.querySelector('[name="pptx_template"]');
+    if (templateSel) {
+      templateSel.value = 'cohy_classic';
+      templateSel.dispatchEvent(new Event('change', { bubbles: true }));
     }
+
+    // 4. Font size → 18pt (default)
+    var fontSize = form.querySelector('[name="font_size"]');
+    if (fontSize) {
+      fontSize.value = '18';
+      fontSize.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    // 5. Layout controls → official defaults (6 bullets / 220 chars)
+    var maxBullets = form.querySelector('[name="max_bullets"]');
+    if (maxBullets) {
+      maxBullets.value = '6';
+      maxBullets.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    var maxChars = form.querySelector('[name="max_chars_per_bullet"]');
+    if (maxChars) {
+      maxChars.value = '220';
+      maxChars.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    // 6. Speaker notes on
+    var notesToggle = form.querySelector('[name="include_speaker_notes"]');
+    if (notesToggle) notesToggle.checked = true;
+
+    // 7. Every slide_* section checkbox → ON
+    form.querySelectorAll('input[type="checkbox"][name^="slide_"]').forEach(function (box) {
+      box.checked = true;
+    });
+
+    // 8. Scroll the custom form into view
+    var target = form.closest('.mp-action-grid') || form;
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  // ---- 3) Generating overlay ----
+  // Sync dropdown → cards
+  if (templateSelect) {
+    templateSelect.addEventListener('change', function () {
+      var card = document.querySelector('.pptx-card[data-key="' + this.value + '"]');
+      if (card) selectCard(card);
+    });
+  }
+
+  // ---- Generating overlay ----
   (function () {
     var overlay     = document.getElementById('gen-overlay');
     var statusText  = document.getElementById('gen-status-text');
@@ -476,6 +644,34 @@
     window.addEventListener('pageshow', function (e) {
       if (e.persisted) overlay.classList.remove('show');
     });
+  })();
+
+  // ---- Preview overlay ----
+  window.closePptxPreview = function () {
+    var ov = document.getElementById('pptx-preview-overlay');
+    if (ov) {
+      ov.classList.remove('show');
+      ov.setAttribute('aria-hidden', 'true');
+    }
+  };
+
+  (function () {
+    var ov = document.getElementById('pptx-preview-overlay');
+    if (!ov) return;
+    // Show on every page load (per requirement: "all opens same")
+    ov.classList.add('show');
+    ov.setAttribute('aria-hidden', 'false');
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && ov.classList.contains('show')) closePptxPreview();
+    });
+    ov.addEventListener('click', function (e) {
+      if (e.target === ov) closePptxPreview();
+    });
+    // Fallback: if the PDF takes longer than 8s to signal onload, hide the spinner
+    setTimeout(function () {
+      var ld = document.getElementById('preview-loading');
+      if (ld) ld.classList.add('hidden');
+    }, 8000);
   })();
 </script>
 {% endblock %}

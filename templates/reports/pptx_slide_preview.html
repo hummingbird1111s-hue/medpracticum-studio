@@ -4,96 +4,87 @@
 <meta charset="utf-8">
 <style>
 :root {
-  --tpl-bg:        {{ template.bg_color }};
-  --tpl-primary:   {{ template.primary_color }};
-  --tpl-secondary: {{ template.secondary_color }};
-  --tpl-title:     {{ template.title_color }};
-  --tpl-text:      {{ template.text_color }};
+  --tpl-bg:        #{{ template.bg_color }};
+  --tpl-primary:   #{{ template.primary_color }};
+  --tpl-secondary: #{{ template.secondary_color }};
+  --tpl-title:     #{{ template.title_color }};
+  --tpl-text:      #{{ template.text_color }};
+  --body-font-size: {{ body_font_size|default:18 }}pt;   /* ✅ NEW: matches .pptx bullet size */
 }
-
 @page { size: 13.333in 7.5in; margin: 0; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-
-html, body {
-  font-family: '{{ template.body_font }}', 'Liberation Sans', sans-serif;
-}
-
+html, body { font-family: '{{ template.body_font }}', 'Liberation Sans', sans-serif; }
 .f-heading { font-family: '{{ template.heading_font }}', serif; }
 .f-body    { font-family: '{{ template.body_font }}', 'Liberation Sans', sans-serif; }
-
 .c-title   { color: var(--tpl-title); }
 .c-primary { color: var(--tpl-primary); }
 .c-text    { color: var(--tpl-text); }
 .c-white   { color: #FFFFFF; }
 .muted     { color: #9CA3AF; }
 
-.smooth    { text-rendering: optimizeLegibility; }
-
 .slide {
-  width: 13.333in;
-  height: 7.5in;
-  page-break-after: always;
-  position: relative;
-  overflow: hidden;
-  background: var(--tpl-bg);
-  color: var(--tpl-text);
+  width: 13.333in; height: 7.5in; page-break-after: always;
+  position: relative; overflow: hidden;
+  background: var(--tpl-bg); color: var(--tpl-text);
 }
 .slide:last-child { page-break-after: auto; }
 
-/* ---------- decorations ---------- */
+/* ---------- decorations (match pptx_builder._draw_frame) ---------- */
 .deco { position: absolute; }
-.deco.full-top      { top: 0; left: 0; width: 100%; height: 0.35in; background: var(--tpl-primary); }
-.deco.full-top-tall { top: 0; left: 0; width: 100%; height: 1.4in;  background: var(--tpl-primary); }
-.deco.head-bar      { top: 0; left: 0; width: 100%; height: 1.25in; background: var(--tpl-primary); }
-.deco.head-line     { top: 1.25in; left: 0; width: 100%; height: 0.06in; background: var(--tpl-secondary); }
-.deco.bot-band      { bottom: 0; left: 0; width: 100%; height: 0.35in; background: var(--tpl-secondary); }
-.deco.side-bar      { top: 0; left: 0; width: 0.45in; height: 100%; background: var(--tpl-primary); }
-.deco.side-line     { top: 1.35in; left: 0.45in; width: 2in; height: 0.06in; background: var(--tpl-secondary); }
-.deco.min-line      { top: 1.3in; left: 0.8in; width: 1.2in; height: 0.08in; background: var(--tpl-primary); }
-.deco.tri-top       { top: 0; left: 0; width: 0; height: 0;
-                      border-top: 3in solid var(--tpl-primary);
-                      border-right: 4in solid transparent; }
-.deco.tri-bot       { bottom: 0; right: 0; width: 0; height: 0;
-                      border-bottom: 3in solid var(--tpl-secondary);
-                      border-left: 4in solid transparent; }
-.deco.title-thin    { top: 2.9in; left: 1in; right: 1in; height: 0.08in; background: var(--tpl-secondary); }
-.deco.title-short   { top: 3.4in; left: 0.45in; width: 2.5in; height: 0.08in; background: var(--tpl-secondary); }
 
-/* HIM Bottom Bands */
+/* classic_bar (HIM only) */
 .deco.bot-wine  { bottom: 0.45in; left: 0; width: 100%; height: 0.20in; background: var(--tpl-primary); }
 .deco.bot-black { bottom: 0.35in; left: 0; width: 100%; height: 0.10in; background: #000000; }
 .deco.bot-brown { bottom: 0; left: 0; width: 100%; height: 0.35in; background: #8B4513; }
-
-/* Cover lines */
 .deco.cover-line1 { top: 2.1in; left: 0.5in; right: 0.5in; height: 0.08in; background: var(--tpl-primary); }
 .deco.cover-line2 { top: 3.4in; left: 0.5in; right: 0.5in; height: 0.08in; background: var(--tpl-primary); }
+
+/* side_accent */
+.deco.side-bar      { top: 0; left: 0; width: 0.35in; height: 100%; background: var(--tpl-primary); }
+.deco.side-bot-strip{ bottom: 0; left: 0; width: 100%; height: 0.14in; background: var(--tpl-secondary); }
+
+/* top_band */
+.deco.top-band       { top: 0; left: 0; width: 100%; height: 0.95in; background: var(--tpl-primary); }
+.deco.top-band-sub   { top: 0.95in; left: 0; width: 100%; height: 0.08in; background: var(--tpl-secondary); }
+
+/* minimal_line */
+.deco.min-line { bottom: 0.45in; left: 1in; width: calc(100% - 2in); height: 0.06in; background: var(--tpl-primary); }
+
+/* full_bg */
+.deco.full-bot-strip { bottom: 0; left: 0; width: 100%; height: 0.20in; background: var(--tpl-secondary); }
+
+/* corner_triangle */
+.deco.tri-tr {
+  top: 0; right: 0; width: 0; height: 0;
+  border-top: 1.8in solid var(--tpl-primary);
+  border-left: 1.8in solid transparent;
+}
+.deco.tri-bottom { bottom: 0; left: 0; width: 100%; height: 0.12in; background: var(--tpl-primary); }
 
 /* ---------- layout blocks ---------- */
 .cover-logo   { position: absolute; top: 0.5in; left: 50%; transform: translateX(-50%); width: 1.5in; height: 1.5in; }
 .cover-school { position: absolute; top: 2.2in; left: 0.5in; right: 0.5in; height: 0.6in; text-align: center; }
 .cover-dept   { position: absolute; top: 2.8in; left: 0.5in; right: 0.5in; height: 0.6in; text-align: center; }
 .cover-meta   { position: absolute; top: 4.2in; left: 0.6in; right: 0.6in; height: 2.0in; text-align: center; }
-
-.title-main   { position: absolute; top: 3in; left: 0.6in; right: 0.6in; height: 1.5in; text-align: center; }
+.title-main   { position: absolute; top: 3in; left: 0.6in; right: 0.6in; height: 1.5in; text-align: center;
+                display: flex; align-items: center; justify-content: center; }
 
 .content-head-centered { position: absolute; top: 0.2in; left: 0; right: 0; height: 0.8in; text-align: center;
                          display: flex; align-items: center; justify-content: center; }
 .content-head          { position: absolute; top: 0.35in; left: 0.8in; right: 0.8in; height: 0.9in; }
-.content-body          { position: absolute; top: 1.35in; left: 0.9in; right: 0.9in; bottom: 0.7in; }
-.content-body p        { margin-bottom: 0.15in; font-size: 17pt; line-height: 1.4; }
+.content-rule          { position: absolute; top: 1.15in; left: 0.9in; right: 0.9in; height: 0.06in; background: var(--tpl-primary); }
+
+/* body — vertical center when short.
+   ✅ font-size now driven by --body-font-size (set from pptx_options.font_size) */
+.content-body          { position: absolute; top: 1.35in; left: 0.9in; right: 0.9in; bottom: 0.7in;
+                         display: flex; flex-direction: column; justify-content: flex-start; }
+.content-body.v-center { justify-content: center; }
+.content-body p        { margin-bottom: 0.15in; font-size: var(--body-font-size); line-height: 1.4; }
 .content-body ul       { list-style: disc; padding-left: 0.35in; }
-.content-body li       { margin-bottom: 0.14in; font-size: 18pt; line-height: 1.4; }
+.content-body li       { margin-bottom: 0.14in; font-size: var(--body-font-size); line-height: 1.4; }
 
-.content-rule { position: absolute; top: 1.15in; left: 0.9in; right: 0.9in; height: 0.06in; background: var(--tpl-primary); }
-
-/* Corner logos for the HIM template's content slides */
 .corner-logo {
-  position: absolute;
-  top: 0.15in;
-  width: 0.75in;
-  height: 0.75in;
-  object-fit: contain;
-  z-index: 2;
+  position: absolute; top: 0.15in; width: 0.75in; height: 0.75in; object-fit: contain; z-index: 2;
 }
 .corner-logo.left  { left: 0.35in; }
 .corner-logo.right { right: 0.35in; }
@@ -120,37 +111,28 @@ html, body {
     {% endif %}
   {% elif template.style == 'side_accent' %}
     <div class="deco side-bar"></div>
-    {% if t == 'content' %}<div class="deco side-line"></div>{% endif %}
-    {% if t == 'title' %}<div class="deco title-short"></div>{% endif %}
+    <div class="deco side-bot-strip"></div>
   {% elif template.style == 'top_band' %}
-    {% if t == 'cover' or t == 'content' %}<div class="deco full-top-tall"></div>{% endif %}
-    <div class="deco bot-band"></div>
-    {% if t == 'title' %}<div class="deco full-top-tall"></div>{% endif %}
+    <div class="deco top-band"></div>
+    <div class="deco top-band-sub"></div>
   {% elif template.style == 'minimal_line' %}
-    {% if t == 'content' %}<div class="deco min-line"></div>{% endif %}
-    {% if t == 'title' %}<div class="deco title-thin"></div>{% endif %}
+    <div class="deco min-line"></div>
   {% elif template.style == 'corner_triangle' %}
-    <div class="deco tri-top"></div>
-    <div class="deco tri-bot"></div>
+    <div class="deco tri-tr"></div>
+    <div class="deco tri-bottom"></div>
   {% elif template.style == 'full_bg' %}
-    {% if t == 'title' %}<div class="deco title-thin"></div>{% endif %}
+    <div class="deco full-bot-strip"></div>
   {% endif %}
 
-  {# ------------- per-slide-type content ------------- #}
+  {# ------------- per-slide content ------------- #}
   {% if t == 'cover' %}
-    {% if d.logo %}<img class="cover-logo" src="{{ d.logo }}" alt="">{% endif %}
-    
+    {% if template.style == 'classic_bar' and d.logo %}<img class="cover-logo" src="{{ d.logo }}" alt="">{% endif %}
     <div class="cover-school">
-      <span class="f-heading c-text" style="font-size:40pt; font-weight:700;">
-        {{ d.school_name|upper }}
-      </span>
+      <span class="f-heading c-text" style="font-size:40pt; font-weight:700;">{{ d.school_name|upper }}</span>
     </div>
     <div class="cover-dept">
-      <span class="f-heading c-text" style="font-size:28pt; font-weight:700;">
-        Department of {{ d.dept_name }}
-      </span>
+      <span class="f-heading c-text" style="font-size:28pt; font-weight:700;">Department of {{ d.dept_name }}</span>
     </div>
-    
     <div class="cover-meta">
       <div class="f-body" style="font-size:32pt; font-weight:700; color:#808080; margin-bottom:12pt;">{{ d.student_name|upper }}</div>
       <div class="f-body" style="font-size:28pt; color:#808080; margin-bottom:8pt;">{{ d.index_number|upper }}</div>
@@ -158,27 +140,26 @@ html, body {
     </div>
 
   {% elif t == 'title' %}
+    {% if template.style == 'classic_bar' and d.logo %}
+      <img class="cover-logo" src="{{ d.logo }}" alt="">
+    {% endif %}
     <div class="title-main">
-      <span class="f-heading c-text" style="font-size:44pt; font-weight:700;">
-        {{ d.title|upper }}
-      </span>
+      <span class="f-heading c-text" style="font-size:44pt; font-weight:700;">{{ d.title|upper }}</span>
     </div>
 
   {% elif t == 'content' %}
-    {# ---------- corner logos (HIM template only) ---------- #}
     {% if template.style == 'classic_bar' and d.logo %}
       <img class="corner-logo left"  src="{{ d.logo }}" alt="">
       <img class="corner-logo right" src="{{ d.logo }}" alt="">
     {% endif %}
 
-    {# ---------- heading ---------- #}
     {% if template.style == 'classic_bar' %}
       <div class="content-head-centered">
         <span class="f-heading c-text" style="font-size:32pt; font-weight:700;">{{ d.heading|upper }}</span>
       </div>
       <div class="content-rule"></div>
     {% elif template.style == 'top_band' %}
-      <div class="content-head-centered">
+      <div class="content-head-centered" style="top:0.1in; height:0.75in;">
         <span class="f-heading c-white" style="font-size:32pt; font-weight:700;">{{ d.heading|upper }}</span>
       </div>
     {% else %}
@@ -188,18 +169,17 @@ html, body {
       </div>
     {% endif %}
 
-    {# ---------- body ---------- #}
-    <div class="content-body">
+    <div class="content-body{% if d.items|length <= 3 %} v-center{% endif %}">
       {% if d.items %}
         {% if d.bullet %}
           <ul>
             {% for item in d.items %}
-              <li class="c-text">{{ item }}</li>
+              <li class="{% if template.style == 'full_bg' %}c-white{% else %}c-text{% endif %}">{{ item }}</li>
             {% endfor %}
           </ul>
         {% else %}
           {% for item in d.items %}
-            <p class="c-text">{{ item }}</p>
+            <p class="{% if template.style == 'full_bg' %}c-white{% else %}c-text{% endif %}">{{ item }}</p>
           {% endfor %}
         {% endif %}
       {% else %}
@@ -208,11 +188,9 @@ html, body {
     </div>
 
   {% elif t == 'thankyou' %}
-    {% if d.logo %}<img class="thanks-logo" src="{{ d.logo }}" alt="">{% endif %}
+    {% if template.style == 'classic_bar' and d.logo %}<img class="thanks-logo" src="{{ d.logo }}" alt="">{% endif %}
     <div class="thanks-title">
-      <span class="f-heading c-text" style="font-size:54pt; font-weight:700;">
-        {{ d.title }}
-      </span>
+      <span class="f-heading c-text" style="font-size:54pt; font-weight:700;">{{ d.title }}</span>
     </div>
   {% endif %}
 

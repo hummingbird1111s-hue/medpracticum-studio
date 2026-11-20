@@ -3,14 +3,13 @@
 
 {% block content %}
 <style>
-  /* Custom styles for form labels */
   .field-label { display: block; font-size: 14px; font-weight: 500; color: #374151; margin-bottom: 4px; }
   .req-star { color: #dc2626; font-weight: bold; margin-left: 2px; }
-  
+
   .cmp-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
   .cmp-input-wrap { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; }
   .cmp-input-wrap .cmp-input {
-    flex: 1; min-width: 0; padding: 8px 42px 8px 10px; 
+    flex: 1; min-width: 0; padding: 8px 42px 8px 10px;
     border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; width: 100%; box-sizing: border-box;
   }
   .cmp-mic {
@@ -23,7 +22,7 @@
   .cmp-mic:hover { background: #d1fae5; border-color: #6ee7b7; }
   .cmp-mic.recording { background: #fef2f2; border-color: #fca5a5; color: #dc2626; animation: cmpmic-pulse 1.2s ease-in-out infinite; }
   @keyframes cmpmic-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); } 50% { box-shadow: 0 0 0 6px rgba(220, 38, 38, 0); } }
-  
+
   .cmp-row .cmp-del { background: none; border: 0; color: #dc2626; font-size: 20px; line-height: 1; cursor: pointer; padding: 4px 8px; }
   .cmp-add-btn { background: #ecfdf5; color: #047857; border: 1px dashed #6ee7b7; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
   .cmp-add-btn:hover { background: #d1fae5; }
@@ -31,7 +30,6 @@
   .cmp-spin { display: inline-block; width: 12px; height: 12px; border: 2px solid #d1fae5; border-top-color: #059669; border-radius: 50%; animation: cmpspin .7s linear infinite; vertical-align: -2px; margin-right: 6px; }
   @keyframes cmpspin { to { transform: rotate(360deg); } }
 
-  /* Info overlay */
   #cmp-info-overlay { display: none; position: fixed; inset: 0; z-index: 99999; background: rgba(17, 24, 39, 0.6); backdrop-filter: blur(2px); align-items: center; justify-content: center; padding: 16px; }
   #cmp-info-overlay.show { display: flex; }
   #cmp-info-overlay .card { background: #fff; border-radius: 16px; padding: 24px; max-width: 480px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.35); }
@@ -42,13 +40,20 @@
   #cmp-info-overlay .btn-skip { background: #f3f4f6; color: #374151; border: 0; border-radius: 8px; padding: 8px 14px; font-size: 14px; font-weight: 600; cursor: pointer; }
   #cmp-info-overlay .btn-primary { background: #059669; color: #fff; border: 0; border-radius: 8px; padding: 8px 14px; font-size: 14px; font-weight: 600; cursor: pointer; }
   #cmp-info-overlay .btn-primary:hover { background: #047857; }
+
+  #cmp-error { display: none; background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; border-radius: 10px; padding: 12px 14px; font-size: 14px; margin-bottom: 12px; font-weight: 500; }
 </style>
 
 <div class="max-w-2xl mx-auto">
   <form method="post" id="start-att-form">
     {% csrf_token %}
 
-    <!-- ── Main Details ───────────────────────────────────── -->
+    {% if form.non_field_errors %}
+      <div class="bg-red-50 border border-red-200 text-red-700 rounded-2xl px-4 py-3 mb-4 text-sm" role="alert">
+        {% for err in form.non_field_errors %}<p style="margin: 0;">{{ err }}</p>{% endfor %}
+      </div>
+    {% endif %}
+
     <div class="bg-white rounded-2xl shadow p-6 space-y-4">
       <h1 class="text-2xl font-bold mb-1">Start your attachment</h1>
       <p class="text-sm text-gray-600 mb-4">Tell us where you're posted and for how long.</p>
@@ -56,7 +61,6 @@
       <div id="facility-wrapper">
         <label for="{{ form.facility.id_for_label }}" class="field-label">Facility <span class="req-star">*</span></label>
         {{ form.facility }}
-        <!-- Custom Search Input and Dropdown injected by JS below -->
       </div>
 
       <div>
@@ -96,12 +100,11 @@
       </div>
     </div>
 
-    <!-- ── Competency Areas ───────────────────────────────────── -->
     <div class="bg-white rounded-2xl shadow p-6 mt-4">
       <div class="flex items-start justify-between gap-3 mb-3 flex-wrap">
         <div>
           <h2 class="font-semibold text-gray-900 mb-1">
-            Competency areas <span class="text-xs text-emerald-700 font-semibold">(recommended)</span>
+            Competency areas <span class="text-xs text-red-600 font-semibold">(required)</span>
           </h2>
           <p class="text-sm text-gray-600">
             The skills and outcomes this attachment is meant to develop.
@@ -114,6 +117,10 @@
         </button>
       </div>
 
+      <div id="cmp-error" role="alert">
+        ⚠️ Please add at least one competency area before saving.
+      </div>
+
       <div id="cmp-rows"></div>
 
       <button type="button" class="cmp-add-btn" id="cmp-add-one">+ Add competency</button>
@@ -121,14 +128,15 @@
       <div class="cmp-upload">
         <p class="text-sm font-semibold text-gray-800 mb-1">Or capture a photo / upload a file</p>
         <p class="text-xs text-gray-600 mb-3">
-          Upload a screenshot or take a photo of your competency list. We'll transcribe it into editable rows above.
+          Upload a screenshot, photo, PDF, Word doc, or text file of your competency list. We'll transcribe it into editable rows above.
         </p>
-        
-        <!-- Dual Buttons for Upload vs Camera -->
+
         <div class="flex flex-wrap gap-2">
-          <input type="file" id="cmp-file-upload" accept="image/*" class="hidden">
+          <input type="file" id="cmp-file-upload"
+                 accept="image/*,.pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+                 class="hidden">
           <input type="file" id="cmp-file-camera" accept="image/*" capture="environment" class="hidden">
-          
+
           <button type="button" onclick="document.getElementById('cmp-file-upload').click()" class="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold rounded-lg px-4 py-2 text-sm shadow-sm transition-colors flex items-center gap-2">
             📁 Choose File
           </button>
@@ -148,8 +156,9 @@
   </form>
 </div>
 
-<!-- Info / reminder overlay -->
-<div id="cmp-info-overlay" aria-hidden="true" role="dialog">
+<div id="cmp-info-overlay"
+     data-show-intro="{% if form.errors %}0{% else %}1{% endif %}"
+     aria-hidden="true" role="dialog">
   <div class="card">
     <h3 id="cmp-info-title">💡 Why add your competency areas?</h3>
     <p id="cmp-info-lede">
@@ -162,7 +171,7 @@
       <li>You can always add or edit them later from <em>All Attachments</em>.</li>
     </ul>
     <p class="text-xs text-gray-500" id="cmp-info-foot">
-      Not compulsory — you can skip. But reports built with competencies score higher.
+      Required to start your attachment — add at least one now.
     </p>
     <div class="actions">
       <button type="button" class="btn-skip" id="cmp-info-skip">Skip for now</button>
@@ -173,26 +182,21 @@
 
 <script>
 (function () {
-  /* ── 1. Custom Facility Search Autocomplete ──────────────── */
+  /* ── 1. Facility autocomplete ─────────────────────────────── */
   var facilitySelect = document.getElementById('id_facility');
   if (facilitySelect) {
-      // Hide original select
       facilitySelect.style.display = 'none';
 
-      // Create wrapper for positioning
       var wrapper = document.createElement('div');
       wrapper.style.position = 'relative';
       wrapper.style.width = '100%';
 
-      // Create the text input
       var input = document.createElement('input');
       input.type = 'text';
-      // Apply Tailwind classes that Django forms usually use
       input.className = 'w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-emerald-500 focus:border-emerald-500 bg-gray-50 font-medium text-gray-800';
       input.placeholder = 'Type to search or enter a new facility...';
       input.autocomplete = 'off';
-      
-      // Set initial value if one is selected
+
       var selectedOpt = facilitySelect.options[facilitySelect.selectedIndex];
       if (selectedOpt && selectedOpt.value) {
           input.value = selectedOpt.text;
@@ -200,7 +204,6 @@
           input.value = '';
       }
 
-      // Create the dropdown menu
       var menu = document.createElement('div');
       menu.style.position = 'absolute';
       menu.style.top = '100%';
@@ -216,7 +219,6 @@
       menu.style.display = 'none';
       menu.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
 
-      // Extract options from the original select
       var optionsList = [];
       for (var i = 0; i < facilitySelect.options.length; i++) {
           var opt = facilitySelect.options[i];
@@ -225,12 +227,9 @@
           }
       }
 
-      // Render the menu items based on search
       function renderMenu(filterText) {
           menu.innerHTML = '';
           var filterLower = filterText.toLowerCase();
-          
-          // Find matches (substring, case-insensitive)
           var matches = optionsList.filter(function(item) {
               return item.text.toLowerCase().includes(filterLower);
           });
@@ -247,7 +246,7 @@
                   div.addEventListener('mouseenter', function() { div.style.background = '#f3f4f6'; });
                   div.addEventListener('mouseleave', function() { div.style.background = 'white'; });
                   div.addEventListener('mousedown', function(e) {
-                      e.preventDefault(); // Prevent blur from firing before click
+                      e.preventDefault();
                       input.value = item.text;
                       facilitySelect.value = item.value;
                       menu.style.display = 'none';
@@ -258,13 +257,9 @@
           menu.style.display = 'block';
       }
 
-      // Handle typing
       input.addEventListener('input', function() {
           renderMenu(this.value);
-          // Clear the select value when typing so we don't accidentally submit the old one
           facilitySelect.value = '';
-          
-          // If they typed exactly an option name, set it in the hidden select
           for (var i = 0; i < optionsList.length; i++) {
               if (optionsList[i].text.toLowerCase() === this.value.toLowerCase()) {
                   facilitySelect.value = optionsList[i].value;
@@ -273,16 +268,11 @@
           }
       });
 
-      input.addEventListener('focus', function() {
-          renderMenu(this.value);
-      });
+      input.addEventListener('focus', function() { renderMenu(this.value); });
 
       input.addEventListener('blur', function() {
-          // Delay hiding so mousedown on menu items can fire
           setTimeout(function() {
               menu.style.display = 'none';
-              
-              // Auto-correct casing if they typed an exact match
               var typed = input.value.trim().toLowerCase();
               for (var i = 0; i < optionsList.length; i++) {
                   if (optionsList[i].text.toLowerCase() === typed) {
@@ -294,14 +284,13 @@
           }, 200);
       });
 
-      // Insert into DOM
       var originalWrapper = document.getElementById('facility-wrapper');
       originalWrapper.appendChild(wrapper);
       wrapper.appendChild(input);
       wrapper.appendChild(menu);
   }
 
-  /* ── 2. Laptop Camera Check ─────────────────────────────────── */
+  /* ── 2. Camera button ─────────────────────────────────────── */
   document.getElementById('btn-take-photo').addEventListener('click', function(e) {
       var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       if (isMobile) {
@@ -314,7 +303,7 @@
       }
   });
 
-  /* ── 3. Competency Overlay ──────────────────────────────────── */
+  /* ── 3. Competency rows + overlay ─────────────────────────── */
   var rows      = document.getElementById('cmp-rows');
   var addBtn    = document.getElementById('cmp-add-one');
   var fileUpload= document.getElementById('cmp-file-upload');
@@ -326,16 +315,17 @@
   var infoTitle = document.getElementById('cmp-info-title');
   var infoLede  = document.getElementById('cmp-info-lede');
   var infoFoot  = document.getElementById('cmp-info-foot');
+  var errorBanner = document.getElementById('cmp-error');
 
   function showInfo(kind) {
     if (kind === 'reminder') {
       infoTitle.textContent = '⚠️ You haven’t added competencies yet';
-      infoLede.textContent   = 'Your report will be much stronger if you add them now. You can still save without competencies — but you’ll miss out on:';
-      infoFoot.textContent   = 'You can also add them later from All Attachments → View Competency Area.';
+      infoLede.textContent   = 'You need at least one competency area to start your attachment. Tap “Got it, let’s add” below to create your first one.';
+      infoFoot.textContent   = 'Required — you cannot start the attachment without at least one competency.';
     } else {
       infoTitle.textContent = '💡 Why add your competency areas?';
       infoLede.textContent   = 'Your competency areas are the “target skills” for this attachment. Adding them makes your report sharper and faster to build:';
-      infoFoot.textContent   = 'Not compulsory — you can skip. But reports built with competencies score higher.';
+      infoFoot.textContent   = 'Required — you need at least one to start.';
     }
     infoOv.classList.add('show');
     infoOv.setAttribute('aria-hidden', 'false');
@@ -345,9 +335,10 @@
     infoOv.setAttribute('aria-hidden', 'true');
   }
 
-  // Always show on page load
-  showInfo('intro');
-  
+  if (infoOv.dataset.showIntro === '1') {
+    showInfo('intro');
+  }
+
   document.getElementById('cmp-show-info').addEventListener('click', function () { showInfo('intro'); });
   document.getElementById('cmp-info-skip').addEventListener('click', closeInfo);
   document.getElementById('cmp-info-go').addEventListener('click', function () {
@@ -356,7 +347,6 @@
     row.querySelector('.cmp-input').focus();
   });
 
-  // ── Row management ───────────────────────────────────────
   function addRow(text, source) {
     var row = document.createElement('div');
     row.className = 'cmp-row';
@@ -372,17 +362,23 @@
     rows.appendChild(row);
     return row;
   }
+
   addBtn.addEventListener('click', function () {
     var row = addRow('');
     row.querySelector('.cmp-input').focus();
   });
+
   rows.addEventListener('click', function (e) {
     if (e.target.classList.contains('cmp-del')) {
       e.target.closest('.cmp-row').remove();
     }
   });
 
-  // ── Upload / Camera → OCR ────────────────────────────────
+  rows.addEventListener('input', function () {
+    if (errorBanner) errorBanner.style.display = 'none';
+  });
+
+  /* ── 4. Upload → OCR ──────────────────────────────────────── */
   async function handleFileUpload(fileObj) {
     if (!fileObj) return;
     fileStat.innerHTML = '<span class="cmp-spin"></span>Transcribing…';
@@ -404,14 +400,15 @@
         ? data.lines
         : (data.text || '').split(/\r?\n/).map(function (s) { return s.trim(); }).filter(Boolean);
       if (!lines.length) {
-        fileStat.innerHTML = '<span class="text-amber-700">No text found — try a clearer image.</span>';
+        fileStat.innerHTML = '<span class="text-amber-700">No text found — try a clearer file.</span>';
         return;
       }
       lines.forEach(function (line) {
         addRow(line.length > 500 ? line.slice(0, 500) : line, 'ocr');
       });
       fileStat.innerHTML = '<span class="text-emerald-700">Added ' + lines.length +
-        ' competency ' + (lines.length === 1 ? 'line' : 'lines') + ' from image.</span>';
+        ' competency ' + (lines.length === 1 ? 'line' : 'lines') + ' from file.</span>';
+      if (errorBanner) errorBanner.style.display = 'none';
     } catch (err) {
       fileStat.innerHTML = '<span class="text-red-600">Network error. Try again.</span>';
     } finally {
@@ -423,7 +420,7 @@
   fileUpload.addEventListener('change', function() { handleFileUpload(this.files[0]); });
   fileCamera.addEventListener('change', function() { handleFileUpload(this.files[0]); });
 
-  // ── Submit: pack competencies + reminder if empty ────────
+  /* ── 5. Submit gate ───────────────────────────────────────── */
   form.addEventListener('submit', function (e) {
     var items = [];
     rows.querySelectorAll('.cmp-row').forEach(function (row) {
@@ -433,14 +430,21 @@
     });
     jsonIn.value = JSON.stringify(items);
 
-    if (!items.length && !form.dataset.cmpWarned) {
+    if (!items.length) {
       e.preventDefault();
-      form.dataset.cmpWarned = '1';
+      if (errorBanner) {
+        errorBanner.style.display = 'block';
+        try { errorBanner.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (_) {}
+      }
+      var firstInput = rows.querySelector('.cmp-input');
+      if (firstInput) {
+        try { firstInput.focus({ preventScroll: true }); } catch (_) { firstInput.focus(); }
+      }
       showInfo('reminder');
     }
   });
 
-  // ── Voice recorder for competency inputs ─────────────────
+  /* ── 6. Voice recorder for competency inputs ──────────────── */
   (function () {
     var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {

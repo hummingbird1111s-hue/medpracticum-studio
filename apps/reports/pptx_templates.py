@@ -6,6 +6,9 @@ department's official sample deck (maroon / gold, Times New Roman, classic
 top-bar layout). The remaining 15 are colourful variants using 6 distinct
 slide layouts: `classic_bar`, `side_accent`, `top_band`, `minimal_line`,
 `full_bg`, `corner_triangle`.
+
+Only the HIM template (`cohy_classic`) renders the college logo — all other
+templates are logo-free by design (`has_logo=False`).
 """
 
 from collections import OrderedDict
@@ -20,6 +23,7 @@ def _t(key, name, description, **kw):
         'name': name,
         'description': description,
         'is_him': False,
+        'has_logo': False,   # ✅ FIX v3: only the HIM template shows the college logo
         'bg_color': 'FFFFFF',
         'primary_color': '1A3A6C',
         'secondary_color': '4A90E2',
@@ -41,6 +45,7 @@ _t(
     'COHY Classic (HIM Official)',
     'Maroon & gold academic bar layout in Times New Roman — department standard.',
     is_him=True,
+    has_logo=True,   # ✅ FIX v3: this is the one template that shows the logo
     bg_color='FFFFFF',
     primary_color='800000',
     secondary_color='C9A227',
@@ -149,7 +154,9 @@ def get_template(key):
 def template_list():
     return [
         {'key': k, 'name': v['name'], 'description': v['description'],
-         'is_him': v['is_him'], 'style': v['style'],
+         'is_him': v['is_him'],
+         'has_logo': v.get('has_logo', False),   # ✅ FIX v3: exposed for UI badges
+         'style': v['style'],
          'primary_color': v['primary_color'],
          'secondary_color': v['secondary_color'],
          'bg_color': v['bg_color']}

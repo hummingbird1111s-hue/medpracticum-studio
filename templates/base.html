@@ -21,7 +21,7 @@
     /* ================= BASE ================= */
     *, *::before, *::after { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; }
-    html, body { height: 100%; }
+    html, body { height: 100vh; height: 100dvh; }
     body {
       background: #f9fafb;
       color: #111827;
@@ -65,12 +65,12 @@
     }
 
     /* ================= SHELL ================= */
-    .mp-shell { display: flex; height: 100vh; width: 100%; overflow: hidden; }
+    .mp-shell { display: flex; height: 100vh; height: 100dvh; width: 100%; overflow: hidden; }
 
     /* ================= SIDEBAR ================= */
     .mp-sidebar {
       width: 240px; flex-shrink: 0; background: #047857; color: #ecfdf5;
-      display: flex; flex-direction: column; height: 100vh; overflow-y: auto; z-index: 50;
+      display: flex; flex-direction: column; height: 100%; overflow-y: auto; z-index: 50;
     }
     .mp-sidebar__brand { padding: 18px 20px; border-bottom: 1px solid rgba(255,255,255,0.12); }
     .mp-sidebar__brand a { color: #ffffff; text-decoration: none; font-weight: 700; font-size: 17px; display: block; line-height: 1.2; }
@@ -97,7 +97,7 @@
     .mp-logout-btn:hover { background: rgba(0,0,0,0.35); }
 
     /* ================= MAIN COLUMN ================= */
-    .mp-main-column { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+    .mp-main-column { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
 
     /* HEADER */
     .mp-header {
@@ -165,9 +165,9 @@
     #install-btn:hover { background: #047857; }
     #install-btn.show { display: inline-block; }
 
-    @media (min-width: 768px) { 
-      .mp-hamburger { display: none; } 
-      .mp-header { padding: 10px 20px; } 
+    @media (min-width: 768px) {
+      .mp-hamburger { display: none; }
+      .mp-header { padding: 10px 20px; }
     }
 
     /* ================= BREADCRUMBS ================= */
@@ -211,15 +211,15 @@
     .mp-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 40; }
     .mp-backdrop.show { display: block; }
     @media (max-width: 767px) {
-      .mp-sidebar { position: fixed; top: 0; left: 0; bottom: 0; height: 100vh; width: 280px; max-width: 85%; z-index: 60; transform: translateX(-100%); transition: transform 0.25s ease; box-shadow: 4px 0 24px rgba(0,0,0,0.25); }
+      .mp-sidebar { position: fixed; top: 0; left: 0; bottom: 0; height: 100vh; height: 100dvh; width: 280px; max-width: 85%; z-index: 60; transform: translateX(-100%); transition: transform 0.25s ease; box-shadow: 4px 0 24px rgba(0,0,0,0.25); }
       .mp-sidebar.open { transform: translateX(0); }
       .mp-main-column { width: 100%; }
     }
 
     /* ================= WELCOME OVERLAY ================= */
     #mp-welcome-overlay {
-      display: none; position: fixed; inset: 0; z-index: 9999999; 
-      background: rgba(17, 24, 39, 0.85); backdrop-filter: blur(4px); 
+      display: none; position: fixed; inset: 0; z-index: 9999999;
+      background: rgba(17, 24, 39, 0.85); backdrop-filter: blur(4px);
       align-items: center; justify-content: center; padding: 16px;
     }
     @keyframes welcomePop {
@@ -266,7 +266,8 @@
 
     #mp-ai-window {
         position: fixed; bottom: 100px; right: 24px; width: 380px; max-width: calc(100vw - 32px);
-        height: 550px; max-height: calc(100vh - 120px); background: #ffffff; border-radius: 16px;
+        height: 550px; max-height: calc(100vh - 120px); max-height: calc(100dvh - 120px);
+        background: #ffffff; border-radius: 16px;
         box-shadow: 0 12px 40px rgba(0,0,0,0.15); display: none; flex-direction: column; z-index: 10000;
         border: 1px solid #e5e7eb; overflow: hidden; resize: both; min-width: 300px; min-height: 400px;
     }
@@ -328,7 +329,7 @@
         background: rgba(0,0,0,0.9); align-items: center; justify-content: center;
         flex-direction: column;
     }
-    #mp-ai-fullscreen img { max-width: 95vw; max-height: 90vh; object-fit: contain; }
+    #mp-ai-fullscreen img { max-width: 95vw; max-height: 90vh; max-height: 90dvh; object-fit: contain; }
     #mp-ai-fullscreen .close-btn {
         position: absolute; top: 20px; right: 30px; color: white; font-size: 40px;
         cursor: pointer; line-height: 1; font-weight: 300;
@@ -528,8 +529,8 @@
       <footer class="mp-footer">
         <p>Developed by Hummingbird Digital Solutions &amp; Syntra Digital Solutions</p>
         <p style="margin-top: 4px;">
-          &copy; <span id="footer-year"></span> MedPracticum Studio. All rights reserved. 
-          <span style="margin: 0 8px; color: #6b7280;">|</span> 
+          &copy; <span id="footer-year"></span> MedPracticum Studio. All rights reserved.
+          <span style="margin: 0 8px; color: #6b7280;">|</span>
           <a href="{% url 'terms' %}" style="color: #34d399; text-decoration: underline; font-weight: 500;">Terms, Conditions &amp; Privacy Policy</a>
         </p>
       </footer>
@@ -565,7 +566,6 @@
     document.addEventListener('DOMContentLoaded', function() {
       var path = window.location.pathname.replace(/^\/|\/$/g, '');
 
-      // Skip breadcrumbs for auth, admin, dashboard, and root pages
       if (!path || path === 'dashboard' || path === 'accounts' ||
           path.indexOf('accounts/') === 0 || path.indexOf('admin/') === 0 ||
           path === 'login' || path === 'logout' || path === 'password-reset' ||
@@ -709,7 +709,6 @@
     var installBtn = document.getElementById('install-btn');
     if (!installBtn) return;
 
-    // Hide if already installed as standalone PWA
     var isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
                        window.navigator.standalone === true;
     if (isStandalone) {
@@ -718,12 +717,10 @@
       return;
     }
 
-    // Show only for logged-in users (read from data-authenticated attribute set by Django)
     if (installBtn.dataset.authenticated === '1') {
       installBtn.classList.add('show');
     }
 
-    // Capture the native install prompt
     var deferredPrompt = null;
     window.addEventListener('beforeinstallprompt', function(e) {
       e.preventDefault();
@@ -780,11 +777,13 @@
           <span style="font-size:18px;">🩺</span>
           <span style="flex:1;">Practicum AI Assistant</span>
           <button type="button" class="mp-ai-hdr-btn" onclick="openAIHistory(event)">🕐 History</button>
+          <!-- ✅ FIX v2: refresh button — reloads the active conversation from server -->
+          <button type="button" class="mp-ai-hdr-btn" onclick="refreshAIChat(event)" title="Reload this conversation">↻</button>
           <button type="button" class="mp-ai-hdr-btn" onclick="startNewAIChat(event)">+ New</button>
           <span style="cursor:pointer; font-size:20px; margin-left:6px; line-height:1;" onclick="toggleAIWindow()">✕</span>
       </div>
       <div id="mp-ai-body">
-          <div class="mp-ai-msg bot">Hello! I am your AI assistant. I can read your logs, look at your photos, and help you write your report. Try:<br><br>• "Write an abstract for my report"<br>• "How many logs do I have?"<br>• 📎 Attach a file or photo and ask "Transcribe this"</div>
+          <div class="mp-ai-msg bot">Hello! I am your AI assistant. I can read your logs, look at your photos, and help you write your report. Try:<br><br>• "Write an abstract for my report"<br>• "How many logs do I have?"<br>• 📎 Attach an image, PDF, .docx, or .txt and ask "Transcribe this"</div>
       </div>
 
       <div id="mp-ai-image-preview">
@@ -794,12 +793,16 @@
       </div>
 
       <div id="mp-ai-input-area">
-          <button type="button" id="mp-ai-attach-btn" title="Attach file or take photo">📎</button>
+          <button type="button" id="mp-ai-attach-btn" title="Attach image, PDF, .docx, or .txt">📎</button>
           <input type="text" id="mp-ai-input" placeholder="Ask AI to help you..." onkeypress="if(event.key==='Enter') sendAIMessage()">
           <button id="mp-ai-send" type="button" onclick="sendAIMessage()">➤</button>
       </div>
 
-      <input type="file" id="mp-ai-file-input" accept="image/*,application/pdf,.doc,.docx,.txt" capture="environment" style="display:none;">
+      <!-- ✅ FIX v2: accept expanded to include .pdf/.docx/.txt AND explicit MIMEs
+           (Windows browsers sometimes hide .docx/.txt from the picker if only image/*,application/pdf) -->
+      <input type="file" id="mp-ai-file-input"
+             accept="image/*,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,.pdf,.docx,.txt"
+             style="display:none;">
 
       <div id="mp-ai-history">
         <div id="mp-ai-history-header">
@@ -888,8 +891,29 @@
           fileIn.addEventListener('change', function () {
               var f = fileIn.files && fileIn.files[0];
               if (!f) return;
+
+              // ✅ FIX v2: MIME + extension guard. Windows often reports empty MIME
+              // for .docx, so we accept by extension as a fallback.
+              var allowedMimes = [
+                  'image/jpeg', 'image/jpg', 'image/png', 'image/webp',
+                  'image/heic', 'image/heif', 'application/pdf',
+                  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                  'text/plain'
+              ];
+              var allowedExtensions = ['.pdf', '.docx', '.txt', '.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif'];
+              var _fnameLower = (f.name || '').toLowerCase();
+              var _extOk = allowedExtensions.some(function (ext) { return _fnameLower.endsWith(ext); });
+              if (allowedMimes.indexOf(f.type) === -1 && !_extOk) {
+                  alert(
+                      'Unsupported file type: ' + (f.type || 'unknown') + '\n\n' +
+                      'Please attach an image (JPG, PNG, WEBP), a PDF, a .docx, or a .txt.'
+                  );
+                  fileIn.value = '';
+                  return;
+              }
+
               if (f.size > 5 * 1024 * 1024) {
-                  alert('File too large for AI processing (max 5 MB). Please compress or upload a screenshot.');
+                  alert('File too large for AI processing (max 5 MB). Please compress or upload a smaller version.');
                   fileIn.value = '';
                   return;
               }
@@ -897,17 +921,39 @@
               reader.onload = function (e) {
                   var dataUrl = e.target.result;
                   var comma = dataUrl.indexOf(',');
-                  var header = dataUrl.substring(5, comma); 
+                  var header = dataUrl.substring(5, comma);
                   var mime = header.split(';')[0] || 'image/jpeg';
+
+                  // ✅ FIX v2: infer MIME from extension when the browser sends none
+                  if (!mime || mime === 'application/octet-stream') {
+                      if (_fnameLower.endsWith('.pdf')) mime = 'application/pdf';
+                      else if (_fnameLower.endsWith('.docx')) mime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+                      else if (_fnameLower.endsWith('.txt')) mime = 'text/plain';
+                      else if (_fnameLower.endsWith('.jpg') || _fnameLower.endsWith('.jpeg')) mime = 'image/jpeg';
+                      else if (_fnameLower.endsWith('.png')) mime = 'image/png';
+                      else if (_fnameLower.endsWith('.webp')) mime = 'image/webp';
+                      else if (_fnameLower.endsWith('.heic')) mime = 'image/heic';
+                      else if (_fnameLower.endsWith('.heif')) mime = 'image/heif';
+                  }
+
                   pendingImageB64  = dataUrl.substring(comma + 1);
                   pendingImageMime = mime;
                   pendingImageName = f.name || 'file';
 
                   if (previewThumb) {
-                      if (mime.startsWith('image/')) {
+                      if (mime.indexOf('image/') === 0) {
                           previewThumb.src = dataUrl;
                       } else {
-                          previewThumb.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" fill="%236b7280"><rect width="50" height="50" fill="%23f3f4f6"/><text x="25" y="30" text-anchor="middle" font-size="12">📄</text></svg>';
+                          // ✅ FIX v2: shape-based SVG icon (renders on every browser, no emoji encoding issues)
+                          var _docSvg =
+                              '<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54">' +
+                              '<rect width="54" height="54" fill="#ecfdf5" rx="6"/>' +
+                              '<rect x="16" y="12" width="22" height="30" fill="#ffffff" stroke="#10b981" stroke-width="2" rx="2"/>' +
+                              '<line x1="20" y1="20" x2="34" y2="20" stroke="#10b981" stroke-width="1.5"/>' +
+                              '<line x1="20" y1="26" x2="34" y2="26" stroke="#10b981" stroke-width="1.5"/>' +
+                              '<line x1="20" y1="32" x2="30" y2="32" stroke="#10b981" stroke-width="1.5"/>' +
+                              '</svg>';
+                          previewThumb.src = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(_docSvg);
                       }
                   }
                   if (previewInfo) {
@@ -924,7 +970,7 @@
       }
 
       var currentSessionId = null;
-      var GREETING = 'Hello! I am your AI assistant. I can read your logs, look at your photos, and help you write your report. Try:<br><br>• "Write an abstract for my report"<br>• "How many logs do I have?"<br>• 📎 Attach a file or photo and ask "Transcribe this"';
+      var GREETING = 'Hello! I am your AI assistant. I can read your logs, look at your photos, and help you write your report. Try:<br><br>• "Write an abstract for my report"<br>• "How many logs do I have?"<br>• 📎 Attach an image, PDF, .docx, or .txt and ask "Transcribe this"';
 
       var isDragging = false, moved = false;
       var dragStartX = 0, dragStartY = 0, startL = 0, startT = 0;
@@ -1011,7 +1057,7 @@
       var winStartX = 0, winStartY = 0, winStartL = 0, winStartT = 0;
 
       header.addEventListener('pointerdown', function (e) {
-          if (e.target.tagName.toLowerCase() === 'button' || e.target.tagName.toLowerCase() === 'span') return; 
+          if (e.target.tagName.toLowerCase() === 'button' || e.target.tagName.toLowerCase() === 'span') return;
           if (e.pointerType === 'mouse' && e.button !== 0) return;
 
           isWinDragging = true;
@@ -1044,39 +1090,29 @@
           });
       }
 
-      // ── FIX: strip horizontal rules, echoed context markers, and collapse <br> runs ──
       function formatContent(s) {
-          var cleaned = String(s == null ? '' : s).replace(/\[Image attached:[^\]]*\]\s*/g, '');
+          // ✅ FIX v2: strip both [Image attached:] AND [File attached:] prefixes
+          var cleaned = String(s == null ? '' : s).replace(/\[(?:Image|File) attached:[^\]]*\]\s*/gi, '');
           var html = escapeHtml(cleaned);
 
-          // 1) Strip echoed context markers
           html = html.replace(/-{2,}\s*USER DATA CONTEXT[^\n]*-{2,}/gi, '');
           html = html.replace(/-{2,}\s*END OF CONTEXT[^\n]*-{2,}/gi, '');
-
-          // 2) Remove standalone horizontal rules (---, ***, ___, ===)
           html = html.replace(/^[ \t]*([-*_=])(?:[ \t]*\1){2,}[ \t]*$/gm, '');
-
-          // 3) Collapse blank-line runs
           html = html.replace(/\n{3,}/g, '\n\n');
 
-          // 4) Headers
           html = html.replace(/^### (.*$)/gim, '<h4 style="margin: 12px 0 4px; font-weight: 700; font-size: 15px;">$1</h4>');
           html = html.replace(/^## (.*$)/gim, '<h3 style="margin: 14px 0 6px; font-weight: 700; font-size: 16px;">$1</h3>');
           html = html.replace(/^# (.*$)/gim, '<h2 style="margin: 16px 0 8px; font-weight: 700; font-size: 18px;">$1</h2>');
 
-          // 5) Bold
           html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
 
-          // 6) Bullets
           html = html.replace(/^\s*[\-\*]\s+(.*$)/gim, '<li style="margin-left: 16px; margin-bottom: 4px;">$1</li>');
           html = html.replace(/(<li.*<\/li>)/gim, '<ul style="margin: 6px 0 10px; padding-left: 0;">$1</ul>');
           html = html.replace(/^\s*\d+\.\s+(.*$)/gim, '<li style="margin-left: 16px; margin-bottom: 4px;">$1</li>');
 
-          // 7) Newlines
           html = html.replace(/\n/g, '<br>');
           html = html.replace(/<br><ul/g, '<ul').replace(/<\/ul><br>/g, '</ul>');
 
-          // 8) Final cleanup — no triple <br>, no leading/trailing <br>
           html = html.replace(/(<br\s*\/?>){3,}/gi, '<br><br>');
           html = html.replace(/^(<br\s*\/?>)+/i, '');
           html = html.replace(/(<br\s*\/?>)+$/i, '');
@@ -1107,6 +1143,16 @@
       };
 
       window.closeAIHistory = function () { histPanel.classList.remove('show'); };
+
+      // ✅ FIX v2: refresh button handler — reload current session or reset to greeting
+      window.refreshAIChat = async function (e) {
+          if (e) e.stopPropagation();
+          if (currentSessionId) {
+              await loadSession(currentSessionId);
+          } else {
+              startNewAIChat();
+          }
+      };
 
       async function loadSessions() {
           try {
@@ -1213,14 +1259,12 @@
           }
       }
 
-      // ── FIX: res.ok check, 60s AbortController, retry button, specific error messages ──
       window.sendAIMessage = async function () {
           var text = input.value.trim();
           var hasImage = !!pendingImageB64;
           if (!text && !hasImage) return;
           input.value = '';
 
-          // Snapshot for retry
           var retryText = text;
           var retryImage = pendingImageB64;
           var retryMime = pendingImageMime;
@@ -1230,10 +1274,16 @@
           if (text) userBubble += escapeHtml(text);
           if (hasImage) {
               if (text) userBubble += '<br>';
-              if (pendingImageMime.startsWith('image/')) {
+              if (pendingImageMime && pendingImageMime.indexOf('image/') === 0) {
                   userBubble += '<img src="data:' + pendingImageMime + ';base64,' + pendingImageB64 + '" alt="attached image">';
               } else {
-                  userBubble += '<div class="mp-ai-file-attach">📎 ' + escapeHtml(pendingImageName) + '</div>';
+                  // ✅ FIX v2: per-type icon instead of generic paperclip
+                  var _ufn = (pendingImageName || '').toLowerCase();
+                  var _uicon = '📎';
+                  if (_ufn.endsWith('.pdf') || pendingImageMime === 'application/pdf') _uicon = '📄';
+                  else if (_ufn.endsWith('.docx')) _uicon = '📝';
+                  else if (_ufn.endsWith('.txt')) _uicon = '📃';
+                  userBubble += '<div class="mp-ai-file-attach">' + _uicon + ' ' + escapeHtml(pendingImageName) + '</div>';
               }
           }
           userBubble += '</div>';
@@ -1274,12 +1324,17 @@
 
           function appendError(msg) {
               var errId = 'err-' + Date.now();
+              var retryJson = JSON.stringify(retryText)
+                  .replace(/&/g, '&amp;')
+                  .replace(/"/g, '&quot;')
+                  .replace(/</g, '&lt;')
+                  .replace(/>/g, '&gt;');
               var errHtml =
                   '<div class="mp-ai-msg bot" id="' + errId + '" style="color:#b91c1c; background:#fef2f2; border-color:#fecaca;">'
                 + escapeHtml(msg)
                 + '<br><button type="button" style="margin-top:8px; background:#dc2626; color:#fff; border:0; border-radius:6px; padding:6px 12px; font-size:12px; font-weight:600; cursor:pointer;" '
                 + 'onclick="(function(b){var p=b.closest(\'.mp-ai-msg\'); if(p) p.remove(); '
-                + 'document.getElementById(\'mp-ai-input\').value=' + JSON.stringify(retryText) + ';'
+                + 'document.getElementById(\'mp-ai-input\').value=' + retryJson + ';'
                 + 'window.sendAIMessage();})(this)">🔄 Retry</button>'
                 + '</div>';
               body.innerHTML += errHtml;
@@ -1291,7 +1346,6 @@
           var sendImageName = pendingImageName;
           clearPendingImage();
 
-          // 60-second client-side timeout via AbortController
           var controller = null;
           var abortTimer = null;
           if (typeof AbortController !== 'undefined') {
@@ -1324,7 +1378,6 @@
               var res = await fetch('/api/ai/chat/', fetchOpts);
               if (abortTimer) clearTimeout(abortTimer);
 
-              // Server returned non-2xx — read the JSON error if possible
               if (!res.ok) {
                   var errMsg = 'Server error (' + res.status + '). Please try again.';
                   try {
@@ -1339,7 +1392,6 @@
                   return;
               }
 
-              // Try to parse JSON
               var data;
               try {
                   data = await res.json();

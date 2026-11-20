@@ -1,6 +1,6 @@
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
-from django.contrib.auth import password_validation  # Added import for password rules
+from django.contrib.auth import password_validation
 
 from .models import User
 
@@ -162,7 +162,6 @@ class PasswordResetConfirmForm(StyledFormMixin, forms.Form):
         label="New password",
         widget=forms.PasswordInput(attrs={'autocomplete': 'new-password'}),
         min_length=8,
-        # ADDED: This pulls in the password rules (length, common passwords, etc.)
         help_text=password_validation.password_validators_help_text_html(),
     )
     new_password_confirm = forms.CharField(
@@ -181,7 +180,6 @@ class PasswordResetConfirmForm(StyledFormMixin, forms.Form):
 
         if p1:
             try:
-                # Use the imported validation
                 password_validation.validate_password(p1)
             except forms.ValidationError as e:
                 self.add_error('new_password', e)
@@ -201,6 +199,7 @@ class ProfileForm(StyledFormMixin, forms.ModelForm):
         fields = (
             'first_name', 'last_name', 'email',
             'phone_number', 'level', 'department',
+            'index_number',   # ✅ NEW: allow editing own index number
         )
 
     def __init__(self, *args, **kwargs):
@@ -213,6 +212,10 @@ class ProfileForm(StyledFormMixin, forms.ModelForm):
             attrs={'class': INPUT_CLASSES},
         )
         self.fields['level'].required = True
+
+        self.fields['index_number'].help_text = (
+            'Your student ID. Make sure it matches your school records.'
+        )
 
         if user and not user.is_staff:
             self.fields['department'].disabled = True
@@ -232,3 +235,19 @@ class ProfileForm(StyledFormMixin, forms.ModelForm):
                 'If you believe this is a mistake, contact an administrator.'
             )
         return email
+
+    def clean_index_number(self):
+        """
+        Prevent two users from claiming the same index number — but exclude
+        THIS user's pk so an unchanged save passes.
+        """
+        index_number = (self.cleaned_data.get('index_number') or '').strip()
+        if not index_number:
+            return index_number
+        qs = User.objects.filter(index_number__iexact=index_number).exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise forms.ValidationError(
+                'Another account is already using this Index Number. '
+                'If you believe this is a mistake, contact an administrator.'
+            )
+        return index_number

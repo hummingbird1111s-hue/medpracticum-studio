@@ -23,11 +23,13 @@ urlpatterns = [
     # 👇 NEW: Competency areas
     #    Upload MUST sit before any <int:pk> pattern for clarity, even though
     #    `<int:pk>` wouldn't match the literal "competencies" segment.
+    # AFTER
     path(
-        'attachments/competencies/upload-image/',
-        competency_views.upload_competency_image,
-        name='upload_competency_image',
+    'attachments/competencies/upload-image/',
+    views.upload_competency_image,
+    name='upload_competency_image',
     ),
+    
     path(
         'attachments/<int:session_id>/competencies/',
         competency_views.attachment_competencies,

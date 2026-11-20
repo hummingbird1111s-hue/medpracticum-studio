@@ -170,6 +170,135 @@
     font-weight: 500;
     text-align: center;
   }
+
+  /* ===== ✅ Report abstract preview overlay ===== */
+  #report-preview-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1000000;
+    background: rgba(17, 24, 39, 0.94);
+    backdrop-filter: blur(4px);
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  #report-preview-overlay.show { display: flex; }
+  #report-preview-overlay .preview-shell {
+    background: #fff;
+    border-radius: 16px;
+    overflow: hidden;
+    width: 100%;
+    max-width: 1000px;
+    display: flex;
+    flex-direction: column;
+    height: 92vh;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+    animation: rp-pop 0.25s ease-out;
+  }
+  @keyframes rp-pop {
+    from { opacity: 0; transform: translateY(8px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  #report-preview-overlay .preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid #e5e7eb;
+    background: #f9fafb;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  #report-preview-overlay .preview-header h3 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: #065f46;
+  }
+  #report-preview-overlay .preview-header p {
+    margin: 2px 0 0;
+    font-size: 12px;
+    color: #6b7280;
+  }
+  #report-preview-overlay .preview-btn {
+    border: 0;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  #report-preview-overlay .preview-btn.close {
+    background: #f3f4f6;
+    color: #374151;
+  }
+  #report-preview-overlay .preview-btn.close:hover { background: #e5e7eb; }
+  #report-preview-overlay .preview-body {
+    flex: 1;
+    overflow-y: auto;
+    background: #d1d5db;
+    padding: 24px;
+    display: flex;
+    justify-content: center;
+  }
+  #report-preview-overlay .preview-page {
+    background: #fff;
+    width: 100%;
+    max-width: 700px;
+    padding: 1in;
+    font-family: "Times New Roman", Times, serif;
+    font-size: 12pt;
+    line-height: 1.5;
+    color: #000;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
+    align-self: flex-start;
+  }
+  #report-preview-overlay .preview-page h2 {
+    text-align: center;
+    font-size: 14pt;
+    text-transform: uppercase;
+    margin: 0 0 0.75em;
+    letter-spacing: 0.1em;
+    font-weight: bold;
+  }
+  #report-preview-overlay .preview-page p {
+    margin: 0 0 0.6em;
+    text-align: justify;
+    text-indent: 0;
+  }
+  #report-preview-overlay .preview-page .keywords-line {
+    margin-top: 0.8em;
+    font-style: italic;
+    text-align: left;
+  }
+  #report-preview-overlay .preview-page .preview-meta {
+    margin-top: 1.2em;
+    padding-top: 0.8em;
+    border-top: 1px solid #e5e7eb;
+    font-size: 10pt;
+    color: #6b7280;
+    font-style: italic;
+    text-align: center;
+  }
+  #report-preview-overlay .preview-hint {
+    padding: 10px 16px;
+    font-size: 12px;
+    color: #6b7280;
+    text-align: center;
+    border-top: 1px solid #e5e7eb;
+    background: #f9fafb;
+  }
+  @media (max-width: 640px) {
+    #report-preview-overlay { padding: 0; }
+    #report-preview-overlay .preview-shell {
+      border-radius: 0;
+      height: 100vh;
+      max-width: 100%;
+    }
+    #report-preview-overlay .preview-body { padding: 12px; }
+    #report-preview-overlay .preview-page { padding: 24px; font-size: 11pt; }
+  }
 </style>
 
 <h1 class="text-2xl font-bold mb-1">Report settings</h1>
@@ -552,6 +681,34 @@
   <p>Setting report engine to read all data from this attachment...</p>
 </div>
 
+{# ✅ Preview overlay — abstract styled as it will appear in the report #}
+{% if abstract_paragraphs %}
+<div id="report-preview-overlay" aria-hidden="true" role="dialog">
+  <div class="preview-shell">
+    <div class="preview-header">
+      <div>
+        <h3>Report preview — Abstract</h3>
+        <p>This is how your report will look. Formatting matches the final PDF exactly.</p>
+      </div>
+      <button type="button" class="preview-btn close" onclick="closeReportPreview()">Close</button>
+    </div>
+    <div class="preview-body">
+      <div class="preview-page">
+        <h2>Abstract</h2>
+        {% for para in abstract_paragraphs %}<p>{{ para }}</p>{% endfor %}
+        {% if preview_keywords %}
+          <p class="keywords-line"><b>Keywords:</b> {{ preview_keywords }}</p>
+        {% endif %}
+        <p class="preview-meta">— Body chapters (Introduction, Facility Profile, Activities, Skills, Challenges, Recommendations, Conclusion) follow the same font, spacing, and margins. —</p>
+      </div>
+    </div>
+    <div class="preview-hint">
+      Close this preview when you're ready — it will appear again the next time you visit this page.
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <script>
   // ============================================================
   // 0) Switch Facility Overlay
@@ -740,17 +897,14 @@
       progressBar.style.width = '0%';
       statusText.textContent = STEPS[0];
 
-      // Animate progress up to 95% over ~2 minutes
       progressTimer = setInterval(function() {
         if (progress < 95) {
-          // Slow down as it gets higher
           var increment = progress > 80 ? 0.2 : (progress > 50 ? 0.5 : 1);
           progress += increment;
           progressBar.style.width = progress + '%';
         }
       }, 1000);
 
-      // Cycle text every 10 seconds
       stepTimer = setInterval(function() {
         if (stepIndex < STEPS.length - 1) {
           stepIndex++;
@@ -796,6 +950,31 @@
 
     window.addEventListener('pageshow', function (e) {
       if (e.persisted) overlay.classList.remove('show');
+    });
+  })();
+
+  // ============================================================
+  // ✅ 4) REPORT ABSTRACT PREVIEW — auto-show on every page load
+  // ============================================================
+  window.closeReportPreview = function () {
+    var ov = document.getElementById('report-preview-overlay');
+    if (ov) {
+      ov.classList.remove('show');
+      ov.setAttribute('aria-hidden', 'true');
+    }
+  };
+
+  (function () {
+    var ov = document.getElementById('report-preview-overlay');
+    if (!ov) return;
+    // Show on every page load (mirrors presentation preview behaviour)
+    ov.classList.add('show');
+    ov.setAttribute('aria-hidden', 'false');
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && ov.classList.contains('show')) closeReportPreview();
+    });
+    ov.addEventListener('click', function (e) {
+      if (e.target === ov) closeReportPreview();
     });
   })();
 </script>
