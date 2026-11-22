@@ -146,6 +146,52 @@ _t('slate_pro', 'Slate Pro',
    title_color='263238', text_color='1E2A30', style='side_accent',
    bg_color='F9FBFC')
 
+_t('ocean_teal', 'Ocean Teal',
+   'Deep teal side accent with pale aqua body and cyan underline.',
+   primary_color='0B3D3D', secondary_color='0FB5BA', accent_color='D0EEEE',
+   title_color='0B3D3D', text_color='0E2626', style='side_accent',
+   bg_color='F5FBFC')
+
+_t('rust_warm', 'Rust Warm',
+   'Warm rust top band on a cream parchment background.',
+   primary_color='A64B1E', secondary_color='D67D2A', accent_color='F5D5A8',
+   title_color='7A3614', text_color='3D2010', style='top_band',
+   bg_color='FDF6EC')
+
+_t('sage_calm', 'Sage Calm',
+   'Muted sage green side stripe with deep forest accents.',
+   primary_color='4A5F47', secondary_color='7FA87A', accent_color='D5E5D2',
+   title_color='2F3D2C', text_color='1F2A1D', style='side_accent',
+   bg_color='F7FAF6')
+
+_t('navy_coral', 'Navy Coral',
+   'Bold navy classic-bar with a bright coral underline.',
+   primary_color='0A2647', secondary_color='FF6B4A', accent_color='F4E5E1',
+   title_color='0A2647', text_color='1A1A2E', style='classic_bar',
+   heading_font='Georgia', body_font='Georgia')
+
+_t('mocha_cream', 'Mocha Cream',
+   'Warm mocha minimal-line style on a cream background.',
+   primary_color='5E3E2E', secondary_color='A47251', accent_color='F5E5D5',
+   title_color='5E3E2E', text_color='2D1E14', style='minimal_line',
+   bg_color='FCF6F0')
+
+_t('electric_blue', 'Electric Blue',
+   'Bright electric blue side accent on a clean white body.',
+   primary_color='0D47A1', secondary_color='2196F3', accent_color='E3F2FD',
+   title_color='0D47A1', text_color='0A1929', style='side_accent')
+
+_t('charcoal_gold', 'Charcoal Gold',
+   'Charcoal full-background with gold trim — high-end academic feel.',
+   primary_color='1C1C1C', secondary_color='C9A227', accent_color='3A3A3A',
+   title_color='C9A227', text_color='E8E8E8', style='full_bg',
+   bg_color='1C1C1C', heading_font='Georgia', body_font='Georgia')
+
+_t('lavender_mist', 'Lavender Mist',
+   'Soft lavender minimal-line style on a pale purple body.',
+   primary_color='6A4C93', secondary_color='9B7EDE', accent_color='E9E0F5',
+   title_color='6A4C93', text_color='2C1B47', style='minimal_line',
+   bg_color='F9F5FE')
 
 def get_template(key):
     return PPTX_TEMPLATES.get(key) or PPTX_TEMPLATES['cohy_classic']

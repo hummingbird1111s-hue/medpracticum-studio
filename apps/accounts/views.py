@@ -50,7 +50,11 @@ def register(request):
 
 @login_required
 def profile(request):
-    """View + edit your own profile. Username and index number stay read-only."""
+    """View + edit your own profile.
+
+    Editable: username, name, email, phone, level, index_number.
+    Locked for non-staff: department (admin-only change).
+    """
     if request.method == 'POST':
         form = ProfileForm(request.POST, instance=request.user, user=request.user)
         if form.is_valid():

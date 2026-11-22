@@ -61,6 +61,11 @@ def _build(request, session, use_ai=True, force_ai=False):
             target_pages = report.options.get('target_pages') or MIN_PAGES_GUIDELINE
             drafts = draft_sections_with_ai(session, samples, target_pages=target_pages)
             if drafts:
+                # ✅ Extract the AI note for the UI and remove it from the saved content
+                ai_note = drafts.pop('_ai_note', '')
+                if ai_note:
+                    messages.warning(request, ai_note)
+                
                 report.content = drafts
                 report.save(update_fields=['content'])
                 logger.info('AI drafted %d sections for report %s', len(drafts), report.pk)
@@ -477,6 +482,11 @@ def _ensure_ai_content(request, session, force_ai=False):
         target_pages = report.options.get('target_pages') or MIN_PAGES_GUIDELINE
         drafts = draft_sections_with_ai(session, samples, target_pages=target_pages)
         if drafts:
+            # ✅ Extract the AI note for the UI and remove it from the saved content
+            ai_note = drafts.pop('_ai_note', '')
+            if ai_note:
+                messages.warning(request, ai_note)
+                
             report.content = drafts
             report.save(update_fields=['content'])
             return True
@@ -486,13 +496,42 @@ def _ensure_ai_content(request, session, force_ai=False):
 
 
 def _build_pptx_from_scratch(request, session, template_key, force_ai=False):
+    """
+    Build the .pptx + PDF preview, then report back to the user with an
+    accurate summary of what was actually built (vs what was selected),
+    and whether the AI draft succeeded for every section.
+    """
     _ensure_ai_content(request, session, force_ai=force_ai)
     try:
-        PracticumReportBuilder(session).save_pptx(template_key, force_ai=force_ai)
-        messages.success(
-            request,
-            f'Presentation built with the "{template_key}" template.',
-        )
+        builder = PracticumReportBuilder(session)
+        builder.save_pptx(template_key, force_ai=force_ai)
+
+        summary = getattr(builder, '_last_pptx_summary', None)
+        if summary:
+            built = summary['slides_built']
+            selected = summary['slides_selected'] or built
+            fallbacks = summary['ai_fallback_count']
+            tpl = summary.get('template', template_key)
+            plural = 's' if built != 1 else ''
+
+            if fallbacks == 0:
+                messages.success(
+                    request,
+                    f"✅ Presentation ready: {built} slide{plural} · Template: {tpl}"
+                )
+            else:
+                fb_plural = 's' if fallbacks != 1 else ''
+                messages.warning(
+                    request,
+                    f"⚠️ Presentation ready: {built} slide{plural} · Template: {tpl} · "
+                    f"Note: {fallbacks} slide{fb_plural} used fallback content "
+                    f"(AI draft incomplete — using trimmed report text)"
+                )
+        else:
+            messages.success(
+                request,
+                f'Presentation built with the "{template_key}" template.'
+            )
         return True
     except Exception as exc:
         logger.exception('PPTX build failed for session %s', session.pk)

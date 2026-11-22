@@ -22,9 +22,7 @@ logger = logging.getLogger(__name__)
 
 # NOTE: 'facility_profile' is deliberately NOT drafted by the AI.
 # The Facility Profile is built purely from the facility record in the
-# database (see PracticumReportBuilder._build_facility_profile). This
-# prevents the AI from injecting student narratives ("I assisted…",
-# "I performed…") into what must be a plain description of the facility.
+# database (see PracticumReportBuilder._build_facility_profile).
 DRAFT_SECTIONS = [
     ('abstract', 'Abstract',
      "Write a single academic paragraph (150-200 words, third person). "
@@ -49,6 +47,8 @@ DRAFT_SECTIONS = [
      "Under each sub-heading, write 1 descriptive paragraph. Use first-person ('I'). "
      "CRITICAL: DO NOT just paste the raw daily logs. Synthesize and refine the activities into professional narratives "
      "(e.g., instead of 'entered NHIS claims', write 'I managed the processing of NHIS claims for facility reimbursement'). "
+     "If the student only logged one activity for a unit, EXPAND it into a full, realistic paragraph using your knowledge "
+     "of typical Ghanaian HIM workflows — but stay truthful to what they actually did. "
      "Do NOT include the main heading."),
 
     ('skills_acquired', 'Skills Acquired',
@@ -106,19 +106,11 @@ DRAFT_SECTIONS = [
      "APA-style reference list for any sources you cite. If you cite nothing, return an empty response. Do NOT include a heading."),
 ]
 
-# FIX: capped at 90s so the AI loop bails well before Gunicorn's 180s timeout
-# (see Render Start Command: --timeout 180). Sections not drafted by 90s fall
-# back to template text — the report still generates, just less AI prose.
-# Was 240s, which exceeded the timeout and caused WORKER TIMEOUT / SIGKILL.
-DEFAULT_MAX_SECONDS = 90
+DEFAULT_MAX_SECONDS = 90  # Capped at 90s so it doesn't trigger Gunicorn timeouts
 
 
 # ============================================================
 # Presentation drafting (slide bullets + speaker notes)
-# ============================================================
-# These sections produce SHORT bullets for slides, not prose.
-# They are drafted lazily by save_pptx() — never during report
-# generation — so the report flow stays fast.
 # ============================================================
 
 PPTX_DRAFT_SECTIONS = [
@@ -157,7 +149,6 @@ PPTX_DRAFT_SECTIONS = [
      "Bullet 2: illegible handwriting in physical records complicating NHIS claims entry. "
      "FORBIDDEN: more than 2 bullets. FORBIDDEN: bullets longer than 12 words."),
 
-    # COMBINED SLIDE
     ('pptx_observation_recommendation_bullets', 'Slide: Observation and Recommendation',
      "Write exactly 4 short bullet points for a slide titled 'Observation and Recommendation'. "
      "Each bullet MUST be 14 words or fewer. Output ONE bullet per line, no markers. "
@@ -171,7 +162,6 @@ PPTX_DRAFT_SECTIONS = [
      "Cover: overall experience, key takeaway, readiness for professional practice. "
      "FORBIDDEN: more than 3 bullets."),
 
-    # UPDATED FOR 7 SLIDES
     ('pptx_speaker_notes', 'Speaker Notes for All Slides',
      "Write 2 short sentences of speaker notes (what the presenter should say aloud) for each slide. "
      "Cover exactly these 7 slides in this order: "
@@ -299,6 +289,32 @@ def get_ai_reply_with_image(prompt, image_bytes, mime='image/jpeg'):
 
 
 # ============================================================
+# Shared quality rules (used by both drafting functions)
+# ============================================================
+
+_QUALITY_RULES = (
+    "\nQUALITY RULES (Apply to every section):\n"
+    "9. NEVER COPY RAW LOG TEXT. The student's raw logs may say things like 'Registered 15 patients' "
+    "or 'Entered NHIS claims'. NEVER use that phrasing verbatim. Instead write it as professional prose: "
+    "'I processed approximately fifteen outpatient registrations per session, ensuring all demographic "
+    "data was accurately captured before filing.' Transform, do not transcribe.\n"
+    "10. EXPAND SPARSE LOGS. If the student's logs for this section are thin (under 40 words or a single "
+    "short line), do NOT write a bare 1-sentence paragraph. Instead, use your professional knowledge of "
+    "typical Ghanaian HIM practice to EXPAND into a full, realistic narrative that still reflects what "
+    "they actually did. Add context, describe typical workflows, mention standard tools (LHIMS, DHIMS, "
+    "NHIS). Never invent activities they didn't do, but do add realistic detail around what they did.\n"
+    "11. REFINE ABUNDANT LOGS. If the student's logs for this section are rich (over 200 words), do NOT "
+    "pad with filler. Synthesize, distill, and remove repetition. Keep the strongest 3-5 details and "
+    "skip the mundane ones. Quality over quantity.\n"
+    "12. BUILD AROUND COMPETENCIES. Every paragraph should visibly connect to at least one of the "
+    "student's listed competency areas. Name the competency explicitly where it fits naturally.\n"
+    "13. SIMPLE ENGLISH. Write in clear, accessible English. Avoid Latin abbreviations, complex "
+    "subordinate clauses, and academic jargon when a plain word works. (Exception: technical HIM terms "
+    "like NHIS, DHIMS, LHIMS, ICD-10 are fine and should be used.)\n"
+)
+
+
+# ============================================================
 # Entry point 1 — report prose drafting
 # ============================================================
 
@@ -343,7 +359,6 @@ def draft_sections_with_ai(session, samples=None, target_pages=25):
                 "\n".join(f"- {n}" for n in notes) + "\n"
             )
 
-    # Section caps (rule 7b below) always override this.
     length_instruction = "Match the length specified in the section instruction."
     if target_pages and target_pages >= 20:
         length_instruction = (
@@ -356,13 +371,34 @@ def draft_sections_with_ai(session, samples=None, target_pages=25):
             "Keep the writing concise and brief, as the target report length is short."
         )
 
-    max_seconds = getattr(
-        settings, 'REPORT_AI_DRAFTING_MAX_SECONDS', DEFAULT_MAX_SECONDS
+    # Dynamic Page-Target & Log Volume Warning
+    log_count = session.daily_logs.filter(is_deleted=False).count()
+    length_rule = (
+        f"\nLENGTH & DETAIL RULE: The student is targeting approximately {target_pages} pages total. "
+        "Expand the provided logs into detailed, professional, and descriptive narratives to achieve this length. "
     )
+    if log_count < 5:
+        length_rule += (
+            "\nCRITICAL (EXPANSION REQUIRED): The student has very few daily logs. You MUST heavily expand on the units and activities "
+            "mentioned using your extensive knowledge of Ghanaian Health Information Management workflows. "
+            "Invent realistic, professional activities consistent with the facilities and units mentioned, "
+            "to ensure the report reaches the targeted page count. Do NOT copy raw logs verbatim."
+        )
 
-    unique_seed = random.randint(1000, 9999)
+    # Determine a warning note for the final build message
+    note = ""
+    if log_count < 5:
+        note = f"Note: You have very few logs ({log_count}). The AI expanded the content, but adding more logs will improve depth and help reach your {target_pages}-page target."
+    elif log_count < 15:
+        note = f"Note: If the generated report falls short of your {target_pages}-page target, adding more daily logs will provide the AI with more material to synthesize."
 
     drafts = {}
+    if note:
+        drafts['_ai_note'] = note
+
+    max_seconds = getattr(settings, 'REPORT_AI_DRAFTING_MAX_SECONDS', DEFAULT_MAX_SECONDS)
+    unique_seed = random.randint(1000, 9999)
+
     total_start = time.time()
     total = len(DRAFT_SECTIONS)
 
@@ -394,8 +430,9 @@ def draft_sections_with_ai(session, samples=None, target_pages=25):
             f"Obey the section cap even if it contradicts rule 7. Exceeding a section cap is a FAILURE.\n"
             f"8. UNIQUENESS (Seed: {unique_seed}): Write with a fresh perspective. Avoid generic templates. "
             f"Vary your sentence structure and vocabulary completely from standard reports to ensure this report feels unique and personalized.\n"
-            f"9. ELABORATE IF SPARSE: If the student's logs lack detail, enrich the section using standard Ghanaian Health Information Management practices. Expand on the data provided to create a substantial, realistic, and professional narrative.\n"
+            f"{_QUALITY_RULES}"
             f"{competencies_rule}"
+            f"\n{length_rule}\n"
             f"\n{format_notes}\n"
             f"Section instructions (these are authoritative and override any general guidance above):\n"
             f"{instruction}\n\n"
@@ -406,14 +443,19 @@ def draft_sections_with_ai(session, samples=None, target_pages=25):
 
         if reply is None:
             logger.warning(
-                'AI drafting: section %d/%d (%r) failed — bailing; '
-                '%d section(s) kept, remaining %d will use template defaults',
-                idx, total, key, len(drafts), total - len(drafts),
+                'AI drafting: section %d/%d (%r) failed — skipping; '
+                'will use template default for this section only',
+                idx, total, key,
             )
-            break
+            continue
 
-        drafts[key] = reply
-        logger.debug('AI drafted section %r (%d chars)', key, len(reply))
+        # Clean up echoed context or markdown headers
+        reply = re.sub(r'^#+\s+.*$', '', reply, flags=re.MULTILINE).strip()
+        
+        # Don't save empty replies
+        if reply:
+            drafts[key] = reply
+            logger.debug('AI drafted section %r (%d chars)', key, len(reply))
 
     if drafts:
         logger.info(
@@ -430,7 +472,7 @@ def draft_sections_with_ai(session, samples=None, target_pages=25):
 # Entry point 2 — presentation bullets + speaker notes
 # ============================================================
 
-def draft_presentation_with_ai(session):
+def draft_presentation_with_ai(session, target_slides=7):
     """
     Draft slide-specific bullets + speaker notes for the PPTX.
 
@@ -461,9 +503,15 @@ def draft_presentation_with_ai(session):
             + "\n".join(f"- {c}" for c in competencies) + "\n"
         )
 
-    max_seconds = getattr(
-        settings, 'REPORT_AI_DRAFTING_MAX_SECONDS', DEFAULT_MAX_SECONDS
-    )
+    log_count = session.daily_logs.filter(is_deleted=False).count()
+    if log_count < 5:
+        competency_hint += (
+            "\nCRITICAL (EXPANSION REQUIRED): The student has very few daily logs. "
+            "You MUST heavily expand on the units and activities using your knowledge of Ghanaian HIM workflows "
+            "to ensure there are enough detailed bullets to cover the slides.\n"
+        )
+
+    max_seconds = getattr(settings, 'REPORT_AI_DRAFTING_MAX_SECONDS', DEFAULT_MAX_SECONDS)
 
     drafts = {}
     total_start = time.time()
@@ -486,29 +534,36 @@ def draft_presentation_with_ai(session):
             f"2. WORD LIMITS ARE ABSOLUTE: If the instruction says '12 words or fewer', "
             f"every line must respect that. Exceeding a word limit is a FAILURE.\n"
             f"3. REFINE, DON'T COPY: Synthesize from the student data — never paste raw logs.\n"
+            f"   Example: if the raw log says 'Registered 15 patients', do NOT write "
+            f"'Registered 15 patients'. Write 'Patient registration and LHIMS data entry'.\n"
             f"4. PRESENTATION VOICE: Slides are spoken, not read. Use active verbs, "
             f"present tense, short clauses.\n"
             f"5. NO HEADINGS: Do NOT include section titles, bullet markers, or markdown.\n"
             f"6. STRUCTURE & GRAMMAR: Ensure perfect grammar. Transform rough log notes into "
             f"clean, professional action statements.\n"
-            f"7. ELABORATE IF SPARSE: If the student's raw logs are brief or missing details, "
-            f"generate standard, highly realistic Ghanaian HIM practicum tasks to flesh out "
-            f"the slide so it looks full and professional. Do not leave gaps.\n"
+            f"7. EXPAND IF SPARSE: If the student's raw logs for this slide are thin (under 30 words "
+            f"or only one short line), do NOT write fewer than the requested bullet count. Use "
+            f"realistic Ghanaian HIM knowledge to EXPAND into the full requested number of bullets, "
+            f"staying truthful to what they did.\n"
+            f"8. REFINE IF ABUNDANT: If the logs are dense (over 200 words), distill to the strongest "
+            f"points. Do NOT pad. Pick the top bullets that best represent the section.\n"
+            f"9. SIMPLE ENGLISH: Short words, plain sentences. Technical HIM terms are fine.\n"
             f"{competency_hint}"
             f"\nSection instruction (authoritative):\n{instruction}\n\n"
             f"--- STUDENT DATA ---\n{context}\n-------------------\n"
         )
 
         reply = _call_ai(prompt)
+
         if reply is None:
             logger.warning(
-                'PPTX AI drafting: section %d/%d (%r) failed — stopping; '
-                '%d section(s) kept; remaining slides fall back to trimmed report text',
-                idx, total, key, len(drafts),
+                'PPTX AI drafting: section %d/%d (%r) failed — skipping; '
+                'builder will trim report text for this slide only',
+                idx, total, key,
             )
-            break
+            continue
 
-        drafts[key] = reply
+        drafts[key] = reply.strip()
         logger.debug('PPTX AI drafted %r (%d chars)', key, len(reply))
 
     if drafts:

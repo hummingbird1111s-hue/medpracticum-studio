@@ -97,7 +97,9 @@
     .mp-logout-btn:hover { background: rgba(0,0,0,0.35); }
 
     /* ================= MAIN COLUMN ================= */
-    .mp-main-column { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
+    /* ✅ FOOTER FIX: flex-basis 0 + min-height 0 so the flex algorithm properly
+       constrains .mp-main and keeps .mp-footer visible on tall pages. */
+    .mp-main-column { flex: 1 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
 
     /* HEADER */
     .mp-header {
@@ -199,11 +201,15 @@
     .mp-message--default { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
 
     /* ================= MAIN CONTENT ================= */
-    .mp-main { flex: 1; overflow-y: auto; min-height: 0; }
+    /* ✅ FOOTER FIX: flex-basis 0 + overflow-x hidden so tall pages scroll internally
+       and never push the footer off-screen. */
+    .mp-main { flex: 1 1 0; min-height: 0; overflow-y: auto; overflow-x: hidden; }
     .mp-main__inner { max-width: 768px; width: 100%; margin: 0 auto; padding: 24px 16px; }
 
     /* ================= FOOTER ================= */
-    .mp-footer { background: #111827; color: #9ca3af; font-size: 12px; padding: 14px 16px; text-align: center; flex-shrink: 0; }
+    /* ✅ FOOTER FIX: flex: 0 0 auto locks both grow and shrink — footer always
+       sits at natural height, never expands or collapses. */
+    .mp-footer { flex: 0 0 auto; background: #111827; color: #9ca3af; font-size: 12px; padding: 14px 16px; text-align: center; }
     .mp-footer p { margin: 0 0 4px; }
     .mp-footer p:last-child { margin-bottom: 0; }
 

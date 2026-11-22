@@ -71,6 +71,9 @@ class PracticumPptxBuilder:
         self.prs_w = None
         self.prs_h = None
         self.show_logo = bool(self.template.get('has_logo') or self.template.get('is_him'))
+        # ✅ NEW: build counters (populated during build / _slide_specs)
+        self.slides_built_count = 0
+        self.ai_fallback_count = 0
 
     # ---------------- pptx_options accessors ----------------
     def _opts(self):
@@ -90,8 +93,8 @@ class PracticumPptxBuilder:
         except (TypeError, ValueError):
             return 220
 
-    # ✅ NEW: body font size for content-slide bullets (10–28 pt, default 18)
     def _font_size(self):
+        """Body font size (pt) for content-slide bullets. 10–28 pt range."""
         try:
             return max(10, min(28, int(self._opts().get('font_size', 18))))
         except (TypeError, ValueError):
@@ -101,7 +104,7 @@ class PracticumPptxBuilder:
         sections = (self._opts().get('sections') or {})
         return bool(sections.get(key, True))
 
-    # ---------------- content helpers (unchanged) ----------------
+    # ---------------- content helpers ----------------
     def _clean_list(self, text):
         out = []
         for line in (text or '').splitlines():
@@ -132,6 +135,8 @@ class PracticumPptxBuilder:
                     break
             if out:
                 return out
+        # ✅ NEW: fallback path — count this slide as using fallback content
+        self.ai_fallback_count += 1
         return _trim_to_slide(fallback_items, max_items=max_items, max_chars=max_chars)
 
     def _parse_speaker_notes(self):
@@ -223,6 +228,8 @@ class PracticumPptxBuilder:
                 },
             })
 
+        # ✅ NEW: record how many slides the builder actually emitted
+        self.slides_built_count = len(specs)
         return specs
 
     def build(self):
@@ -274,7 +281,6 @@ class PracticumPptxBuilder:
             {
                 'specs': specs,
                 'template': self.template,
-                # ✅ NEW: font size for the HTML preview so it matches the .pptx
                 'body_font_size': self._font_size(),
             },
         )
@@ -441,33 +447,18 @@ class PracticumPptxBuilder:
             items = ['(No content available for this slide)']
 
         body_top = Inches(1.35)
-        full_body_h = H - body_top - Inches(0.8)
-
-        estimated_chars = sum(len(i) for i in items)
-        center_vertically = len(items) <= 3 and estimated_chars < 400
-
-        # ✅ PHASE 7 — cap the centering box so short-bullet slides don't drift down.
-        # Previously, centering happened in a ~5.35in tall box, so the middle of
-        # that box sat at ~4.0in — well below the heading — leaving a huge gap.
-        # Now the box height scales with font size: ~2.6in at 18pt, ~4.0in at 28pt,
-        # ~1.44in at 10pt. Bullets start right below the divider.
-        body_font_size = self._font_size()
-        if center_vertically:
-            base_cap_in = 2.6
-            capped_in = base_cap_in * (body_font_size / 18.0)
-            body_h = min(full_body_h, Inches(capped_in))
-        else:
-            body_h = full_body_h
-
+        body_h = H - body_top - Inches(0.8)
         body_tb = slide.shapes.add_textbox(Inches(0.9), body_top, W - Inches(1.8), body_h)
         body_tf = body_tb.text_frame
         body_tf.word_wrap = True
+
+        estimated_chars = sum(len(i) for i in items)
+        center_vertically = len(items) <= 3 and estimated_chars < 400
         body_tf.vertical_anchor = MSO_ANCHOR.MIDDLE if center_vertically else MSO_ANCHOR.TOP
 
         bullet = bool(data.get('bullet'))
         body_color = t.get('text_color', '1A1A1A')
-        # ✅ NEW: use the user-configured body font size (defaults to 18 pt)
-        body_size = body_font_size
+        body_size = self._font_size()
 
         for i, item in enumerate(items):
             _add_para(body_tf, item, size=body_size,

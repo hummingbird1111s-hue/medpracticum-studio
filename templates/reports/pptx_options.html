@@ -79,9 +79,7 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   #switch-overlay p { color: #fff; font-size: 16px; font-weight: 500; text-align: center; }
 
-  /* ============================================================
-     ✅ PHASE 5 — Sample presentation preview (7 slides, auto-swipe)
-     ============================================================ */
+  /* PHASE 5 preview styles */
   #pptx-preview-overlay {
     display: none; position: fixed; inset: 0; z-index: 1000000;
     background: rgba(17, 24, 39, 0.94); backdrop-filter: blur(4px);
@@ -115,16 +113,11 @@
     border: 0; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600;
     cursor: pointer; text-decoration: none; display: inline-block;
   }
-  #pptx-preview-overlay .preview-btn.open-new {
-    background: #ecfdf5; color: #047857;
-  }
-  #pptx-preview-overlay .preview-btn.open-new:hover { background: #d1fae5; }
   #pptx-preview-overlay .preview-btn.close {
     background: #f3f4f6; color: #374151;
   }
   #pptx-preview-overlay .preview-btn.close:hover { background: #e5e7eb; }
 
-  /* Info banner below header */
   #pptx-preview-overlay .preview-info-banner {
     padding: 10px 16px; background: #ecfdf5;
     border-bottom: 1px solid #a7f3d0;
@@ -132,7 +125,6 @@
   }
   #pptx-preview-overlay .preview-info-banner strong { color: #047857; }
 
-  /* Horizontal slide viewport */
   #pptx-preview-overlay .preview-body {
     flex: 1; position: relative; background: #1f2937; overflow: hidden; min-height: 0;
   }
@@ -149,7 +141,6 @@
     padding: 20px;
   }
 
-  /* Slide sheet — COHY Classic */
   #pptx-preview-overlay .pptx-slide-sheet {
     background: #fff;
     width: 100%;
@@ -165,17 +156,14 @@
     line-height: 1.4;
   }
 
-  /* Maroon/gold/brown bars at bottom */
   #pptx-preview-overlay .slide-deco { position: absolute; left: 0; right: 0; }
   #pptx-preview-overlay .slide-bot-wine  { bottom: 6%; height: 2.67%; background: #800000; }
   #pptx-preview-overlay .slide-bot-black { bottom: 3.33%; height: 1.33%; background: #000; }
   #pptx-preview-overlay .slide-bot-brown { bottom: 0; height: 4.67%; background: #8B4513; }
 
-  /* Cover maroon rules */
   #pptx-preview-overlay .slide-cover-line1 { top: 28%; left: 5%; right: 5%; height: 1.07%; background: #800000; }
   #pptx-preview-overlay .slide-cover-line2 { top: 45%; left: 5%; right: 5%; height: 1.07%; background: #800000; }
 
-  /* Cover content */
   #pptx-preview-overlay .slide-logo {
     position: absolute; top: 6%; left: 50%; transform: translateX(-50%);
     width: 12%; aspect-ratio: 1/1;
@@ -201,7 +189,6 @@
   #pptx-preview-overlay .slide-cover-index { font-size: 1.55em; margin-bottom: 0.3em; }
   #pptx-preview-overlay .slide-cover-level { font-size: 1.55em; }
 
-  /* Content slides */
   #pptx-preview-overlay .slide-corner-logo {
     position: absolute; top: 2%; width: 8%; aspect-ratio: 1/1;
     border: 1px dashed #d1d5db; border-radius: 50%;
@@ -234,7 +221,6 @@
     font-size: 1em; margin-bottom: 0.55em; line-height: 1.4;
   }
 
-  /* Footer: dots + hint */
   #pptx-preview-overlay .preview-footer {
     padding: 10px 16px; background: #f9fafb; border-top: 1px solid #e5e7eb;
     display: flex; flex-direction: column; align-items: center; gap: 6px; flex-shrink: 0;
@@ -501,7 +487,6 @@
   The AI drafts on first use only — subsequent builds reuse the saved content.
 </p>
 
-<!-- ===== OVERLAYS ===== -->
 <div id="gen-overlay" aria-hidden="true" role="status" aria-live="polite">
   <div class="gen-card">
     <h3>Building your presentation</h3>
@@ -516,8 +501,7 @@
   <p>Setting the presentation engine to read all data from this attachment...</p>
 </div>
 
-{# ✅ PHASE 5 — Sample presentation preview. Renders only when a deck exists.
-   `data-auto-open="1"` tells the JS to show it on fresh page load. #}
+{# Phase 5 preview: auto-opens on fresh page load #}
 {% if has_pptx_pdf %}
 <div id="pptx-preview-overlay"
      data-auto-open="{% if not generated %}1{% else %}0{% endif %}"
@@ -530,11 +514,6 @@
         <p>This is what your deck will look like. Auto-scrolling every 4 seconds.</p>
       </div>
       <div class="preview-actions">
-        <a class="preview-btn open-new"
-           href="{% url 'view_pptx_pdf' %}?attachment_id={{ session.id }}"
-           target="_blank" rel="noopener">
-          Open full PDF
-        </a>
         <button type="button" class="preview-btn close" onclick="closePptxPreview()">Close</button>
       </div>
     </div>
@@ -546,7 +525,6 @@
     <div class="preview-body" id="pptx-preview-scroller">
       <div class="pptx-slide-track" id="pptx-slide-track">
 
-        <!-- Slide 1 — Cover -->
         <div class="pptx-slide" data-slide="1">
           <div class="pptx-slide-sheet">
             <div class="slide-deco slide-bot-wine"></div>
@@ -565,7 +543,6 @@
           </div>
         </div>
 
-        <!-- Slide 2 — Introduction -->
         <div class="pptx-slide" data-slide="2">
           <div class="pptx-slide-sheet">
             <div class="slide-deco slide-bot-wine"></div>
@@ -585,7 +562,6 @@
           </div>
         </div>
 
-        <!-- Slide 3 — Facility Profile -->
         <div class="pptx-slide" data-slide="3">
           <div class="pptx-slide-sheet">
             <div class="slide-deco slide-bot-wine"></div>
@@ -605,7 +581,6 @@
           </div>
         </div>
 
-        <!-- Slide 4 — Activities Performed -->
         <div class="pptx-slide" data-slide="4">
           <div class="pptx-slide-sheet">
             <div class="slide-deco slide-bot-wine"></div>
@@ -626,7 +601,6 @@
           </div>
         </div>
 
-        <!-- Slide 5 — Skills Acquired -->
         <div class="pptx-slide" data-slide="5">
           <div class="pptx-slide-sheet">
             <div class="slide-deco slide-bot-wine"></div>
@@ -648,7 +622,6 @@
           </div>
         </div>
 
-        <!-- Slide 6 — Challenges Faced -->
         <div class="pptx-slide" data-slide="6">
           <div class="pptx-slide-sheet">
             <div class="slide-deco slide-bot-wine"></div>
@@ -667,7 +640,6 @@
           </div>
         </div>
 
-        <!-- Slide 7 — Conclusion -->
         <div class="pptx-slide" data-slide="7">
           <div class="pptx-slide-sheet">
             <div class="slide-deco slide-bot-wine"></div>
@@ -708,7 +680,6 @@
 {% endif %}
 
 <script>
-  // ---- Colour the swatches ----
   document.querySelectorAll('.swatches[data-primary]').forEach(function (sw) {
     var p = sw.querySelector('.swatch-primary');
     var s = sw.querySelector('.swatch-secondary');
@@ -718,20 +689,17 @@
     if (b) b.style.backgroundColor = sw.dataset.bg;
   });
 
-  // ---- Switch attachment ----
   function showSwitchOverlay() {
     document.getElementById('switch-overlay').classList.add('show');
     document.getElementById('switch-att-form').submit();
   }
 
-  // ---- Show/hide the "Build Official" card based on selected template ----
   function updateOfficialCardVisibility(templateKey) {
     var officialForm = document.getElementById('gen-official-form');
     if (!officialForm) return;
     officialForm.style.display = (templateKey === 'cohy_classic') ? '' : 'none';
   }
 
-  // ---- Template selection + live preview ----
   let currentKey = "{{ selected_pptx_template|escapejs }}";
   const cards = document.querySelectorAll('.pptx-card');
   const livePreview = document.getElementById('live-preview');
@@ -806,7 +774,6 @@
 
   updateOfficialCardVisibility(currentKey);
 
-  // ---- Auto-fill: COHY Classic + default settings ----
   window.pickOfficialTemplate = function () {
     var official = document.querySelector('.pptx-card[data-key="cohy_classic"]');
     if (official) selectCard(official);
@@ -855,7 +822,6 @@
     });
   }
 
-  // ---- Generating overlay ----
   (function () {
     var overlay     = document.getElementById('gen-overlay');
     var statusText  = document.getElementById('gen-status-text');
@@ -917,7 +883,6 @@
     });
   })();
 
-  // ---- PHASE 5: Sample slide carousel ----
   window.closePptxPreview = function () {
     var ov = document.getElementById('pptx-preview-overlay');
     if (ov) {
@@ -992,7 +957,6 @@
       else if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   { goto(current - 1); restartTimer(); }
     });
 
-    // Horizontal touch swipe
     var touchStartX = 0;
     var touchMoved  = false;
     if (scroller) {

@@ -197,14 +197,20 @@ class ProfileForm(StyledFormMixin, forms.ModelForm):
     class Meta:
         model = User
         fields = (
+            'username',                    # ✅ NEW: allow editing own username
             'first_name', 'last_name', 'email',
             'phone_number', 'level', 'department',
-            'index_number',   # ✅ NEW: allow editing own index number
+            'index_number',
         )
 
     def __init__(self, *args, **kwargs):
         user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
+
+        # ✅ NEW: friendlier help text than Django's default for the username field
+        self.fields['username'].help_text = (
+            'You log in with this. Letters, digits, and @/./+/-/_ only.'
+        )
 
         self.fields['level'].widget = forms.Select(
             choices=[(100, 'Level 100'), (200, 'Level 200'),
@@ -222,6 +228,22 @@ class ProfileForm(StyledFormMixin, forms.ModelForm):
             self.fields['department'].help_text = (
                 'Contact an administrator if your department needs to change.'
             )
+
+    # ✅ NEW: case-insensitive uniqueness check that excludes the current user
+    def clean_username(self):
+        """
+        Prevent two users from claiming the same username — but exclude
+        THIS user's pk so an unchanged save passes.
+        """
+        username = (self.cleaned_data.get('username') or '').strip()
+        if not username:
+            raise forms.ValidationError('Username is required.')
+        qs = User.objects.filter(username__iexact=username).exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise forms.ValidationError(
+                'That username is already taken. Please choose another.'
+            )
+        return username
 
     def clean_email(self):
         email = (self.cleaned_data.get('email') or '').strip()

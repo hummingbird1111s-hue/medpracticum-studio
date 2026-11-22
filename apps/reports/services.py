@@ -1066,13 +1066,10 @@ class PracticumReportBuilder:
         Build BOTH the .pptx and its PDF preview from a single template, and
         persist them on the GeneratedReport.
 
-        Slide-specific AI content (short bullets + speaker notes) is drafted
-        lazily on first build. `force_ai=True` clears the cached slide content
-        and re-runs the AI — used by the "Reset AI & Rebuild" button.
-
-        Both files are always written together so the presentation-builder
-        page can offer View PDF / Download PDF / Download PowerPoint without
-        needing a separate rebuild.
+        After the call, `self._last_pptx_summary` holds:
+            { 'slides_built': int, 'slides_selected': int | None,
+              'ai_fallback_count': int, 'template': str }
+        Used by the view to build an accurate success/warning message.
         """
         from .pptx_builder import PracticumPptxBuilder
 
@@ -1113,8 +1110,17 @@ class PracticumReportBuilder:
         report.pptx_template = template_key
         report.pptx_file.save(f"{filename}.pptx", ContentFile(pptx_bytes), save=False)
         report.pptx_pdf_file.save(f"{filename}.pdf", ContentFile(pdf_bytes), save=True)
-        return report
 
+        # ✅ NEW: capture build summary for the view to report back accurately
+        sections = (report.pptx_options or {}).get('sections') or {}
+        selected_count = sum(1 for v in sections.values() if v) if sections else None
+        self._last_pptx_summary = {
+            'slides_built': getattr(builder, 'slides_built_count', 0),
+            'slides_selected': selected_count,
+            'ai_fallback_count': getattr(builder, 'ai_fallback_count', 0),
+            'template': template_key,
+        }
+        return report
     def save(self):
         pdf_bytes = self.build_pdf()
         docx_bytes = self.build_docx()
