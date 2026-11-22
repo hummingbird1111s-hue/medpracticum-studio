@@ -95,6 +95,12 @@ SECRET_KEY = os.environ.get(
 # DEBUG is False if we are running on Render
 DEBUG = 'RENDER' not in os.environ
 
+# ✅ NEW: one-shot override — set DJANGO_DEBUG=1 in Render env vars to force
+# DEBUG=True temporarily (for viewing the yellow error page in your browser).
+# Remove the env var afterwards to return to normal.
+if os.environ.get('DJANGO_DEBUG', '').lower() in ('1', 'true', 'yes'):
+    DEBUG = True
+
 # Render provides RENDER_EXTERNAL_HOSTNAME automatically
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 
@@ -274,3 +280,59 @@ PAYSTACK_CURRENCY   = 'GHS'
 # Subscription plan
 SUBSCRIPTION_PRICE  = 50      # GHS — per semester
 SUBSCRIPTION_MONTHS = 6       # months of access per payment
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# ✅ NEW: LOGGING — dumps tracebacks to stdout so Render's log stream
+# shows the actual Python error, not just "500 Internal Server Error".
+# By default Django sends django.request ERROR to admin email only,
+# which is why you've only been seeing 500 status codes and not the
+# underlying traceback. This forces everything to console (stdout).
+# ═══════════════════════════════════════════════════════════════════════
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {name} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {name} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        # ✅ The key one — captures the full traceback of any 500 error
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+        'django.security': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'apps': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
