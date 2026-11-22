@@ -1,0 +1,178 @@
+{% extends 'base.html' %}
+{% block title %}Subscribe · MedPracticum Studio{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6">
+
+  <!-- Header -->
+  <div class="text-center mt-4">
+    <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 mb-4 shadow-sm text-3xl">
+      💳
+    </div>
+    <h1 class="text-3xl font-bold text-gray-900 mb-2">Unlock Report & Presentation Builder</h1>
+    <p class="text-sm text-gray-500 max-w-2xl mx-auto">
+      One payment. Unlimited daily logs, AI-drafted reports, and slide decks —
+      for the whole semester.
+    </p>
+  </div>
+
+  {% if subscribed %}
+  <!-- ✅ ALREADY SUBSCRIBED -->
+  <div class="bg-emerald-50 border-2 border-emerald-300 rounded-2xl p-6 text-center shadow-sm">
+    <div class="text-4xl mb-3">✅</div>
+    <h2 class="text-xl font-bold text-emerald-900 mb-2">You're all set!</h2>
+    <p class="text-sm text-emerald-800 mb-1">
+      Your subscription is active
+      {% if subscription.expires_at %}
+        until <strong>{{ subscription.expires_at|date:"j M Y" }}</strong>
+      {% endif %}.
+    </p>
+    {% if subscription.last_reference %}
+    <p class="text-xs text-emerald-700 mb-4">
+      Last payment ref: <code class="bg-emerald-100 px-1.5 py-0.5 rounded">{{ subscription.last_reference }}</code>
+      · ₵{{ subscription.last_amount_paid }}
+    </p>
+    {% endif %}
+    <div class="flex flex-wrap justify-center gap-3 mt-4">
+      <a href="{% url 'report_options' %}" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-5 py-2.5 text-sm shadow-sm transition-colors">
+        Build a Report →
+      </a>
+      <a href="{% url 'pptx_options' %}" class="bg-white border border-emerald-300 hover:bg-emerald-50 text-emerald-800 font-semibold rounded-lg px-5 py-2.5 text-sm shadow-sm transition-colors">
+        Build a Presentation →
+      </a>
+    </div>
+  </div>
+
+  {% else %}
+  <!-- ⏳ NOT SUBSCRIBED — PRICING CARD -->
+  <div class="bg-white rounded-2xl shadow-lg border border-emerald-100 overflow-hidden">
+
+    <!-- Price header -->
+    <div class="bg-gradient-to-br from-emerald-700 to-emerald-500 text-white p-8 text-center">
+      <p class="text-xs uppercase tracking-widest text-emerald-200 font-bold mb-2">Semester Plan</p>
+      <div class="flex items-baseline justify-center gap-2">
+        <span class="text-2xl font-bold text-emerald-100">₵</span>
+        <span class="text-6xl font-black">{{ price }}</span>
+      </div>
+      <p class="text-sm text-emerald-100 mt-2">
+        One payment · {{ months }} months of access
+      </p>
+    </div>
+
+    <!-- Features -->
+    <div class="p-6 md:p-8">
+      <h3 class="text-sm font-bold uppercase tracking-wide text-gray-500 mb-4">
+        What's included
+      </h3>
+      <ul class="space-y-3 mb-6">
+        <li class="flex items-start gap-3">
+          <span class="text-emerald-500 mt-0.5 flex-shrink-0">
+            <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;"><path d="M5 13l4 4L19 7"/></svg>
+          </span>
+          <div>
+            <p class="text-sm font-semibold text-gray-900">Unlimited daily logs</p>
+            <p class="text-xs text-gray-600">Record as many activities as you need — no cap.</p>
+          </div>
+        </li>
+        <li class="flex items-start gap-3">
+          <span class="text-emerald-500 mt-0.5 flex-shrink-0">
+            <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;"><path d="M5 13l4 4L19 7"/></svg>
+          </span>
+          <div>
+            <p class="text-sm font-semibold text-gray-900">AI-drafted reports (PDF + Word)</p>
+            <p class="text-xs text-gray-600">Full COHY-standard report from your own logs.</p>
+          </div>
+        </li>
+        <li class="flex items-start gap-3">
+          <span class="text-emerald-500 mt-0.5 flex-shrink-0">
+            <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;"><path d="M5 13l4 4L19 7"/></svg>
+          </span>
+          <div>
+            <p class="text-sm font-semibold text-gray-900">PowerPoint presentations</p>
+            <p class="text-xs text-gray-600">Any template, AI speaker notes, PDF preview.</p>
+          </div>
+        </li>
+        <li class="flex items-start gap-3">
+          <span class="text-emerald-500 mt-0.5 flex-shrink-0">
+            <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;"><path d="M5 13l4 4L19 7"/></svg>
+          </span>
+          <div>
+            <p class="text-sm font-semibold text-gray-900">All AI assistant features</p>
+            <p class="text-xs text-gray-600">Chat, image transcription, report coaching.</p>
+          </div>
+        </li>
+      </ul>
+
+      <!-- Payment CTA — every Django value passed via data-* attributes -->
+      <div class="border-t border-gray-100 pt-6">
+        <button type="button" id="paystack-btn"
+                data-callback-url="{% url 'paystack_callback' %}"
+                data-public-key="{{ paystack_public_key|escapejs }}"
+                data-user-email="{{ user.email|escapejs }}"
+                data-price="{{ price }}"
+                class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg py-3 text-base shadow-md transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
+          Pay ₵{{ price }} with Paystack
+        </button>
+        <p class="text-xs text-gray-500 text-center mt-3">
+          Secure checkout · Powered by Paystack · MTN MoMo, Visa, Mastercard accepted
+        </p>
+      </div>
+
+      <!-- Staff-only test activation -->
+      {% if user.is_staff %}
+      <div class="mt-6 pt-6 border-t border-dashed border-gray-200">
+        <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 mb-3">
+          <strong>Staff-only test mode.</strong> Simulates a successful payment so you can verify the
+          report/presentation flow before Paystack is wired. Remove before launch.
+        </p>
+        <form method="post" action="{% url 'subscribe_activate_test' %}">
+          {% csrf_token %}
+          <button type="submit"
+                  class="w-full bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-lg py-2 text-sm shadow-sm transition-colors">
+            🧪 Activate for testing (staff only)
+          </button>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Trust strip -->
+  <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-center text-sm text-emerald-900">
+    🔒 <strong>Your data stays yours.</strong> We never share your logs.
+    Payment is processed by Paystack — we never see your card details.
+  </div>
+  {% endif %}
+
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var btn = document.getElementById('paystack-btn');
+    if (!btn) return;
+
+    var publicKey   = btn.dataset.publicKey   || '';
+    var callbackUrl = btn.dataset.callbackUrl || '';
+    var userEmail   = btn.dataset.userEmail   || '';
+    var price       = parseFloat(btn.dataset.price || '0');
+
+    btn.addEventListener('click', function () {
+      if (!publicKey) {
+        alert(
+          'Paystack checkout is being set up.\n\n' +
+          'If you are an admin, add PAYSTACK_PUBLIC_KEY to your environment ' +
+          'to enable real payments.\n\n' +
+          'For now, staff can use the "Activate for testing" button below.'
+        );
+        return;
+      }
+
+      // Paystack Inline JS is not enabled yet. To wire it up:
+      //   1. Load the Paystack inline script inside the head (served from js.paystack.co/v1/inline.js).
+      //   2. Replace the alert below with the PaystackPop.setup() call using
+      //      publicKey, userEmail, price * 100 (kobo), 'GHS', and callbackUrl.
+      alert('Paystack checkout not wired yet — public key is set, but the JS snippet still needs to be enabled.');
+    });
+  });
+</script>
+{% endblock %}

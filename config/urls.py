@@ -8,6 +8,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/', include('apps.accounts.urls')),
     path('reports/', include('apps.reports.urls')),
+    path('payments/', include('apps.payments.urls')),   # ✅ NEW: subscriptions + Paystack
     path('', include('apps.logs.urls')),
 
     # Silence the browser's automatic /favicon.ico request by pointing it at the PWA icon.

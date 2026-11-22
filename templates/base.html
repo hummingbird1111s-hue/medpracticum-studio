@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#059669">
   <title>{% block title %}MedPracticum Studio{% endblock %}</title>
 
@@ -96,10 +96,33 @@
     }
     .mp-logout-btn:hover { background: rgba(0,0,0,0.35); }
 
+    /* ✅ SUBSCRIPTION BADGE — styles extracted from inline attribute to fix
+       VS Code HTML-parsing errors caused by {% if %} inside a multi-line style="" */
+    .mp-sidebar__subscription {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 10px 12px; border-radius: 8px;
+      font-weight: 600; font-size: 13px;
+      text-decoration: none; transition: background 0.15s ease;
+    }
+    .mp-sidebar__subscription--active {
+      background: rgba(16, 185, 129, 0.25); color: #a7f3d0;
+    }
+    .mp-sidebar__subscription--inactive {
+      background: rgba(245, 158, 11, 0.25); color: #fcd34d;
+    }
+    .mp-sidebar__subscription:hover { background: rgba(255, 255, 255, 0.15); }
+
     /* ================= MAIN COLUMN ================= */
-    /* ✅ FOOTER FIX: flex-basis 0 + min-height 0 so the flex algorithm properly
-       constrains .mp-main and keeps .mp-footer visible on tall pages. */
-    .mp-main-column { flex: 1 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
+    .mp-main-column {
+      flex: 1 1 0;
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      max-height: 100vh;
+      max-height: 100dvh;
+    }
 
     /* HEADER */
     .mp-header {
@@ -195,21 +218,25 @@
     #mp-banner.show { display: block; }
 
     /* ================= MESSAGES ================= */
-    .mp-messages { max-width: 768px; width: 100%; margin: 0 auto; padding: 16px 16px 0; flex-shrink: 0; }
+    .mp-messages { max-width: 1200px; width: 100%; margin: 0 auto; padding: 16px 16px 0; flex-shrink: 0; }
     .mp-message { padding: 8px 16px; border-radius: 8px; font-size: 14px; margin-bottom: 8px; }
     .mp-message--error   { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
     .mp-message--default { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
 
     /* ================= MAIN CONTENT ================= */
-    /* ✅ FOOTER FIX: flex-basis 0 + overflow-x hidden so tall pages scroll internally
-       and never push the footer off-screen. */
-    .mp-main { flex: 1 1 0; min-height: 0; overflow-y: auto; overflow-x: hidden; }
-    .mp-main__inner { max-width: 768px; width: 100%; margin: 0 auto; padding: 24px 16px; }
+    .mp-main { flex: 1 1 0; min-height: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
+    .mp-main__inner { max-width: 1200px; width: 100%; margin: 0 auto; padding: 24px 16px; }
 
     /* ================= FOOTER ================= */
-    /* ✅ FOOTER FIX: flex: 0 0 auto locks both grow and shrink — footer always
-       sits at natural height, never expands or collapses. */
-    .mp-footer { flex: 0 0 auto; background: #111827; color: #9ca3af; font-size: 12px; padding: 14px 16px; text-align: center; }
+    .mp-footer {
+      flex: 0 0 auto;
+      background: #111827;
+      color: #9ca3af;
+      font-size: 12px;
+      padding: 14px 16px;
+      padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+      text-align: center;
+    }
     .mp-footer p { margin: 0 0 4px; }
     .mp-footer p:last-child { margin-bottom: 0; }
 
@@ -442,6 +469,18 @@
       </nav>
 
       <div class="mp-sidebar__footer" style="display: flex; flex-direction: column; gap: 8px;">
+
+        <!-- ✅ SUBSCRIPTION BADGE — styles are now in the <style> block so VS Code
+             can parse this file without errors. Only the class name is templated. -->
+        <a href="{% url 'subscribe' %}"
+           class="mp-sidebar__subscription {% if user_has_subscription %}mp-sidebar__subscription--active{% else %}mp-sidebar__subscription--inactive{% endif %}">
+          {% if user_has_subscription %}
+            ⭐ Subscription Active
+          {% else %}
+            💳 Unlock Reports — ₵50
+          {% endif %}
+        </a>
+
         <a href="{% url 'how_to_use' %}" style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 12px; background: rgba(255,255,255,0.1); border-radius: 8px; font-weight: 500; font-size: 14px; color: #ecfdf5; text-decoration: none; transition: background 0.15s ease;" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'">
           <svg viewBox="0 0 24 24" style="width: 18px; height: 18px; flex-shrink: 0; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;">
             <circle cx="12" cy="12" r="10"></circle>
@@ -595,7 +634,8 @@
         'attachment': '{% url "start_attachment" %}',
         'terms': '{% url "terms" %}',
         'how_to_use': '{% url "how_to_use" %}',
-        'contact': '{% url "contact" %}'
+        'contact': '{% url "contact" %}',
+        'payments': '{% url "subscribe" %}'
       };
 
       var labelMap = {
@@ -611,7 +651,8 @@
         'attachment': 'Attachment Details',
         'how_to_use': 'How to Use',
         'terms': 'Terms, Conditions & Privacy Policy',
-        'contact': 'Contact'
+        'contact': 'Contact',
+        'payments': 'Subscribe'
       };
 
       var html = '';
@@ -709,7 +750,7 @@
   })();
   </script>
 
-  <!-- ================= PWA INSTALL BUTTON (always visible for logged-in users) ================= -->
+  <!-- ================= PWA INSTALL BUTTON ================= -->
   <script>
   (function() {
     var installBtn = document.getElementById('install-btn');
@@ -783,7 +824,6 @@
           <span style="font-size:18px;">🩺</span>
           <span style="flex:1;">Practicum AI Assistant</span>
           <button type="button" class="mp-ai-hdr-btn" onclick="openAIHistory(event)">🕐 History</button>
-          <!-- ✅ FIX v2: refresh button — reloads the active conversation from server -->
           <button type="button" class="mp-ai-hdr-btn" onclick="refreshAIChat(event)" title="Reload this conversation">↻</button>
           <button type="button" class="mp-ai-hdr-btn" onclick="startNewAIChat(event)">+ New</button>
           <span style="cursor:pointer; font-size:20px; margin-left:6px; line-height:1;" onclick="toggleAIWindow()">✕</span>
@@ -804,8 +844,6 @@
           <button id="mp-ai-send" type="button" onclick="sendAIMessage()">➤</button>
       </div>
 
-      <!-- ✅ FIX v2: accept expanded to include .pdf/.docx/.txt AND explicit MIMEs
-           (Windows browsers sometimes hide .docx/.txt from the picker if only image/*,application/pdf) -->
       <input type="file" id="mp-ai-file-input"
              accept="image/*,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,.pdf,.docx,.txt"
              style="display:none;">
@@ -898,8 +936,6 @@
               var f = fileIn.files && fileIn.files[0];
               if (!f) return;
 
-              // ✅ FIX v2: MIME + extension guard. Windows often reports empty MIME
-              // for .docx, so we accept by extension as a fallback.
               var allowedMimes = [
                   'image/jpeg', 'image/jpg', 'image/png', 'image/webp',
                   'image/heic', 'image/heif', 'application/pdf',
@@ -930,7 +966,6 @@
                   var header = dataUrl.substring(5, comma);
                   var mime = header.split(';')[0] || 'image/jpeg';
 
-                  // ✅ FIX v2: infer MIME from extension when the browser sends none
                   if (!mime || mime === 'application/octet-stream') {
                       if (_fnameLower.endsWith('.pdf')) mime = 'application/pdf';
                       else if (_fnameLower.endsWith('.docx')) mime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -950,7 +985,6 @@
                       if (mime.indexOf('image/') === 0) {
                           previewThumb.src = dataUrl;
                       } else {
-                          // ✅ FIX v2: shape-based SVG icon (renders on every browser, no emoji encoding issues)
                           var _docSvg =
                               '<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54">' +
                               '<rect width="54" height="54" fill="#ecfdf5" rx="6"/>' +
@@ -1097,7 +1131,6 @@
       }
 
       function formatContent(s) {
-          // ✅ FIX v2: strip both [Image attached:] AND [File attached:] prefixes
           var cleaned = String(s == null ? '' : s).replace(/\[(?:Image|File) attached:[^\]]*\]\s*/gi, '');
           var html = escapeHtml(cleaned);
 
@@ -1150,7 +1183,6 @@
 
       window.closeAIHistory = function () { histPanel.classList.remove('show'); };
 
-      // ✅ FIX v2: refresh button handler — reload current session or reset to greeting
       window.refreshAIChat = async function (e) {
           if (e) e.stopPropagation();
           if (currentSessionId) {
@@ -1283,7 +1315,6 @@
               if (pendingImageMime && pendingImageMime.indexOf('image/') === 0) {
                   userBubble += '<img src="data:' + pendingImageMime + ';base64,' + pendingImageB64 + '" alt="attached image">';
               } else {
-                  // ✅ FIX v2: per-type icon instead of generic paperclip
                   var _ufn = (pendingImageName || '').toLowerCase();
                   var _uicon = '📎';
                   if (_ufn.endsWith('.pdf') || pendingImageMime === 'application/pdf') _uicon = '📄';
@@ -1500,11 +1531,141 @@
       function closeWelcome() {
         welcomeOverlay.style.display = 'none';
         localStorage.setItem('mp_welcome_seen', 'true');
+        // ✅ Notify the payment banner to start its 3s countdown
+        window.dispatchEvent(new Event('mp:welcome-closed'));
       }
 
       skipBtn.addEventListener('click', closeWelcome);
       continueBtn.addEventListener('click', closeWelcome);
     });
+  </script>
+  {% endif %}
+
+  {# ============================================================ #}
+  {# ✅ PAYMENT BANNER — shows 3s after welcome closes, cycles   #}
+  {# every 7s (4s visible → 3s hidden). Only for logged-in users #}
+  {# who don't have an active subscription.                      #}
+  {# ============================================================ #}
+  {% if user.is_authenticated and show_payment_banner %}
+  <style>
+    #mp-pay-banner {
+      position: fixed;
+      left: 50%;
+      bottom: 24px;
+      transform: translateX(-50%) translateY(140%);
+      width: calc(100% - 32px);
+      max-width: 560px;
+      background: linear-gradient(135deg, #047857 0%, #10b981 100%);
+      color: #fff;
+      border-radius: 16px;
+      box-shadow: 0 12px 40px rgba(5, 150, 105, 0.4);
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      z-index: 9990;
+      opacity: 0;
+      pointer-events: none;
+      transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s;
+    }
+    #mp-pay-banner.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+      pointer-events: auto;
+    }
+    #mp-pay-banner .mp-pay-banner__icon { font-size: 28px; flex-shrink: 0; line-height: 1; }
+    #mp-pay-banner .mp-pay-banner__text { flex: 1; min-width: 0; }
+    #mp-pay-banner .mp-pay-banner__title { margin: 0 0 2px; font-size: 14px; font-weight: 700; line-height: 1.2; }
+    #mp-pay-banner .mp-pay-banner__sub { margin: 0; font-size: 12px; color: #d1fae5; line-height: 1.35; }
+    #mp-pay-banner .mp-pay-banner__cta {
+      flex-shrink: 0; background: #fff; color: #047857; font-weight: 700; font-size: 13px;
+      padding: 8px 14px; border-radius: 8px; text-decoration: none; white-space: nowrap;
+      transition: background 0.15s;
+    }
+    #mp-pay-banner .mp-pay-banner__cta:hover { background: #ecfdf5; }
+    #mp-pay-banner .mp-pay-banner__close {
+      flex-shrink: 0; background: transparent; border: 0; color: #d1fae5;
+      font-size: 20px; line-height: 1; cursor: pointer; padding: 4px 6px; margin-left: -4px;
+      transition: color 0.15s;
+    }
+    #mp-pay-banner .mp-pay-banner__close:hover { color: #fff; }
+    @media (max-width: 767px) {
+      #mp-pay-banner { bottom: 100px; padding: 12px 14px; }
+      #mp-pay-banner .mp-pay-banner__title { font-size: 13px; }
+      #mp-pay-banner .mp-pay-banner__sub { font-size: 11px; }
+      #mp-pay-banner .mp-pay-banner__cta { padding: 7px 12px; font-size: 12px; }
+    }
+  </style>
+
+  <div id="mp-pay-banner" role="dialog" aria-live="polite" aria-label="Subscribe to unlock reports">
+    <div class="mp-pay-banner__icon">💳</div>
+    <div class="mp-pay-banner__text">
+      <p class="mp-pay-banner__title">Unlock Report &amp; Presentation Builder</p>
+      <p class="mp-pay-banner__sub">₵50 for this semester · Unlimited logs, AI reports, and slide decks</p>
+    </div>
+    <a href="{% url 'subscribe' %}" class="mp-pay-banner__cta">Subscribe →</a>
+    <button type="button" class="mp-pay-banner__close" onclick="dismissPaymentBanner()" aria-label="Dismiss">×</button>
+  </div>
+
+  <script>
+  (function () {
+    var banner = document.getElementById('mp-pay-banner');
+    if (!banner) return;
+
+    var p = window.location.pathname;
+    if (p.indexOf('/payments/') === 0 || p.indexOf('/admin/') === 0) {
+      banner.remove();
+      return;
+    }
+
+    if (sessionStorage.getItem('mp_pay_banner_dismissed') === '1') {
+      banner.remove();
+      return;
+    }
+
+    var dismissed = false;
+    var showTimer = null;
+    var hideTimer = null;
+
+    // 7s cycle: 4s visible → 3s hidden → repeat
+    var SHOW_MS = 4000;
+    var HIDE_MS = 3000;
+
+    function showBanner() { if (!dismissed) banner.classList.add('show'); }
+    function hideBanner() { banner.classList.remove('show'); }
+
+    function runShowCycle() {
+      if (dismissed) return;
+      showBanner();
+      hideTimer = setTimeout(runHideCycle, SHOW_MS);
+    }
+    function runHideCycle() {
+      if (dismissed) return;
+      hideBanner();
+      showTimer = setTimeout(runShowCycle, HIDE_MS);
+    }
+
+    // 3s after welcome closes (or 3s after load if welcome already seen)
+    function startBannerLoop() {
+      if (dismissed) return;
+      setTimeout(runShowCycle, 3000);
+    }
+
+    if (localStorage.getItem('mp_welcome_seen')) {
+      startBannerLoop();
+    } else {
+      window.addEventListener('mp:welcome-closed', startBannerLoop, { once: true });
+    }
+
+    window.dismissPaymentBanner = function () {
+      dismissed = true;
+      if (showTimer) clearTimeout(showTimer);
+      if (hideTimer) clearTimeout(hideTimer);
+      banner.classList.remove('show');
+      sessionStorage.setItem('mp_pay_banner_dismissed', '1');
+      setTimeout(function () { banner.remove(); }, 500);
+    };
+  })();
   </script>
   {% endif %}
 

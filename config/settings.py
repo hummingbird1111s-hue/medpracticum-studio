@@ -120,6 +120,7 @@ INSTALLED_APPS = [
     'apps.facilities',
     'apps.logs',
     'apps.reports',
+    'apps.payments',   # ✅ NEW: subscriptions + Paystack
 ]
 
 MIDDLEWARE = [
@@ -145,6 +146,8 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                # ✅ NEW: exposes user_has_subscription + show_payment_banner in every template
+                'apps.payments.context_processors.subscription_status',
             ],
         },
     },
@@ -259,3 +262,15 @@ else:
 
 # How long a password reset link stays valid (in seconds).
 PASSWORD_RESET_TIMEOUT = 60 * 60  # 1 hour
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# ✅ NEW: PAYSTACK — fill these via environment variables when ready
+# ═══════════════════════════════════════════════════════════════════════
+PAYSTACK_PUBLIC_KEY = os.environ.get('PAYSTACK_PUBLIC_KEY', '')
+PAYSTACK_SECRET_KEY = os.environ.get('PAYSTACK_SECRET_KEY', '')
+PAYSTACK_CURRENCY   = 'GHS'
+
+# Subscription plan
+SUBSCRIPTION_PRICE  = 50      # GHS — per semester
+SUBSCRIPTION_MONTHS = 6       # months of access per payment
