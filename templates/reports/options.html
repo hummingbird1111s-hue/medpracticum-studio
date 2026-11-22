@@ -243,13 +243,23 @@
 {% if session.report.pdf_file %}
 <div class="bg-emerald-600 text-white rounded-2xl shadow-md p-5 mb-4">
   <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-    <div>
+    <div class="min-w-0 flex-1">
       <h2 class="text-lg font-bold mb-1">Your report is ready!</h2>
       <p class="text-sm text-emerald-100">
-        Last generated: {{ session.report.generated_at|date:"j M Y, H:i" }} · {{ session.report.options.last_page_count|default:"?" }} pages
+        Last generated: {{ session.report.generated_at|date:"j M Y, H:i" }}
+        · {{ session.report.options.last_page_count|default:"?" }} pages
+        {% if session.report.options.target_pages %}
+          · target {{ session.report.options.target_pages }}
+        {% endif %}
       </p>
+      {# ✅ PHASE 6: persistent note so the user can re-read WHY the target was missed, even after reloading #}
+      {% if session.report.options.last_page_note %}
+      <div class="mt-2 bg-emerald-800 bg-opacity-40 rounded-lg px-3 py-2 text-xs text-emerald-50 leading-relaxed">
+        ℹ️ {{ session.report.options.last_page_note }}
+      </div>
+      {% endif %}
     </div>
-    <div class="flex flex-wrap items-center gap-2">
+    <div class="flex flex-wrap items-center gap-2 flex-shrink-0">
       <a href="{% url 'view_report' %}?attachment_id={{ session.id }}" target="_blank" class="bg-white text-emerald-800 font-semibold rounded-lg px-4 py-2 text-sm hover:bg-emerald-50 transition-colors shadow-sm">
         View / Print PDF
       </a>
@@ -265,6 +275,38 @@
   </div>
 </div>
 {% endif %}
+
+{# ✅ PHASE 6 UX: pre-flight readiness banner — shows BEFORE the user clicks Generate #}
+{% with log_count=session.daily_logs.count comp_count=session.competencies.count %}
+  {% if log_count > 0 %}
+  <div class="{% if log_count < 10 %}bg-amber-50 border-amber-300{% elif log_count < 20 %}bg-blue-50 border-blue-300{% else %}bg-emerald-50 border-emerald-300{% endif %} border-2 rounded-2xl p-4 mb-4 shadow-sm">
+    <div class="flex items-start gap-3">
+      <div class="text-xl flex-shrink-0">
+        {% if log_count < 10 %}⚠️{% elif log_count < 20 %}ℹ️{% else %}✅{% endif %}
+      </div>
+      <div class="flex-1 min-w-0 text-sm">
+        <p class="font-semibold mb-1 {% if log_count < 10 %}text-amber-900{% elif log_count < 20 %}text-blue-900{% else %}text-emerald-900{% endif %}">
+          AI readiness for this attachment
+        </p>
+        <p class="{% if log_count < 10 %}text-amber-800{% elif log_count < 20 %}text-blue-800{% else %}text-emerald-800{% endif %}">
+          You have <strong>{{ log_count }} daily log{{ log_count|pluralize }}</strong>
+          and <strong>{{ comp_count }} competenc{{ comp_count|pluralize:"y,ies" }}</strong> on file.
+          {% if log_count < 10 %}
+            That's a <strong>light log set</strong> — the AI will expand using Ghanaian HIM knowledge,
+            but targets above ~15 pages usually need more source material.
+            <strong>Consider adding more logs before generating</strong> for best results.
+          {% elif log_count < 20 %}
+            That's a <strong>solid log set</strong>. Targets up to ~20 pages should be reachable
+            without heavy expansion.
+          {% else %}
+            <strong>Excellent — plenty of material</strong> for any target page count.
+          {% endif %}
+        </p>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+{% endwith %}
 
 <!-- ===== ATTACHMENT SWITCHER ===== -->
 <div class="bg-white rounded-2xl shadow p-5 mb-4 border border-emerald-100">
@@ -368,13 +410,28 @@
 
 <!-- ===== GENERATE / EDIT ACTION GRID ===== -->
 <div class="mp-action-grid mb-4">
+  {# ✅ PHASE 6: target-pages input added directly to the Official form — no accordion digging #}
   <form method="post" id="gen-official-form" class="bg-emerald-600 rounded-2xl p-5 text-white shadow-lg">
     {% csrf_token %}
     <input type="hidden" name="attachment_id" value="{{ session.id }}">
     <h2 class="text-lg font-bold mb-1">Generate Official Report</h2>
-    <p class="text-sm text-emerald-100 mb-4">
+    <p class="text-sm text-emerald-100 mb-3">
       The AI drafts each section using the hardcoded COHY standard (Times New Roman, 12pt, 1.5 spacing, 1-inch margins).
     </p>
+
+    <label for="official_target_pages" class="block text-xs font-semibold text-emerald-100 mb-1 uppercase tracking-wide">
+      Target pages (optional)
+    </label>
+    <input type="number" name="official_target_pages" id="official_target_pages"
+           min="5" max="50"
+           value="{{ session.report.options.target_pages|default:25 }}"
+           placeholder="25"
+           class="w-full rounded-lg border-0 bg-white text-gray-900 font-semibold px-3 py-2 text-sm mb-2 focus:ring-2 focus:ring-white focus:outline-none">
+    <p class="text-xs text-emerald-200 mb-4 leading-snug">
+      The AI expands the content to reach this length. If your logs are too sparse to hit it,
+      the build message will tell you exactly how many more to add.
+    </p>
+
     <button type="submit" name="action" value="official" id="gen-official-btn"
             class="w-full bg-white text-emerald-800 font-semibold rounded-lg py-2.5 hover:bg-emerald-50 transition disabled:opacity-70 disabled:cursor-wait">
       {% if session.report.pdf_file %}Regenerate Official Report{% else %}Generate Official Report{% endif %}
@@ -741,6 +798,14 @@
     trySetField(['line_spacing', 'line-spacing', 'spacing'], ['1.5', '1.5 lines']);
     trySetField(['page_margin', 'page_margins', 'margins', 'margin'], ['1', '1in', '1 in', '1 inch', '1.0', '2.54', '2.54cm']);
 
+    // ✅ PHASE 6: also pre-fill the target-pages input to the official default
+    var targetInput = form.querySelector('[name="target_pages"]');
+    if (targetInput) {
+      targetInput.value = '25';
+      targetInput.dispatchEvent(new Event('input',  { bubbles: true }));
+      targetInput.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
     var boxes = form.querySelectorAll('input[type="checkbox"]');
     boxes.forEach(function (box) {
       var name = (box.name || '').toLowerCase();
@@ -1027,5 +1092,4 @@
     ov.addEventListener('mouseleave', function () { paused = false; });
   })();
 </script>
-
 {% endblock %}

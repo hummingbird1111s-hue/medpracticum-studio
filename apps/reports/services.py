@@ -338,6 +338,49 @@ class PracticumReportBuilder:
         keys += [k for k in totals if k not in keys and totals[k]]
         return labels, totals, by_week, keys
 
+    @staticmethod
+    def _synthesize_challenges_prose(challenges):
+        """
+        Convert raw student challenge entries into professional academic prose.
+
+        Used ONLY as a fallback when the AI failed to draft the 'challenges'
+        section. Wraps each raw challenge in a sentence frame so the report
+        never shows raw log text verbatim. See services.py fix (Phase 6, part 2).
+        """
+        if not challenges:
+            return ''
+
+        selected = challenges[:4]
+        connectives = [
+            "One of the main challenges I encountered was that ",
+            "I also experienced a situation where ",
+            "Another obstacle was that ",
+            "In addition, I had to deal with the fact that ",
+        ]
+
+        sentences = []
+        for i, ch in enumerate(selected):
+            raw = ch['challenge_text'].rstrip('. ').strip()
+            if not raw:
+                continue
+            # lowercase first char since it's embedded in a sentence
+            if raw[0].isupper() and len(raw) > 1:
+                raw = raw[0].lower() + raw[1:]
+            conn = connectives[i] if i < len(connectives) else "A further challenge was that "
+            sentences.append(
+                f"{conn}{raw}, which disrupted the smooth flow of work and required "
+                f"me to adapt my approach to maintain service delivery."
+            )
+
+        if not sentences:
+            return ''
+
+        opening = (
+            "During my attachment I encountered several challenges that required "
+            "adaptability and problem-solving. "
+        )
+        return opening + ' '.join(sentences)
+
     def _prepare(self):
         if self._data is not None:
             return self._data
@@ -481,7 +524,10 @@ class PracticumReportBuilder:
         facility_type = (self.facility.facility_type if self.facility else 'health facility').lower()
         keywords = f"practicum, clinical attachment, {dept_name.lower()}, {facility_type}"
 
-        default_challenges = '\n\n'.join(ch['challenge_text'] for ch in challenges)
+        # ✅ PHASE 6 FIX (part 2): wrap raw challenges in academic prose.
+        # This runs ONLY when the AI failed to draft 'challenges' — the
+        # effective_content() overlay prefers the AI draft when it exists.
+        default_challenges = self._synthesize_challenges_prose(challenges)
         default_skills = '\n'.join(text for _, text in skills)
 
         facility_profile_text = self._build_facility_profile()
@@ -523,6 +569,15 @@ class PracticumReportBuilder:
 
     # ---------- content cleaning ----------
     def effective_content(self):
+        """
+        Merge template defaults with AI-drafted saved content.
+
+        ⚠️ PHASE 6 ROOT-CAUSE FIX: the old version iterated ONLY over
+        `defaults`, so any section the AI drafted that has no template
+        fallback (activities_performed, recommendations) was silently
+        discarded before rendering. This version iterates over the union
+        of both key sets so every AI draft reaches the report.
+        """
         defaults = self.content_defaults()
         saved = self.saved_content or {}
         title_variants = {
@@ -541,7 +596,14 @@ class PracticumReportBuilder:
             'references':           ['references'],
         }
         result = {}
-        for k, default in defaults.items():
+
+        # Internal keys (e.g. '_ai_note') are never content.
+        all_keys = [k for k in (set(defaults.keys()) | set(saved.keys()))
+                    if not str(k).startswith('_')]
+
+        for k in all_keys:
+            default = defaults.get(k, '')
+
             # Facility Profile: DB-only. If the saved content contains any
             # student narrative ("I was attached", "I assisted", etc.),
             # discard it and fall back to the DB-sourced text.
@@ -553,9 +615,14 @@ class PracticumReportBuilder:
                     result[k] = default
                 continue
 
-            val = str(saved.get(k, '')).strip() or default
+            saved_val = str(saved.get(k, '')).strip()
+            val = saved_val or default
+            if not val:
+                continue
+
             # 1) Strip Markdown heading markers (##, ###, …) at line start.
             val = re.sub(r'^[ \t]*#+[ \t]*', '', val, flags=re.MULTILINE).strip()
+
             # 2) Strip a leading section title line (e.g. "INTRODUCTION\n\n").
             for variant in title_variants.get(k, []):
                 pattern = r'^' + re.escape(variant) + r'[ \t]*\n+'
@@ -563,7 +630,9 @@ class PracticumReportBuilder:
                 if new_val != val:
                     val = new_val.strip()
                     break
+
             result[k] = val
+
         return result
 
     # ---------- charts and QR ----------
@@ -784,12 +853,43 @@ class PracticumReportBuilder:
         final_pages = chosen['pages']
         notes = []
         if target:
+            # ✅ PHASE 6 FIX (part 3): explain WHY the target wasn't reached
+            # and how many more logs are needed — not just "add more detail".
+            log_count = len(self.logs)
+            try:
+                comp_count = self.attachment.competencies.count() if self.attachment else 0
+            except Exception:
+                comp_count = 0
+
             if final_pages == target:
                 notes.append(f'Exactly {target} pages, as you asked.')
             elif grow:
-                notes.append(f'Your logs fill only {final_pages} pages even at the widest spacing, short of your {target}-page target. Add more detail to your daily logs.')
+                if log_count < 10:
+                    gap = 10 - log_count
+                    notes.append(
+                        f'Your report fills only {final_pages} pages at maximum spacing, '
+                        f'short of your {target}-page target. Why: the AI has only '
+                        f'{log_count} daily log(s) and {comp_count} competency area(s) to work '
+                        f'from, which is not enough source material to generate {target} pages. '
+                        f'Add at least {gap} more detailed daily logs (with specific activities, '
+                        f'skills, and challenges for each unit) and regenerate to reach '
+                        f'{target} pages.'
+                    )
+                else:
+                    notes.append(
+                        f'Your report fills only {final_pages} pages at maximum spacing, '
+                        f'short of your {target}-page target. Why: the AI-generated content '
+                        f'totals ~{final_pages} pages. To reach {target}, add more detailed '
+                        f'daily logs — especially for units where you only logged once or twice — '
+                        f'and regenerate so the AI has more source material to expand.'
+                    )
             elif final_pages > target:
-                notes.append(f'The smallest we could make it is {final_pages} pages, above your {target}-page target. Try a smaller font size or narrower margins.')
+                notes.append(
+                    f'The smallest we could fit is {final_pages} pages, above your '
+                    f'{target}-page target. Why: your {log_count} daily entries produce more '
+                    f'content than fits in {target} pages even at the tightest spacing. '
+                    f'Either trim less-important logs, or accept the larger report.'
+                )
             else:
                 notes.append(f'The closest fit was {final_pages} pages (target {target}).')
             if chosen['dropped']:
@@ -1068,8 +1168,8 @@ class PracticumReportBuilder:
 
         After the call, `self._last_pptx_summary` holds:
             { 'slides_built': int, 'slides_selected': int | None,
-              'ai_fallback_count': int, 'template': str }
-        Used by the view to build an accurate success/warning message.
+              'ai_fallback_count': int, 'template': str,
+              'overflow_warnings': list }
         """
         from .pptx_builder import PracticumPptxBuilder
 
@@ -1101,6 +1201,15 @@ class PracticumReportBuilder:
         pptx_bytes = builder.build()
         pdf_bytes = builder.build_pdf()
 
+        # ✅ PHASE 7: persist overflow warnings onto pptx_options so the
+        # template can surface them on subsequent page loads.
+        opts = dict(report.pptx_options or {})
+        if getattr(builder, 'overflow_warnings', None):
+            opts['last_overflow_warnings'] = builder.overflow_warnings
+        else:
+            opts.pop('last_overflow_warnings', None)
+        report.pptx_options = opts
+
         if report.pptx_file:
             report.pptx_file.delete(save=False)
         if report.pptx_pdf_file:
@@ -1111,7 +1220,6 @@ class PracticumReportBuilder:
         report.pptx_file.save(f"{filename}.pptx", ContentFile(pptx_bytes), save=False)
         report.pptx_pdf_file.save(f"{filename}.pdf", ContentFile(pdf_bytes), save=True)
 
-        # ✅ NEW: capture build summary for the view to report back accurately
         sections = (report.pptx_options or {}).get('sections') or {}
         selected_count = sum(1 for v in sections.values() if v) if sections else None
         self._last_pptx_summary = {
@@ -1119,8 +1227,10 @@ class PracticumReportBuilder:
             'slides_selected': selected_count,
             'ai_fallback_count': getattr(builder, 'ai_fallback_count', 0),
             'template': template_key,
+            'overflow_warnings': getattr(builder, 'overflow_warnings', []),
         }
         return report
+
     def save(self):
         pdf_bytes = self.build_pdf()
         docx_bytes = self.build_docx()
@@ -1135,6 +1245,10 @@ class PracticumReportBuilder:
             **self.options,
             'last_page_count': self.result['pages'],
             'last_spacing': self.result['spacing'],
+            # ✅ PHASE 6: persist the "why it fell short" note so the amber
+            # info box on options.html survives page reloads. Without this,
+            # the message only lives for the redirect after generation.
+            'last_page_note': self.result.get('note', ''),
         }
         filename = f"practicum-report-{slugify(self.user.index_number)}"
 

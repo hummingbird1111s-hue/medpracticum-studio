@@ -51,10 +51,19 @@
     0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }
     50%      { box-shadow: 0 0 0 6px rgba(220, 38, 38, 0); }
   }
+
+  /* Spinner for competency transcription */
+  .cmp-spin {
+    display: inline-block; width: 12px; height: 12px;
+    border: 2px solid #d1fae5; border-top-color: #059669;
+    border-radius: 50%; animation: cmpspin .7s linear infinite;
+    vertical-align: -2px; margin-right: 6px;
+  }
+  @keyframes cmpspin { to { transform: rotate(360deg); } }
 </style>
 
 <div class="max-w-4xl mx-auto space-y-6">
-  
+
   <!-- Header -->
   <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
     <div>
@@ -70,7 +79,7 @@
   <div class="space-y-4">
     {% for att in attachments %}
       <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-4">
-        
+
         {% if att.id == active_id %}
           <div class="absolute top-0 left-0 w-1.5 h-full bg-emerald-500"></div>
         {% endif %}
@@ -82,12 +91,12 @@
               <span class="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Active</span>
             {% endif %}
           </div>
-          
+
           <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-600 mb-2">
             <span class="font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">{{ att.active_logs|length }} Logs</span>
             <span>{{ att.start_date|date:"j M Y" }} &mdash; {{ att.end_date|date:"j M Y" }}</span>
           </div>
-          
+
           <p class="text-xs text-gray-400 uppercase tracking-wide">{{ att.academic_year }} &middot; {{ att.report_title|default:"Practicum Report" }}</p>
         </div>
 
@@ -148,6 +157,9 @@
                      cursor:pointer; color:#6b7280; padding:4px 8px;">&times;</button>
     </div>
 
+    <!-- Persistent upload banner (stays visible even when the modal body scrolls) -->
+    <div id="cmp-modal-banner" style="display:none; padding:10px 16px; font-size:13px; font-weight:600; flex-shrink:0;"></div>
+
     <div style="flex:1; overflow-y:auto; padding:16px;">
       <div id="cmp-modal-rows"></div>
       <div style="margin-top:6px;">
@@ -158,7 +170,7 @@
           + Add competency
         </button>
       </div>
-      
+
       <!-- Dual Buttons for Upload / Camera -->
       <div style="margin-top:12px; border:1px dashed #d1d5db; border-radius:10px; padding:12px; background:#f9fafb;">
         <p style="margin:0 0 4px; font-size:13px; font-weight:600; color:#111827;">
@@ -167,12 +179,12 @@
         <p style="margin:0 0 8px; font-size:12px; color:#6b7280;">
           Images, PDFs, Word docs, and text files are supported.
         </p>
-        
+
         <input type="file" id="cmp-modal-upload"
                accept="image/*,.pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
                style="display:none;">
         <input type="file" id="cmp-modal-camera" accept="image/*" capture="environment" style="display:none;">
-        
+
         <div style="display:flex; gap:8px; margin-top:8px;">
           <button type="button" onclick="document.getElementById('cmp-modal-upload').click()" class="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold rounded-lg px-4 py-2 text-sm shadow-sm transition-colors flex items-center gap-2">
             📁 Choose File
@@ -181,7 +193,7 @@
             📷 Take Photo
           </button>
         </div>
-        <span id="cmp-modal-file-status" style="font-size:12px; color:#6b7280; display:block; margin-top:8px;"></span>
+        <span id="cmp-modal-file-status" style="font-size:12px; color:#6b7280; display:block; margin-top:8px; min-height:16px;"></span>
       </div>
 
       <p id="cmp-modal-empty"
@@ -209,26 +221,49 @@
 
 <script>
 (function () {
+  /* ── Element refs ─────────────────────────────────────────── */
   var modal     = document.getElementById('cmp-modal');
   var modalFac  = document.getElementById('cmp-modal-facility');
   var rowsBox   = document.getElementById('cmp-modal-rows');
   var addBtn    = document.getElementById('cmp-modal-add');
-  
-  // Updated to grab the dual buttons
   var fileUpload= document.getElementById('cmp-modal-upload');
   var fileCamera= document.getElementById('cmp-modal-camera');
   var fileStat  = document.getElementById('cmp-modal-file-status');
-  
+  var banner    = document.getElementById('cmp-modal-banner');
   var emptyNote = document.getElementById('cmp-modal-empty');
   var saveBtn   = document.getElementById('cmp-modal-save');
   var cancelBtn = document.getElementById('cmp-modal-cancel');
   var closeBtn  = document.getElementById('cmp-modal-close');
+  var photoBtn  = document.getElementById('btn-modal-take-photo');
 
   var currentAttId = null;
 
-  function openModal()  { modal.style.display = 'flex'; }
-  function closeModal() { modal.style.display = 'none'; }
+  /* ── Banner helpers ───────────────────────────────────────── */
+  function showBanner(type, msg) {
+    if (!banner) return;
+    banner.style.display = 'block';
+    if (type === 'success') {
+      banner.style.background = '#ecfdf5';
+      banner.style.borderBottom = '1px solid #a7f3d0';
+      banner.style.color = '#065f46';
+    } else if (type === 'error') {
+      banner.style.background = '#fef2f2';
+      banner.style.borderBottom = '1px solid #fecaca';
+      banner.style.color = '#b91c1c';
+    } else {
+      banner.style.background = '#fef3c7';
+      banner.style.borderBottom = '1px solid #fde68a';
+      banner.style.color = '#92400e';
+    }
+    banner.textContent = msg;
+  }
+  function hideBanner() { if (banner) banner.style.display = 'none'; }
 
+  /* ── Modal open / close ───────────────────────────────────── */
+  function openModal()  { modal.style.display = 'flex'; }
+  function closeModal() { modal.style.display = 'none'; hideBanner(); }
+
+  /* ── Row helpers ──────────────────────────────────────────── */
   function addRow(text, source) {
     var row = document.createElement('div');
     row.className = 'cmp-row';
@@ -253,11 +288,13 @@
     emptyNote.style.display = has ? 'none' : 'block';
   }
 
+  /* ── Load competencies for an attachment ──────────────────── */
   async function loadFor(attachmentId, facilityName) {
     currentAttId = attachmentId;
     modalFac.textContent = facilityName || '';
     rowsBox.innerHTML = '';
     fileStat.textContent = '';
+    hideBanner();
     openModal();
 
     try {
@@ -276,11 +313,13 @@
         }
       }
     } catch (e) {
+      console.error('[competency load]', e);
       addRow('', 'manual');
     }
     refreshEmpty();
   }
 
+  /* ── Bind modal open buttons ──────────────────────────────── */
   document.querySelectorAll('.cmp-view-btn').forEach(function (btn) {
     btn.addEventListener('click', function () {
       loadFor(btn.dataset.attachmentId, btn.dataset.facility);
@@ -299,26 +338,67 @@
     }
   });
 
-  /* ── Camera Check (Laptop vs Mobile) ─────────────────────── */
-  document.getElementById('btn-modal-take-photo').addEventListener('click', function(e) {
+  /* ── Camera check ─────────────────────────────────────────── */
+  if (photoBtn) {
+    photoBtn.addEventListener('click', function(e) {
       var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       if (isMobile) {
-          fileCamera.click();
+        fileCamera.click();
       } else {
-          var proceed = confirm("On a laptop or desktop, clicking 'Take Photo' will open your file browser.\n\nIf you have a webcam connected, you can usually use your OS camera app to take a photo first, then select that file here.\n\nClick OK to open the file browser.");
-          if (proceed) {
-              fileCamera.click();
-          }
+        var proceed = confirm("On a laptop or desktop, clicking 'Take Photo' will open your file browser.\n\nIf you have a webcam connected, you can usually use your OS camera app to take a photo first, then select that file here.\n\nClick OK to open the file browser.");
+        if (proceed) fileCamera.click();
       }
-  });
+    });
+  }
 
-  // ── Unified Upload / Camera → OCR ────────────────────────
+  /* ── Transcribing dynamics ────────────────────────────────── */
+  function startTranscribing(statusEl) {
+    var stages = [
+      'Uploading file…',
+      'Reading contents…',
+      'Transcribing text…',
+      'Extracting competencies…',
+      'Almost there…'
+    ];
+    var idx = 0;
+    function render() {
+      statusEl.innerHTML = '<span class="cmp-spin"></span><span style="color:#065f46;">' + stages[idx] + '</span>';
+    }
+    render();
+    var timer = setInterval(function() {
+      idx++;
+      if (idx >= stages.length) return;
+      render();
+    }, 2500);
+    return {
+      stop:    function() { clearInterval(timer); },
+      success: function(count, total) {
+        clearInterval(timer);
+        var plural = (count === 1) ? 'competency' : 'competencies';
+        var suffix = (typeof total === 'number' && total > count) ? ' (' + total + ' total)' : '';
+        statusEl.innerHTML = '<span style="color:#059669; font-weight:600;">✅ Added ' + count + ' ' + plural + suffix + '</span>';
+      },
+      empty:   function() {
+        clearInterval(timer);
+        statusEl.innerHTML = '<span style="color:#b45309; font-weight:600;">⚠️ No text found — try a clearer image or file.</span>';
+      },
+      error:   function(msg) {
+        clearInterval(timer);
+        statusEl.innerHTML = '<span style="color:#dc2626; font-weight:600;">⚠️ ' + msg + '</span>';
+      }
+    };
+  }
+
+  /* ── Upload / Camera → OCR ────────────────────────────────── */
   async function handleFileUpload(fileObj) {
     if (!fileObj) return;
-    fileStat.textContent = 'Transcribing…';
+    hideBanner();
+    var job = startTranscribing(fileStat);
+    showBanner('info', '⏳ Working on your file — this usually takes 10–20 seconds…');
+
     var fd = new FormData();
     fd.append('image', fileObj);
-    
+
     try {
       var res = await fetch('/attachments/competencies/upload-image/', {
         method: 'POST',
@@ -326,35 +406,61 @@
         credentials: 'same-origin',
         headers: { 'X-CSRFToken': '{{ csrf_token }}' },
       });
-      var data = await res.json().catch(function () { return {}; });
-      
-      if (!res.ok) {
-        fileStat.textContent = data.error || 'Upload failed';
+
+      // Detect non-JSON responses (auth redirects, HTML errors)
+      var ct = (res.headers.get('content-type') || '').toLowerCase();
+      if (ct.indexOf('application/json') === -1) {
+        console.error('[competency upload] non-JSON response', res.status, res.url);
+        job.error('Server error (' + res.status + '). Please refresh and try again.');
+        showBanner('error', '⚠️ Server did not return a JSON response (' + res.status + ')');
         return;
       }
-      
+
+      var data = await res.json().catch(function () { return {}; });
+
+      if (!res.ok) {
+        console.error('[competency upload] server error', res.status, data);
+        var msg = data.error || ('Upload failed (' + res.status + ')');
+        job.error(msg);
+        showBanner('error', '⚠️ ' + msg);
+        return;
+      }
+
       var lines = (data.lines && data.lines.length)
         ? data.lines
         : (data.text || '').split(/\r?\n/).map(function (s) { return s.trim(); }).filter(Boolean);
-        
+
+      if (!lines.length) {
+        job.empty();
+        showBanner('info', 'No text was detected in that file. Try a clearer image or a different file.');
+        return;
+      }
+
       lines.forEach(function (line) {
         addRow(line.length > 500 ? line.slice(0, 500) : line, 'ocr');
       });
-      fileStat.textContent = 'Added ' + lines.length + ' line(s).';
-      
-    } catch (e) {
-      fileStat.textContent = 'Network error.';
+
+      var total = rowsBox.querySelectorAll('.cmp-input').length;
+      job.success(lines.length, total);
+      var plural = (lines.length === 1) ? 'competency' : 'competencies';
+      showBanner('success', '✅ Added ' + lines.length + ' ' + plural + ' from file — ' + total + ' total in this attachment. Click "Save competencies" to keep them.');
+
+      // Scroll new rows into view
+      try { rowsBox.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (_) {}
+    } catch (err) {
+      console.error('[competency upload]', err);
+      job.error('Network error. Check your connection and try again.');
+      showBanner('error', '⚠️ Network error — could not reach the server.');
     } finally {
       fileUpload.value = '';
       fileCamera.value = '';
     }
   }
 
-  // Bind both buttons
   fileUpload.addEventListener('change', function() { handleFileUpload(this.files[0]); });
   fileCamera.addEventListener('change', function() { handleFileUpload(this.files[0]); });
 
-
+  /* ── Save competencies ────────────────────────────────────── */
   saveBtn.addEventListener('click', async function () {
     if (!currentAttId) return;
     var items = [];
@@ -387,6 +493,7 @@
       }
       closeModal();
     } catch (e) {
+      console.error('[competency save]', e);
       alert('Network error while saving.');
     } finally {
       saveBtn.disabled = false;
@@ -403,7 +510,7 @@
     if (e.key === 'Escape' && modal.style.display === 'flex') closeModal();
   });
 
-  // ── Voice recorder for competency inputs ─────────────────
+  /* ── Voice recorder for competency inputs ─────────────────── */
   (function () {
     var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {

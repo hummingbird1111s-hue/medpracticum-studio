@@ -1,6 +1,7 @@
 import base64
 import io
 import logging
+import math
 import re
 
 logger = logging.getLogger(__name__)
@@ -66,14 +67,27 @@ class PracticumPptxBuilder:
     def __init__(self, report_builder, template_key='cohy_classic'):
         from .pptx_templates import get_template
         self.rb = report_builder
-        self.template = get_template(template_key)
+        # Shallow copy so font overrides don't leak into the shared template dict.
+        self.template = {**get_template(template_key)}
         self.template_key = self.template['key']
         self.prs_w = None
         self.prs_h = None
         self.show_logo = bool(self.template.get('has_logo') or self.template.get('is_him'))
-        # ✅ NEW: build counters (populated during build / _slide_specs)
         self.slides_built_count = 0
         self.ai_fallback_count = 0
+        # ✅ PHASE 7: warnings populated during _render_content, surfaced post-build.
+        self.overflow_warnings = []
+        self._apply_font_overrides()
+
+    def _apply_font_overrides(self):
+        """Apply user-selected font families on top of the template defaults."""
+        opts = self._opts()
+        heading = (opts.get('heading_font_family') or '').strip()
+        body = (opts.get('body_font_family') or '').strip()
+        if heading:
+            self.template['heading_font'] = heading
+        if body:
+            self.template['body_font'] = body
 
     # ---------------- pptx_options accessors ----------------
     def _opts(self):
@@ -94,9 +108,9 @@ class PracticumPptxBuilder:
             return 220
 
     def _font_size(self):
-        """Body font size (pt) for content-slide bullets. 10–28 pt range."""
+        """Body font size (pt) for content-slide bullets. 10–44 pt range."""
         try:
-            return max(10, min(28, int(self._opts().get('font_size', 18))))
+            return max(10, min(44, int(self._opts().get('font_size', 18))))
         except (TypeError, ValueError):
             return 18
 
@@ -135,7 +149,6 @@ class PracticumPptxBuilder:
                     break
             if out:
                 return out
-        # ✅ NEW: fallback path — count this slide as using fallback content
         self.ai_fallback_count += 1
         return _trim_to_slide(fallback_items, max_items=max_items, max_chars=max_chars)
 
@@ -228,7 +241,6 @@ class PracticumPptxBuilder:
                 },
             })
 
-        # ✅ NEW: record how many slides the builder actually emitted
         self.slides_built_count = len(specs)
         return specs
 
@@ -265,6 +277,13 @@ class PracticumPptxBuilder:
                         slide.notes_slide.notes_text_frame.text = note
                     except Exception:
                         pass
+
+        if self.overflow_warnings:
+            logger.warning(
+                "PPTX build produced %d slide(s) with potential overflow: %s",
+                len(self.overflow_warnings),
+                [w['slide'] for w in self.overflow_warnings],
+            )
 
         buf = io.BytesIO()
         prs.save(buf)
@@ -396,6 +415,21 @@ class PracticumPptxBuilder:
                   color=title_color, font=t['heading_font'], align=PP_ALIGN.CENTER,
                   first=True, space_after=0)
 
+    def _estimate_content_height(self, items, font_size, space_after, box_width_pt):
+        """
+        Rough estimate of the rendered text-block height in points.
+        Errs on the side of "might overflow" so warnings are safe.
+        """
+        char_width_pt = font_size * 0.52
+        line_height_pt = font_size * 1.25
+        total = 0
+        for item in items:
+            text_len = len(item) + 3  # +3 for "•  " prefix
+            chars_per_line = max(1, int(box_width_pt / char_width_pt))
+            lines = math.ceil(text_len / chars_per_line)
+            total += lines * line_height_pt + space_after
+        return total
+
     def _render_content(self, slide, data):
         W, H = self.prs_w, self.prs_h
         t = self.template
@@ -459,12 +493,31 @@ class PracticumPptxBuilder:
         bullet = bool(data.get('bullet'))
         body_color = t.get('text_color', '1A1A1A')
         body_size = self._font_size()
+        space_after = 16 if center_vertically else 14
+
+        # ✅ PHASE 7: overflow detection — estimate rendered height vs. box height
+        try:
+            box_width_pt = float(W - Inches(1.8)) / 12700     # EMU → points
+            box_height_pt = float(body_h) / 12700
+            est_height_pt = self._estimate_content_height(items, body_size, space_after, box_width_pt)
+            if est_height_pt > box_height_pt * 0.98:          # 2% tolerance
+                self.overflow_warnings.append({
+                    'slide': data.get('heading', 'Untitled'),
+                    'items': len(items),
+                    'font_size': body_size,
+                    'estimated_pt': round(est_height_pt),
+                    'available_pt': round(box_height_pt),
+                    'overflow_pct': round(100 * (est_height_pt - box_height_pt) / box_height_pt),
+                })
+        except Exception:
+            # A warning should never break the build.
+            pass
 
         for i, item in enumerate(items):
             _add_para(body_tf, item, size=body_size,
                       color=body_color, font=t['body_font'],
                       first=(i == 0), bullet=bullet,
-                      space_after=16 if center_vertically else 14)
+                      space_after=space_after)
 
     def _render_thankyou(self, slide, data):
         W, H = self.prs_w, self.prs_h

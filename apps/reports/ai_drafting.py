@@ -19,91 +19,128 @@ logger = logging.getLogger(__name__)
 # ============================================================
 # Report drafting (prose sections — used by the PDF/Word flow)
 # ============================================================
-
 # NOTE: 'facility_profile' is deliberately NOT drafted by the AI.
 # The Facility Profile is built purely from the facility record in the
 # database (see PracticumReportBuilder._build_facility_profile).
+#
+# LENGTH PHILOSOPHY (v4):
+#   The old prompts hard-capped sections at 80–200 words, which caused the
+#   AI to under-write and the report to fall short of the user's page target.
+#   These prompts instead give the AI a per-section WORD TARGET computed from
+#   the user's chosen page count — under-writing is now treated as failure.
+#   The only remaining hard constraints are STRUCTURAL (bullet count, sub-
+#   heading organization), never word count.
+
 DRAFT_SECTIONS = [
     ('abstract', 'Abstract',
-     "Write a single academic paragraph (150-200 words, third person). "
-     "Synthesize the overall experience. Cover: purpose, facility, key units, skills, and main outcome. "
-     "Reference at least two specific competency areas by name. "
-     "CRITICAL: Do NOT copy raw logs. Refine the language to sound professional and academic. "
-     "Do NOT include a keyword line or a heading."),
+     "Write a single academic paragraph in third person. "
+     "Synthesize the whole experience: purpose, facility, units rotated, main skills developed, "
+     "and primary outcome. Explicitly name AT LEAST THREE of the student's competency areas. "
+     "Cover the arc of the attachment from start to finish. "
+     "Do NOT copy raw logs. Refine every sentence into academic language. "
+     "Do NOT include a heading or keyword line."),
 
     ('acknowledgments', 'Acknowledgments',
-     "Write one short formal paragraph thanking the facility, the clinical supervisor (if named), and the College. "
-     "Use the first-person singular ('I'). Check grammar carefully. Do NOT include a heading."),
+     "Write 2-3 formal paragraphs thanking the facility, the clinical supervisor (if named), "
+     "the staff of each major unit the student rotated through, and the College. "
+     "Use first-person singular ('I'). Each paragraph should be 3-5 sentences. "
+     "Include a brief reflection on how the support received contributed to the student's learning. "
+     "Check grammar rigorously. Do NOT include a heading."),
 
     ('introduction', 'Introduction',
-     "Write exactly 2 short paragraphs (Max 100 words total). Be concise but highly academic. "
-     "Use the first-person voice ('I'). Introduce the purpose of the attachment, the facility name, location, and period. "
-     "Briefly mention the units rotated through. "
-     "CRITICAL: Do NOT refer to yourself as 'the student' or 'the intern'. Write as if you are the student reflecting on the experience. "
+     "Write 3-4 substantial paragraphs using first-person voice ('I'). "
+     "Paragraph 1: purpose of the attachment, facility name, location, period, and why HIM practice matters in Ghana. "
+     "Paragraph 2: units rotated through, with one specific activity per unit to show breadth. "
+     "Paragraph 3: the competency areas the student targeted and how this report will document achievement of each. "
+     "Paragraph 4: the structure of the report that follows (chapter by chapter, in one line). "
+     "CRITICAL: Do NOT refer to yourself as 'the student' or 'the intern'. Write AS the student. "
      "Do NOT use bullet points and do NOT include a heading."),
 
     ('activities_performed', 'Activities Performed',
-     "Write an introductory sentence. Then create sub-headings for each unit (e.g., 'Outpatient Department', 'RCH Unit'). "
-     "Under each sub-heading, write 1 descriptive paragraph. Use first-person ('I'). "
-     "CRITICAL: DO NOT just paste the raw daily logs. Synthesize and refine the activities into professional narratives "
-     "(e.g., instead of 'entered NHIS claims', write 'I managed the processing of NHIS claims for facility reimbursement'). "
-     "If the student only logged one activity for a unit, EXPAND it into a full, realistic paragraph using your knowledge "
-     "of typical Ghanaian HIM workflows — but stay truthful to what they actually did. "
+     "Write a 2-sentence opening paragraph framing the attachment's activities. "
+     "Then create a SUB-HEADING for EACH unit the student rotated through (use the unit names from the logs). "
+     "Under EACH sub-heading, write 2-3 substantial paragraphs. "
+     "Each paragraph MUST: (a) describe specific activities performed in that unit, "
+     "(b) name the competency area being developed there, "
+     "(c) mention the tools/systems used (LHIMS, DHIMS, NHIS claims portal, ICD-10 coding, etc.) where relevant, "
+     "and (d) use first-person voice ('I'). "
+     "CRITICAL: DO NOT paste raw daily logs. Synthesize and refine into professional academic narrative. "
+     "If a unit was logged only once or twice, EXPAND into a full realistic narrative using your knowledge "
+     "of typical Ghanaian HIM workflows for that unit type — but stay truthful to what the student actually did. "
      "Do NOT include the main heading."),
 
     ('skills_acquired', 'Skills Acquired',
-     "Provide exactly 4-5 specific skills acquired. Do NOT write an introductory sentence. "
-     "Output ONLY the list items, one per line. "
+     "Provide 8-10 specific skills the student developed. Output ONLY the list items, one per line. "
      "CRITICAL: ABSOLUTELY NO numbers, hyphens, or asterisks at the start of the line. "
-     "Use the format: <b>Skill Name</b>: Brief description. Use first-person ('I'). "
-     "Refine the logs to create professional statements. Check grammar strictly. Do NOT include a heading."),
+     "Use the format: <b>Skill Name</b>: 2-3 sentence description showing HOW the skill was developed. "
+     "Each description must reference a specific unit or activity from the logs. "
+     "Use first-person ('I'). Explicitly connect each skill back to one of the listed competency areas where natural. "
+     "Do NOT include a heading."),
 
     ('workshops', 'Workshops',
-     "Write exactly 1 short paragraph (Max 60 words) describing the workshops attended. If none were attended, state that no formal "
-     "workshops were held, but practical on-the-job training was received. Use first-person ('I'). Do NOT include a heading."),
+     "Write exactly 2 paragraphs. "
+     "Paragraph 1: describe each workshop or training session attended (date, topic, presenter if known), "
+     "and the specific skills or knowledge gained from each. "
+     "Paragraph 2: reflect on how the workshops complemented the practical experience and connected to the competencies. "
+     "If NO formal workshops were attended, write 2 paragraphs on the practical on-the-job training received instead. "
+     "Use first-person ('I'). Do NOT include a heading."),
 
     ('lessons_learnt', 'Lessons Learnt',
-     "Provide exactly 5-7 short bullet points detailing key lessons. Do NOT write an introductory sentence. "
-     "Output ONLY the list items, one per line. "
+     "Provide 10-12 detailed bullet points. Output ONLY the list items, one per line. "
      "CRITICAL: ABSOLUTELY NO numbers, hyphens, or asterisks at the start of the line. "
-     "Use the first-person voice ('I'). Each point must be 1-2 sentences max. "
-     "Do NOT duplicate the Skills Acquired section. Focus on broader insights (confidentiality, teamwork, data-driven decision making). "
+     "Each point MUST be 3-4 full sentences that develop a single idea. "
+     "Use first-person voice ('I'). "
+     "EACH LESSON MUST EXPLICITLY NAME OR CLEARLY CONNECT TO AT LEAST ONE OF THE STUDENT'S COMPETENCY AREAS. "
+     "Do NOT duplicate the Skills Acquired section — focus on broader insights: patient confidentiality, "
+     "teamwork and communication, data-driven decision making, professional ethics, workflow efficiency, "
+     "and the realities of HIM practice in Ghana. "
      "Do NOT include a heading."),
 
     ('observation', 'Observations',
-     "Write exactly 1 professional paragraph (Max 80 words) synthesizing your observations about workflows, staffing, or record systems. "
-     "Use first-person ('I'). "
-     "CRITICAL: YOU ARE FORBIDDEN FROM LISTING RAW LOG ENTRIES. You must weave the observations into a cohesive, academic narrative. "
-     "Example: If the logs mention 'electronic system' and 'high patient volume', you must write: "
-     "'I observed that while the electronic health information system streamlined data management, the high patient volume often led to bottlenecks during peak hours, revealing gaps in workflow efficiency.' "
+     "Write 3-4 substantial paragraphs synthesizing observations about workflows, staffing, "
+     "record systems, data quality, and interdepartmental coordination. Use first-person ('I'). "
+     "Weave specific details from the logs into a cohesive academic narrative. "
+     "Connect observations to the competency areas where relevant. "
+     "CRITICAL: YOU ARE FORBIDDEN FROM LISTING RAW LOG ENTRIES. "
+     "Example synthesis: if logs mention 'electronic system' and 'high patient volume', write "
+     "'I observed that while the LHIMS electronic health information system streamlined data management, "
+     "the high patient volume often led to bottlenecks during peak hours, revealing gaps in workflow efficiency.' "
      "Do NOT include a heading."),
 
     ('challenges', 'Challenges',
-     "Write EXACTLY 1 short paragraph. HARD LIMIT: 120 words TOTAL. "
-     "Use first-person ('I'). Do NOT include a heading, sub-heading, or bullet list. "
-     "Do NOT split into multiple paragraphs.\n"
-     "STRUCTURE (follow exactly):\n"
-     "- Identify exactly TWO challenges and no more: "
-     "(1) high patient volume causing congestion and delayed record retrieval, and "
-     "(2) illegible handwriting in physical records complicating NHIS claims entry.\n"
-     "- Write 2-3 sentences per challenge. Do NOT introduce a third challenge. "
-     "Do NOT repeat the same phrases (e.g. avoid repeating 'undermining the reliability', "
-     "'highlighted systemic gaps', or 'warrant targeted interventions').\n"
-     "EXAMPLE (use this as a length and tone guide, do not copy verbatim): "
-     "'I faced two main challenges during the attachment. First, the overwhelming patient volume often led to congestion at the records desk, which delayed the retrieval of folders and slowed down service delivery. Second, illegible handwriting in the physical registers complicated the accurate entry of NHIS claims and required meticulous cross-checking before submission.'\n"
-     "FORBIDDEN: more than 1 paragraph. FORBIDDEN: more than 120 words. FORBIDDEN: more than 2 challenges."),
+     "Write 3-4 substantial paragraphs about the challenges the student ACTUALLY faced. "
+     "CRITICAL FIRST STEP: Read the daily logs below and identify the SPECIFIC challenges the student recorded. "
+     "If the logs recorded challenges, SYNTHESIZE and REFINE them into academic prose — do NOT copy verbatim. "
+     "If the logs recorded NO challenges, generate 2-3 realistic ones based on the units and competencies listed, "
+     "drawing on typical Ghanaian HIM practice (patient congestion, illegible handwriting on paper records, "
+     "network downtime on LHIMS, incomplete NHIS claim documentation, storage space limitations). "
+     "STRUCTURE: Paragraph 1 introduces the challenges generally and their significance. "
+     "Paragraphs 2-3 each describe ONE specific challenge in detail — what happened, its impact on the work, "
+     "and how the student responded. Paragraph 4 (optional) reflects on what these challenges reveal about the facility's systems. "
+     "Use first-person ('I'). Do NOT include a heading or bullet list. "
+     "CRITICAL: NEVER paste raw log text. Always transform into polished academic English."),
 
     ('recommendations', 'Recommendations',
-     "Write an introductory sentence, then provide a numbered list of 4-5 actionable recommendations for the facility "
-     "and the college. Ensure they directly address the challenges and competencies mentioned earlier. "
-     "Check grammar carefully. Do NOT include a heading."),
+     "Write an opening paragraph of 2-3 sentences framing the recommendations. "
+     "Then provide a numbered list of 6-8 actionable recommendations. "
+     "Split them into two clear groups: (A) 3-4 for the FACILITY, (B) 3-4 for the COLLEGE. "
+     "EACH recommendation must directly address a challenge or competency mentioned earlier in the report. "
+     "Each recommendation should be 2-3 sentences — specify WHO should do WHAT and WHY it matters. "
+     "Use professional academic tone (first-person plural 'we' or third-person 'the facility should'). "
+     "Do NOT include a heading."),
 
     ('conclusion', 'Conclusion',
-     "Write exactly 1 short paragraph (Max 100 words). Summarize the experience, units rotated, and readiness for professional practice. "
-     "End with a brief thank you. Use first-person ('I') and refine the grammar to sound highly professional. Do NOT include a heading."),
+     "Write 3 substantial paragraphs using first-person ('I'). "
+     "Paragraph 1: summarize the overall experience, units rotated, and skills gained. "
+     "Paragraph 2: reflect on how the practicum prepares the student for professional HIM practice "
+     "and connect back to the competency areas. "
+     "Paragraph 3: express gratitude to the facility, staff, and College, and outline next steps in "
+     "the student's academic and professional journey. "
+     "Do NOT include a heading."),
 
     ('references', 'References',
-     "APA-style reference list for any sources you cite. If you cite nothing, return an empty response. Do NOT include a heading."),
+     "APA-style reference list for any sources you cite. If you cite nothing, return an empty response. "
+     "Do NOT include a heading."),
 ]
 
 DEFAULT_MAX_SECONDS = 90  # Capped at 90s so it doesn't trigger Gunicorn timeouts
@@ -112,6 +149,7 @@ DEFAULT_MAX_SECONDS = 90  # Capped at 90s so it doesn't trigger Gunicorn timeout
 # ============================================================
 # Presentation drafting (slide bullets + speaker notes)
 # ============================================================
+# Unchanged — PPTX output is intentionally terse.
 
 PPTX_DRAFT_SECTIONS = [
     ('pptx_intro_bullets', 'Slide: Introduction',
@@ -289,6 +327,47 @@ def get_ai_reply_with_image(prompt, image_bytes, mime='image/jpeg'):
 
 
 # ============================================================
+# Per-section word budgets — computed from target_pages
+# ============================================================
+
+def _compute_word_budget(target_pages):
+    """
+    Compute per-section word targets so the total prose fills the user's
+    target page count. ~300 words per page of prose (leaving room for
+    cover, TOC, tables, figures, and references).
+
+    Returns a dict: {section_key: word_target_int}
+    """
+    if not target_pages or target_pages < 5:
+        # Fallback — short report default
+        return {
+            'abstract': 180, 'acknowledgments': 120, 'introduction': 250,
+            'activities_performed': 800, 'skills_acquired': 350, 'workshops': 100,
+            'lessons_learnt': 350, 'observation': 250, 'challenges': 250,
+            'recommendations': 250, 'conclusion': 180,
+        }
+
+    total_prose_words = int(target_pages * 300)
+
+    # Distribution percentages (sum ≈ 1.0)
+    distribution = {
+        'abstract':             0.045,   # 25 pages → ~340
+        'acknowledgments':      0.030,   # 25 pages → ~225
+        'introduction':         0.070,   # 25 pages → ~525
+        'activities_performed': 0.340,   # 25 pages → ~2,550 (the biggest section)
+        'skills_acquired':      0.115,   # 25 pages → ~860
+        'workshops':            0.025,   # 25 pages → ~190
+        'lessons_learnt':       0.115,   # 25 pages → ~860
+        'observation':          0.075,   # 25 pages → ~560
+        'challenges':           0.070,   # 25 pages → ~525
+        'recommendations':      0.060,   # 25 pages → ~450
+        'conclusion':           0.050,   # 25 pages → ~375
+    }
+    return {section: int(total_prose_words * pct)
+            for section, pct in distribution.items()}
+
+
+# ============================================================
 # Shared quality rules (used by both drafting functions)
 # ============================================================
 
@@ -311,6 +390,9 @@ _QUALITY_RULES = (
     "13. SIMPLE ENGLISH. Write in clear, accessible English. Avoid Latin abbreviations, complex "
     "subordinate clauses, and academic jargon when a plain word works. (Exception: technical HIM terms "
     "like NHIS, DHIMS, LHIMS, ICD-10 are fine and should be used.)\n"
+    "14. TARGET WORD COUNT IS REAL. The section instruction below includes a TARGET WORD COUNT. "
+    "Write within ±20% of that target. Under-writing is treated as FAILURE — the report will fall "
+    "short of the user's page target and they will be disappointed. When in doubt, write MORE, not less.\n"
 )
 
 
@@ -359,42 +441,46 @@ def draft_sections_with_ai(session, samples=None, target_pages=25):
                 "\n".join(f"- {n}" for n in notes) + "\n"
             )
 
-    length_instruction = "Match the length specified in the section instruction."
-    if target_pages and target_pages >= 20:
-        length_instruction = (
-            "Where the section instruction does NOT specify a cap, write in a "
-            "detailed, comprehensive academic style with substantial paragraphs "
-            "suitable for a 20+ page report."
-        )
-    elif target_pages and target_pages < 10:
-        length_instruction = (
-            "Keep the writing concise and brief, as the target report length is short."
-        )
-
-    # Dynamic Page-Target & Log Volume Warning
+    # Log volume affects how aggressively the AI must expand
     log_count = session.daily_logs.filter(is_deleted=False).count()
-    length_rule = (
-        f"\nLENGTH & DETAIL RULE: The student is targeting approximately {target_pages} pages total. "
-        "Expand the provided logs into detailed, professional, and descriptive narratives to achieve this length. "
-    )
     if log_count < 5:
-        length_rule += (
-            "\nCRITICAL (EXPANSION REQUIRED): The student has very few daily logs. You MUST heavily expand on the units and activities "
-            "mentioned using your extensive knowledge of Ghanaian Health Information Management workflows. "
-            "Invent realistic, professional activities consistent with the facilities and units mentioned, "
-            "to ensure the report reaches the targeted page count. Do NOT copy raw logs verbatim."
+        expansion_rule = (
+            "\nCRITICAL (EXPANSION REQUIRED): The student has very few daily logs "
+            f"({log_count}). You MUST heavily expand on the units and activities "
+            "mentioned using your extensive knowledge of Ghanaian Health Information "
+            "Management workflows. Invent realistic, professional activities consistent "
+            "with the facilities and units mentioned, to ensure the report reaches the "
+            "targeted page count. Do NOT copy raw logs verbatim.\n"
         )
+    elif log_count < 15:
+        expansion_rule = (
+            f"\nNOTE: The student has {log_count} daily logs — enough for synthesis but "
+            "not rich. Where a section seems thin, use your HIM knowledge to expand "
+            "into a fuller narrative. Stay truthful to what they did.\n"
+        )
+    else:
+        expansion_rule = ''
 
-    # Determine a warning note for the final build message
     note = ""
     if log_count < 5:
-        note = f"Note: You have very few logs ({log_count}). The AI expanded the content, but adding more logs will improve depth and help reach your {target_pages}-page target."
+        note = (
+            f"Note: You have very few logs ({log_count}). The AI expanded the content, "
+            f"but adding more logs will improve depth and help reach your "
+            f"{target_pages}-page target."
+        )
     elif log_count < 15:
-        note = f"Note: If the generated report falls short of your {target_pages}-page target, adding more daily logs will provide the AI with more material to synthesize."
+        note = (
+            f"Note: If the generated report falls short of your {target_pages}-page "
+            f"target, adding more daily logs will provide the AI with more material "
+            f"to synthesize."
+        )
 
     drafts = {}
     if note:
         drafts['_ai_note'] = note
+
+    # Compute per-section word budgets from the user's page target
+    budgets = _compute_word_budget(target_pages)
 
     max_seconds = getattr(settings, 'REPORT_AI_DRAFTING_MAX_SECONDS', DEFAULT_MAX_SECONDS)
     unique_seed = random.randint(1000, 9999)
@@ -412,29 +498,44 @@ def draft_sections_with_ai(session, samples=None, target_pages=25):
             )
             break
 
+        word_budget = budgets.get(key, 0)
+        budget_hint = ""
+        if word_budget:
+            lo = int(word_budget * 0.8)
+            hi = int(word_budget * 1.2)
+            budget_hint = (
+                f"\nTARGET WORD COUNT FOR THIS SECTION: approximately {word_budget} words "
+                f"(acceptable range {lo}-{hi}). Write enough to fill your share of the "
+                f"{target_pages}-page report. Under-writing is a FAILURE.\n"
+            )
+
         prompt = (
-            f"You are an expert academic editor drafting the '{title}' section of a health-information "
-            f"practicum report for a Ghanaian college (COHY).\n\n"
+            f"You are an expert academic editor drafting the '{title}' section of a "
+            f"health-information practicum report for a Ghanaian college (COHY).\n\n"
             f"CRITICAL RULES:\n"
-            f"1. FIRST-PERSON VOICE: Write strictly in the first-person ('I'). Do NOT use phrases like 'the student', 'the trainee', or 'the intern'. The report MUST sound like the user wrote it themselves.\n"
-            f"2. READ ALL DATA: Carefully review the Student Data below, including facility details, logs, workshops, and competencies.\n"
-            f"3. REFINE AND ENHANCE: NEVER copy raw daily logs verbatim. Synthesize the information into polished, professional academic paragraphs.\n"
-            f"4. GRAMMAR: Check grammar, spelling, and sentence flow rigorously. Sentences must sound professional and mature.\n"
-            f"5. DO NOT INVENT: Use ONLY the student data below for personal details, but for standard hospital units, you may use general knowledge of the Ghanaian health system.\n"
-            f"6. FORMATTING: Follow the formatting instructions for this specific section strictly. Return ONLY the section text.\n"
-            f"7. LENGTH: {length_instruction}\n"
-            f"7b. SECTION CAP OVERRIDE (absolute): If the section instruction below specifies "
-            f"a maximum word count, a maximum number of paragraphs, a maximum number of sentences, "
-            f"or an exact count (e.g. 'exactly 2 paragraphs', 'Max 150 words', 'exactly 1 paragraph'), "
-            f"that cap takes ABSOLUTE PRECEDENCE over the general length guidance above. "
-            f"Obey the section cap even if it contradicts rule 7. Exceeding a section cap is a FAILURE.\n"
-            f"8. UNIQUENESS (Seed: {unique_seed}): Write with a fresh perspective. Avoid generic templates. "
-            f"Vary your sentence structure and vocabulary completely from standard reports to ensure this report feels unique and personalized.\n"
+            f"1. FIRST-PERSON VOICE: Write strictly in the first-person ('I'). Do NOT use "
+            f"phrases like 'the student', 'the trainee', or 'the intern'. The report MUST "
+            f"sound like the user wrote it themselves.\n"
+            f"2. READ ALL DATA: Carefully review the Student Data below, including facility "
+            f"details, logs, workshops, and competencies.\n"
+            f"3. REFINE AND ENHANCE: NEVER copy raw daily logs verbatim. Synthesize the "
+            f"information into polished, professional academic paragraphs.\n"
+            f"4. GRAMMAR: Check grammar, spelling, and sentence flow rigorously. Sentences "
+            f"must sound professional and mature.\n"
+            f"5. DO NOT INVENT: Use ONLY the student data below for personal details, but "
+            f"for standard hospital units, you may use general knowledge of the Ghanaian "
+            f"health system.\n"
+            f"6. STRUCTURE: Follow the structural requirements in the section instruction "
+            f"(bullet count, sub-heading organization, format). These are authoritative.\n"
+            f"7. UNIQUENESS (Seed: {unique_seed}): Write with a fresh perspective. Avoid "
+            f"generic templates. Vary your sentence structure and vocabulary completely "
+            f"from standard reports to ensure this report feels unique and personalized.\n"
             f"{_QUALITY_RULES}"
             f"{competencies_rule}"
-            f"\n{length_rule}\n"
+            f"{budget_hint}"
+            f"{expansion_rule}"
             f"\n{format_notes}\n"
-            f"Section instructions (these are authoritative and override any general guidance above):\n"
+            f"Section instructions (authoritative):\n"
             f"{instruction}\n\n"
             f"--- STUDENT DATA ---\n{context}\n-------------------\n"
         )
@@ -451,16 +552,19 @@ def draft_sections_with_ai(session, samples=None, target_pages=25):
 
         # Clean up echoed context or markdown headers
         reply = re.sub(r'^#+\s+.*$', '', reply, flags=re.MULTILINE).strip()
-        
-        # Don't save empty replies
+
         if reply:
             drafts[key] = reply
-            logger.debug('AI drafted section %r (%d chars)', key, len(reply))
+            logger.debug('AI drafted section %r (%d chars ≈ %d words)',
+                         key, len(reply), len(reply.split()))
 
     if drafts:
         logger.info(
-            'AI drafting complete: %d/%d sections drafted in %.1fs (competencies=%d)',
-            len(drafts), total, time.time() - total_start, len(competencies),
+            'AI drafting complete: %d/%d sections drafted in %.1fs (competencies=%d, '
+            'target_pages=%d, log_count=%d)',
+            len([k for k in drafts if not k.startswith('_')]),
+            total, time.time() - total_start, len(competencies),
+            target_pages, log_count,
         )
     else:
         logger.info('AI drafting produced no sections — report will use template defaults')
@@ -469,7 +573,7 @@ def draft_sections_with_ai(session, samples=None, target_pages=25):
 
 
 # ============================================================
-# Entry point 2 — presentation bullets + speaker notes
+# Entry point 2 — presentation bullets + speaker notes (unchanged)
 # ============================================================
 
 def draft_presentation_with_ai(session, target_slides=7):

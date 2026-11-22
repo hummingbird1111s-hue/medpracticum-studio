@@ -79,7 +79,6 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   #switch-overlay p { color: #fff; font-size: 16px; font-weight: 500; text-align: center; }
 
-  /* PHASE 5 preview styles */
   #pptx-preview-overlay {
     display: none; position: fixed; inset: 0; z-index: 1000000;
     background: rgba(17, 24, 39, 0.94); backdrop-filter: blur(4px);
@@ -102,20 +101,14 @@
     padding: 12px 16px; border-bottom: 1px solid #e5e7eb; background: #f9fafb;
     gap: 12px; flex-wrap: wrap; flex-shrink: 0;
   }
-  #pptx-preview-overlay .preview-header h3 {
-    margin: 0; font-size: 15px; font-weight: 700; color: #065f46;
-  }
-  #pptx-preview-overlay .preview-header p {
-    margin: 2px 0 0; font-size: 12px; color: #6b7280;
-  }
+  #pptx-preview-overlay .preview-header h3 { margin: 0; font-size: 15px; font-weight: 700; color: #065f46; }
+  #pptx-preview-overlay .preview-header p { margin: 2px 0 0; font-size: 12px; color: #6b7280; }
   #pptx-preview-overlay .preview-actions { display: flex; gap: 8px; align-items: center; }
   #pptx-preview-overlay .preview-btn {
     border: 0; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600;
     cursor: pointer; text-decoration: none; display: inline-block;
   }
-  #pptx-preview-overlay .preview-btn.close {
-    background: #f3f4f6; color: #374151;
-  }
+  #pptx-preview-overlay .preview-btn.close { background: #f3f4f6; color: #374151; }
   #pptx-preview-overlay .preview-btn.close:hover { background: #e5e7eb; }
 
   #pptx-preview-overlay .preview-info-banner {
@@ -135,91 +128,58 @@
     will-change: transform;
   }
   #pptx-preview-overlay .pptx-slide {
-    flex: 0 0 100%;
-    height: 100%;
+    flex: 0 0 100%; height: 100%;
     display: flex; align-items: center; justify-content: center;
     padding: 20px;
   }
-
   #pptx-preview-overlay .pptx-slide-sheet {
-    background: #fff;
-    width: 100%;
-    max-width: 900px;
-    aspect-ratio: 16 / 9;
-    border-radius: 8px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.35);
-    position: relative;
-    overflow: hidden;
+    background: #fff; width: 100%; max-width: 900px; aspect-ratio: 16 / 9;
+    border-radius: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+    position: relative; overflow: hidden;
     font-family: 'Times New Roman', Times, serif;
-    color: #1a1a1a;
-    font-size: clamp(10px, 1.4vw + 4px, 15px);
-    line-height: 1.4;
+    color: #1a1a1a; font-size: clamp(10px, 1.4vw + 4px, 15px); line-height: 1.4;
   }
-
   #pptx-preview-overlay .slide-deco { position: absolute; left: 0; right: 0; }
   #pptx-preview-overlay .slide-bot-wine  { bottom: 6%; height: 2.67%; background: #800000; }
   #pptx-preview-overlay .slide-bot-black { bottom: 3.33%; height: 1.33%; background: #000; }
   #pptx-preview-overlay .slide-bot-brown { bottom: 0; height: 4.67%; background: #8B4513; }
-
   #pptx-preview-overlay .slide-cover-line1 { top: 28%; left: 5%; right: 5%; height: 1.07%; background: #800000; }
   #pptx-preview-overlay .slide-cover-line2 { top: 45%; left: 5%; right: 5%; height: 1.07%; background: #800000; }
-
   #pptx-preview-overlay .slide-logo {
     position: absolute; top: 6%; left: 50%; transform: translateX(-50%);
     width: 12%; aspect-ratio: 1/1;
     border: 1.5px dashed #d1d5db; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    font-family: Arial, sans-serif; font-size: 0.6em;
-    color: #9ca3af; letter-spacing: 0.1em;
+    font-family: Arial, sans-serif; font-size: 0.6em; color: #9ca3af; letter-spacing: 0.1em;
   }
-  #pptx-preview-overlay .slide-cover-school {
-    position: absolute; top: 30%; left: 5%; right: 5%;
-    text-align: center; font-weight: 700; font-size: 2.4em;
-    letter-spacing: 0.04em;
-  }
-  #pptx-preview-overlay .slide-cover-dept {
-    position: absolute; top: 38%; left: 5%; right: 5%;
-    text-align: center; font-weight: 700; font-size: 1.5em;
-  }
-  #pptx-preview-overlay .slide-cover-meta {
-    position: absolute; top: 52%; left: 5%; right: 5%;
-    text-align: center; color: #808080;
-  }
+  #pptx-preview-overlay .slide-cover-school { position: absolute; top: 30%; left: 5%; right: 5%; text-align: center; font-weight: 700; font-size: 2.4em; letter-spacing: 0.04em; }
+  #pptx-preview-overlay .slide-cover-dept { position: absolute; top: 38%; left: 5%; right: 5%; text-align: center; font-weight: 700; font-size: 1.5em; }
+  #pptx-preview-overlay .slide-cover-meta { position: absolute; top: 52%; left: 5%; right: 5%; text-align: center; color: #808080; }
   #pptx-preview-overlay .slide-cover-name  { font-size: 1.9em; font-weight: 700; margin-bottom: 0.4em; }
   #pptx-preview-overlay .slide-cover-index { font-size: 1.55em; margin-bottom: 0.3em; }
   #pptx-preview-overlay .slide-cover-level { font-size: 1.55em; }
-
   #pptx-preview-overlay .slide-corner-logo {
     position: absolute; top: 2%; width: 8%; aspect-ratio: 1/1;
     border: 1px dashed #d1d5db; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    font-family: Arial, sans-serif; font-size: 0.55em;
-    color: #9ca3af;
+    font-family: Arial, sans-serif; font-size: 0.55em; color: #9ca3af;
   }
   #pptx-preview-overlay .slide-corner-logo.left  { left: 3%; }
   #pptx-preview-overlay .slide-corner-logo.right { right: 3%; }
-
   #pptx-preview-overlay .slide-heading {
     position: absolute; top: 4%; left: 15%; right: 15%;
-    text-align: center; font-weight: 700; font-size: 2.2em;
-    letter-spacing: 0.06em;
+    text-align: center; font-weight: 700; font-size: 2.2em; letter-spacing: 0.06em;
   }
   #pptx-preview-overlay .slide-rule {
-    position: absolute; top: 17%; left: 7%; right: 7%;
-    height: 1%; background: #800000;
+    position: absolute; top: 17%; left: 7%; right: 7%; height: 1%; background: #800000;
   }
   #pptx-preview-overlay .slide-body {
     position: absolute; top: 21%; left: 8%; right: 8%; bottom: 12%;
-    display: flex; flex-direction: column; justify-content: flex-start;
-    padding-left: 0.4em;
+    display: flex; flex-direction: column; justify-content: flex-start; padding-left: 0.4em;
   }
   #pptx-preview-overlay .slide-body.v-center { justify-content: center; }
-  #pptx-preview-overlay .slide-body ul {
-    list-style: disc; padding-left: 1em; margin: 0;
-  }
-  #pptx-preview-overlay .slide-body li {
-    font-size: 1em; margin-bottom: 0.55em; line-height: 1.4;
-  }
+  #pptx-preview-overlay .slide-body ul { list-style: disc; padding-left: 1em; margin: 0; }
+  #pptx-preview-overlay .slide-body li { font-size: 1em; margin-bottom: 0.55em; line-height: 1.4; }
 
   #pptx-preview-overlay .preview-footer {
     padding: 10px 16px; background: #f9fafb; border-top: 1px solid #e5e7eb;
@@ -230,12 +190,8 @@
     width: 8px; height: 8px; border-radius: 50%; background: #d1d5db;
     transition: background 0.2s, transform 0.2s; cursor: pointer;
   }
-  #pptx-preview-overlay .preview-dots span.active {
-    background: #059669; transform: scale(1.25);
-  }
-  #pptx-preview-overlay .preview-hint-text {
-    font-size: 11px; color: #6b7280; text-align: center; margin: 0;
-  }
+  #pptx-preview-overlay .preview-dots span.active { background: #059669; transform: scale(1.25); }
+  #pptx-preview-overlay .preview-hint-text { font-size: 11px; color: #6b7280; text-align: center; margin: 0; }
 
   @media (max-width: 640px) {
     #pptx-preview-overlay { padding: 0; }
@@ -278,6 +234,40 @@
          class="bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-lg px-4 py-2 text-sm shadow-sm">
         Download PowerPoint
       </a>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# ✅ PHASE 7: overflow warnings surfaced from the last build #}
+{% if overflow_warnings %}
+<div class="bg-amber-50 border-2 border-amber-400 rounded-2xl p-5 mb-4 shadow-sm">
+  <div class="flex items-start gap-3">
+    <div class="text-2xl flex-shrink-0">⚠️</div>
+    <div class="flex-1 min-w-0">
+      <h2 class="font-bold text-amber-900 mb-1">
+        {{ overflow_warnings|length }} slide{{ overflow_warnings|length|pluralize }} may have cut-off text
+      </h2>
+      <p class="text-sm text-amber-800 mb-3">
+        With your current font size, this content may not fit on the slide.
+        The PowerPoint will still build, but text on the slides below may run off the slide edge.
+      </p>
+      <ul class="text-sm text-amber-800 list-disc pl-5 space-y-1 mb-3">
+        {% for w in overflow_warnings %}
+        <li>
+          <strong>{{ w.slide }}</strong> —
+          {{ w.items }} bullet{{ w.items|pluralize }} at {{ w.font_size }}pt,
+          estimated to overflow by ~{{ w.overflow_pct }}%
+          (needs {{ w.estimated_pt }}pt, has {{ w.available_pt }}pt)
+        </li>
+        {% endfor %}
+      </ul>
+      <p class="text-xs text-amber-700">
+        <strong>Fixes:</strong>
+        lower the font size (try {{ overflow_warnings.0.font_size|add:"-6" }}pt or smaller),
+        increase <em>Max bullets per slide</em>,
+        or reduce <em>Max characters per bullet</em> — then rebuild.
+      </p>
     </div>
   </div>
 </div>
@@ -408,9 +398,32 @@
         {{ custom_form.font_size.label }}
       </label>
       {{ custom_form.font_size }}
-      {% if custom_form.font_size.help_text %}
-        <p class="text-xs text-gray-500 mt-1">{{ custom_form.font_size.help_text }}</p>
-      {% endif %}
+      <p class="text-xs text-gray-500 mt-1">
+        Typical: <strong>18pt</strong> fits ~6 medium bullets · <strong>28pt</strong> fits ~4 bullets · <strong>40pt</strong> fits ~2–3 bullets.
+        Sizes above 28pt will often trigger overflow warnings.
+      </p>
+    </div>
+
+    {# ✅ PHASE 7: font family dropdowns #}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+      <div>
+        <label for="{{ custom_form.heading_font_family.id_for_label }}" class="block text-sm font-semibold text-gray-700 mb-1">
+          {{ custom_form.heading_font_family.label }}
+        </label>
+        {{ custom_form.heading_font_family }}
+        {% if custom_form.heading_font_family.help_text %}
+          <p class="text-xs text-gray-500 mt-1">{{ custom_form.heading_font_family.help_text }}</p>
+        {% endif %}
+      </div>
+      <div>
+        <label for="{{ custom_form.body_font_family.id_for_label }}" class="block text-sm font-semibold text-gray-700 mb-1">
+          {{ custom_form.body_font_family.label }}
+        </label>
+        {{ custom_form.body_font_family }}
+        {% if custom_form.body_font_family.help_text %}
+          <p class="text-xs text-gray-500 mt-1">{{ custom_form.body_font_family.help_text }}</p>
+        {% endif %}
+      </div>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -501,7 +514,6 @@
   <p>Setting the presentation engine to read all data from this attachment...</p>
 </div>
 
-{# Phase 5 preview: auto-opens on fresh page load #}
 {% if has_pptx_pdf %}
 <div id="pptx-preview-overlay"
      data-auto-open="{% if not generated %}1{% else %}0{% endif %}"
@@ -704,6 +716,8 @@
   const cards = document.querySelectorAll('.pptx-card');
   const livePreview = document.getElementById('live-preview');
   const templateSelect = document.getElementById('{{ custom_form.pptx_template.id_for_label }}');
+  const headingFontSelect = document.getElementById('{{ custom_form.heading_font_family.id_for_label }}');
+  const bodyFontSelect = document.getElementById('{{ custom_form.body_font_family.id_for_label }}');
 
   function renderPreview(card) {
     const style       = card.dataset.style;
@@ -712,8 +726,9 @@
     const secondary   = card.dataset.secondary;
     const titleColor  = card.dataset.titleColor || '#1A3A6C';
     const textColor   = card.dataset.textColor  || '#1A1A1A';
-    const headingFont = card.dataset.headingFont || 'Calibri';
-    const bodyFont    = card.dataset.bodyFont    || 'Calibri';
+    // ✅ PHASE 7: user-selected font overrides beat the template default
+    const headingFont = (headingFontSelect && headingFontSelect.value) || card.dataset.headingFont || 'Calibri';
+    const bodyFont    = (bodyFontSelect    && bodyFontSelect.value)    || card.dataset.bodyFont    || 'Calibri';
     const hasLogo     = card.dataset.hasLogo === '1';
 
     let decos = '';
@@ -774,6 +789,20 @@
 
   updateOfficialCardVisibility(currentKey);
 
+  // ✅ PHASE 7: re-render live preview when the font dropdowns change
+  if (headingFontSelect) {
+    headingFontSelect.addEventListener('change', function () {
+      var sel = document.querySelector('.pptx-card.selected');
+      if (sel) renderPreview(sel);
+    });
+  }
+  if (bodyFontSelect) {
+    bodyFontSelect.addEventListener('change', function () {
+      var sel = document.querySelector('.pptx-card.selected');
+      if (sel) renderPreview(sel);
+    });
+  }
+
   window.pickOfficialTemplate = function () {
     var official = document.querySelector('.pptx-card[data-key="cohy_classic"]');
     if (official) selectCard(official);
@@ -791,6 +820,18 @@
     if (fontSize) {
       fontSize.value = '18';
       fontSize.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    // ✅ PHASE 7: reset font dropdowns to "template default"
+    var heading = form.querySelector('[name="heading_font_family"]');
+    if (heading) {
+      heading.value = '';
+      heading.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    var body = form.querySelector('[name="body_font_family"]');
+    if (body) {
+      body.value = '';
+      body.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
     var maxBullets = form.querySelector('[name="max_bullets"]');

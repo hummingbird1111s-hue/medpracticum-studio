@@ -12,7 +12,7 @@
         {{ user.get_department_display }} &middot; Level {{ user.level }} &middot; {{ user.index_number }}
       </p>
     </div>
-    
+
     <!-- Switch Attachment Dropdown -->
     {% if all_attachments %}
     <div class="bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 flex items-center gap-4">
@@ -76,23 +76,22 @@
 
   <!-- Main Split Layout -->
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-    
+
     <!-- LEFT COLUMN (2/3 Width) -->
     <div class="lg:col-span-2 space-y-6">
-      
+
       <!-- Current Attachment Spotlight -->
       {% if session %}
       <div class="bg-emerald-700 rounded-2xl p-6 shadow-lg text-white relative overflow-hidden">
-        <!-- Background Icon Watermark -->
         <div class="absolute -right-4 -top-4 text-emerald-600 opacity-40">
           <svg viewBox="0 0 24 24" style="width:150px;height:150px;stroke:currentColor;fill:none;stroke-width:2;"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
         </div>
-        
+
         <div class="relative z-10">
           <p class="text-xs uppercase tracking-wider text-emerald-200 font-bold mb-1">Current Active Attachment</p>
           <h2 class="text-2xl font-bold mb-1 text-white">{{ session.facility.name }}</h2>
           <p class="text-emerald-100 text-sm mb-6">{{ session.start_date|date:"M j, Y" }} &rarr; {{ session.end_date|date:"M j, Y" }}</p>
-          
+
           <div class="flex gap-3">
             <a href="{% url 'new_log' %}" class="bg-white text-emerald-800 font-bold rounded-xl px-5 py-2.5 text-sm shadow-md hover:bg-emerald-50 transition-colors flex items-center gap-2">
               <svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><path d="M12 4v16m8-8H4"/></svg>
@@ -113,18 +112,18 @@
       </div>
       {% endif %}
 
-      <!-- NEW: Target Competencies Section -->
+      <!-- Target Competencies Section — shows 5, rest in collapsible -->
       {% if session %}
         {% if session_competencies %}
         <div class="bg-white rounded-2xl shadow-sm border border-emerald-100 p-6 relative overflow-hidden">
-          <!-- Accent Stripe -->
           <div class="absolute top-0 left-0 w-1.5 h-full bg-emerald-500"></div>
-          
+
           <div class="flex justify-between items-start mb-4">
             <div>
               <h2 class="text-lg font-bold text-gray-900 flex items-center gap-2">
                 <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:#059669;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 Target Competencies
+                <span class="text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">{{ session_competencies|length }} total</span>
               </h2>
               <p class="text-sm text-gray-500 mt-1">Skills you are targeting at {{ session.facility.name }}</p>
             </div>
@@ -132,9 +131,10 @@
               Manage
             </a>
           </div>
-          
+
+          <!-- First 5 competencies — always visible -->
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {% for comp in session_competencies %}
+            {% for comp in session_competencies|slice:":5" %}
               <div class="flex items-start gap-3 bg-gray-50 border border-gray-100 p-3 rounded-xl hover:bg-emerald-50/50 hover:border-emerald-100 transition-colors">
                 <div class="mt-0.5 text-emerald-500">
                   <svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;"><path d="M5 13l4 4L19 7"/></svg>
@@ -143,9 +143,28 @@
               </div>
             {% endfor %}
           </div>
+
+          <!-- Remaining competencies — collapsible -->
+          {% if session_competencies|length > 5 %}
+          <details class="mt-3 group">
+            <summary class="cursor-pointer list-none select-none flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg bg-gray-50 hover:bg-emerald-50 text-sm font-semibold text-emerald-700 hover:text-emerald-900 transition-colors">
+              <span class="group-open:hidden">Show {{ session_competencies|length|add:"-5" }} more competenc{{ session_competencies|length|add:"-5"|pluralize:"y,ies" }} ▾</span>
+              <span class="hidden group-open:inline">Hide extra competenc{{ session_competencies|length|add:"-5"|pluralize:"y,ies" }} ▴</span>
+            </summary>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+              {% for comp in session_competencies|slice:"5:" %}
+                <div class="flex items-start gap-3 bg-gray-50 border border-gray-100 p-3 rounded-xl hover:bg-emerald-50/50 hover:border-emerald-100 transition-colors">
+                  <div class="mt-0.5 text-emerald-500">
+                    <svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;"><path d="M5 13l4 4L19 7"/></svg>
+                  </div>
+                  <span class="text-sm font-medium text-gray-800 leading-snug">{{ comp.text }}</span>
+                </div>
+              {% endfor %}
+            </div>
+          </details>
+          {% endif %}
         </div>
         {% else %}
-        <!-- Prompt to add competencies if empty -->
         <div class="bg-amber-50 rounded-2xl shadow-sm border border-amber-200 p-6 text-center">
           <div class="text-3xl mb-2">🎯</div>
           <h2 class="text-lg font-bold text-amber-900 mb-1">No Competencies Added Yet</h2>
@@ -168,7 +187,7 @@
           <a href="{% url 'logs_list' %}" class="text-sm text-emerald-700 font-semibold hover:text-emerald-900 transition-colors">View All &rarr;</a>
           {% endif %}
         </div>
-        
+
         {% if recent_logs %}
           <div class="space-y-3">
             {% for log in recent_logs %}
@@ -204,22 +223,19 @@
 
     <!-- RIGHT COLUMN (1/3 Width) -->
     <div class="space-y-6">
-      
-      <!-- Live Clock Widget -->
       <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col items-center justify-center text-center">
         <p class="text-xs text-gray-400 uppercase tracking-widest font-bold mb-3">Local Time (Accra)</p>
         <div id="live-clock" class="text-4xl font-black text-gray-800 tracking-wider" style="font-variant-numeric: tabular-nums;">--:--:--</div>
         <div id="live-date" class="text-sm text-emerald-600 font-bold mt-2 bg-emerald-50 px-3 py-1 rounded-full"></div>
       </div>
 
-      <!-- POS-Style Calendar Widget -->
       <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
         <div class="flex justify-between items-center mb-2">
           <button id="prevMonthBtn" class="bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-1 rounded text-sm transition-colors">&larr;</button>
           <span id="calendarMonthYear" class="font-semibold text-sm text-gray-800"></span>
           <button id="nextMonthBtn" class="bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-1 rounded text-sm transition-colors">&rarr;</button>
         </div>
-        
+
         <table class="w-full text-center border-collapse">
           <thead>
             <tr>
@@ -232,60 +248,41 @@
               <th class="text-[10px] text-gray-400 font-bold py-1">Sa</th>
             </tr>
           </thead>
-          <tbody id="calendarBody">
-            <!-- JS will populate -->
-          </tbody>
+          <tbody id="calendarBody"></tbody>
         </table>
       </div>
-
     </div>
   </div>
-
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // --- Live Clock ---
     function updateClock() {
         const now = new Date();
         const timeOptions = { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Africa/Accra' };
-        const timeString = now.toLocaleTimeString('en-US', timeOptions);
-        document.getElementById('live-clock').textContent = timeString;
-        
+        document.getElementById('live-clock').textContent = now.toLocaleTimeString('en-US', timeOptions);
         const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Africa/Accra' };
         document.getElementById('live-date').textContent = now.toLocaleDateString('en-US', dateOptions);
     }
     setInterval(updateClock, 1000);
     updateClock();
 
-    // --- POS-Style Calendar Logic ---
     let calendarYear = new Date().getFullYear();
     let calendarMonth = new Date().getMonth();
     const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
     function renderCalendar(year, month) {
         document.getElementById('calendarMonthYear').textContent = `${monthNames[month]} ${year}`;
-        
         const firstDay = new Date(year, month, 1).getDay();
         const daysInMonth = new Date(year, month + 1, 0).getDate();
-        
         let html = '<tr>';
-        for (let i = 0; i < firstDay; i++) {
-            html += '<td></td>';
-        }
-        
+        for (let i = 0; i < firstDay; i++) html += '<td></td>';
         for (let d = 1; d <= daysInMonth; d++) {
             const isToday = (d === new Date().getDate() && month === new Date().getMonth() && year === new Date().getFullYear());
             let cls = 'p-1.5 text-xs rounded cursor-pointer hover:bg-emerald-100 hover:text-emerald-800 transition-colors ';
-            if (isToday) {
-                cls += 'bg-emerald-600 text-white font-bold shadow-sm ring-2 ring-emerald-200';
-            } else {
-                cls += 'text-gray-700';
-            }
+            cls += isToday ? 'bg-emerald-600 text-white font-bold shadow-sm ring-2 ring-emerald-200' : 'text-gray-700';
             html += `<td class="${cls}">${d}</td>`;
-            if ((firstDay + d) % 7 === 0 && d !== daysInMonth) {
-                html += '</tr><tr>';
-            }
+            if ((firstDay + d) % 7 === 0 && d !== daysInMonth) html += '</tr><tr>';
         }
         html += '</tr>';
         document.getElementById('calendarBody').innerHTML = html;
@@ -298,7 +295,6 @@ document.addEventListener('DOMContentLoaded', function() {
         else { calendarMonth--; }
         renderCalendar(calendarYear, calendarMonth);
     });
-
     document.getElementById('nextMonthBtn').addEventListener('click', function() {
         if (calendarMonth === 11) { calendarMonth = 0; calendarYear++; }
         else { calendarMonth++; }

@@ -24,6 +24,25 @@ PPTX_SECTION_FIELDS = [
     'slide_conclusion', 'slide_thankyou',
 ]
 
+# ✅ PHASE 7: font family choices for the two new PPTX dropdowns.
+# The empty-string option means "use the template's built-in font".
+# The builder's _apply_font_overrides() treats any non-empty value as a
+# hard override — so picking "Calibri" or "Georgia" always wins over the
+# template default, and picking "Template default" defers to the design.
+PPTX_FONT_CHOICES = [
+    ('',                'Template default'),
+    ('Times New Roman', 'Times New Roman'),
+    ('Arial',           'Arial'),
+    ('Calibri',         'Calibri'),
+    ('Cambria',         'Cambria'),
+    ('Georgia',         'Georgia'),
+    ('Trebuchet MS',    'Trebuchet MS'),
+    ('Verdana',         'Verdana'),
+    ('Century Gothic',  'Century Gothic'),
+    ('Courier New',     'Courier New'),
+    ('Garamond',        'Garamond'),
+]
+
 
 class ReportOptionsForm(StyledFormMixin, forms.Form):
     font_family = forms.ChoiceField(choices=[(n, n) for n in FONT_FAMILIES], label='Font')
@@ -102,18 +121,44 @@ class PptxOptionsForm(StyledFormMixin, forms.Form):
         label='Presentation template',
         help_text='Only COHY Classic shows the college logo — all other templates are logo-free designs.',
     )
-    # ✅ NEW: body font size for content-slide bullets (10–28 pt, default 18)
+
+    # ✅ PHASE 7: body font size for content-slide bullets.
+    # Range expanded from 10–28 pt to 10–44 pt per the overflow-warning spec.
+    # Sizes above ~28 pt often trigger the builder's "may have cut-off text"
+    # banner — the user can still build, but is warned.
     font_size = forms.TypedChoiceField(
         choices=[
             (10, '10 pt'), (12, '12 pt'), (14, '14 pt'), (16, '16 pt'),
             (18, '18 pt (default)'), (20, '20 pt'), (22, '22 pt'),
             (24, '24 pt'), (26, '26 pt'), (28, '28 pt'),
+            (30, '30 pt'), (32, '32 pt'), (34, '34 pt'), (36, '36 pt'),
+            (38, '38 pt'), (40, '40 pt'), (42, '42 pt'), (44, '44 pt'),
         ],
         coerce=int, initial=18,
         label='Body font size (bullets on content slides)',
         help_text='Larger sizes fill the slide more; smaller sizes leave more breathing room. '
-                  'Headings are unaffected.',
+                  'Headings are unaffected. Sizes above 28 pt often overflow — you will see a '
+                  'warning banner after building.',
     )
+
+    # ✅ PHASE 7: two font family dropdowns.
+    # Empty value = "Template default" (defer to the template's design).
+    # Non-empty = hard override applied by PracticumPptxBuilder._apply_font_overrides().
+    heading_font_family = forms.ChoiceField(
+        required=False,
+        choices=PPTX_FONT_CHOICES,
+        initial='',
+        label='Heading font',
+        help_text='Font for slide titles. Leave on "Template default" to use the template’s built-in font.',
+    )
+    body_font_family = forms.ChoiceField(
+        required=False,
+        choices=PPTX_FONT_CHOICES,
+        initial='',
+        label='Body font',
+        help_text='Font for bullet text. Leave on "Template default" to use the template’s built-in font.',
+    )
+
     max_bullets = forms.TypedChoiceField(
         choices=[(3, '3 per slide'), (4, '4 per slide'), (5, '5 per slide'),
                  (6, '6 per slide'), (7, '7 per slide')],

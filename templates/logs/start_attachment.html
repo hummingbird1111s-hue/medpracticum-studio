@@ -144,7 +144,7 @@
             📷 Take Photo
           </button>
         </div>
-        <span id="cmp-file-status" class="block mt-2 text-xs font-medium text-gray-500"></span>
+        <span id="cmp-file-status" class="block mt-2 text-xs font-medium text-gray-500" style="min-height:20px;"></span>
       </div>
     </div>
 
@@ -378,12 +378,50 @@
     if (errorBanner) errorBanner.style.display = 'none';
   });
 
-  /* ── 4. Upload → OCR ──────────────────────────────────────── */
+  /* ── 4. Upload → OCR (with dynamics + count) ──────────────── */
+  function startTranscribing(statusEl) {
+    var stages = [
+      'Uploading file…',
+      'Reading contents…',
+      'Transcribing text…',
+      'Extracting competencies…',
+      'Almost there…'
+    ];
+    var idx = 0;
+    function render() {
+      statusEl.innerHTML = '<span class="cmp-spin"></span><span style="color:#065f46;">' + stages[idx] + '</span>';
+    }
+    render();
+    var timer = setInterval(function() {
+      idx++;
+      if (idx >= stages.length) return;
+      render();
+    }, 2500);
+    return {
+      stop:    function() { clearInterval(timer); },
+      success: function(count, total) {
+        clearInterval(timer);
+        var plural = (count === 1) ? 'competency' : 'competencies';
+        var suffix = (typeof total === 'number' && total > count) ? ' (' + total + ' total)' : '';
+        statusEl.innerHTML = '<span style="color:#059669; font-weight:600;">✅ Added ' + count + ' ' + plural + suffix + '</span>';
+      },
+      empty:   function() {
+        clearInterval(timer);
+        statusEl.innerHTML = '<span style="color:#b45309; font-weight:600;">⚠️ No text found — try a clearer image or file.</span>';
+      },
+      error:   function(msg) {
+        clearInterval(timer);
+        statusEl.innerHTML = '<span style="color:#dc2626; font-weight:600;">⚠️ ' + msg + '</span>';
+      }
+    };
+  }
+
   async function handleFileUpload(fileObj) {
     if (!fileObj) return;
-    fileStat.innerHTML = '<span class="cmp-spin"></span>Transcribing…';
+    var job = startTranscribing(fileStat);
     var fd = new FormData();
     fd.append('image', fileObj);
+
     try {
       var res = await fetch('/attachments/competencies/upload-image/', {
         method: 'POST',
@@ -391,26 +429,46 @@
         credentials: 'same-origin',
         headers: { 'X-CSRFToken': '{{ csrf_token }}' },
       });
-      var data = await res.json().catch(function () { return {}; });
-      if (!res.ok) {
-        fileStat.innerHTML = '<span class="text-red-600">' + (data.error || 'Upload failed') + '</span>';
+
+      // Detect non-JSON responses (redirects, HTML error pages)
+      var ct = (res.headers.get('content-type') || '').toLowerCase();
+      if (ct.indexOf('application/json') === -1) {
+        console.error('[competency upload] non-JSON response', res.status, res.url);
+        job.error('Server error (' + res.status + '). Please refresh and try again.');
         return;
       }
+
+      var data = await res.json().catch(function () { return {}; });
+
+      if (!res.ok) {
+        console.error('[competency upload] server error', res.status, data);
+        job.error(data.error || ('Upload failed (' + res.status + ')'));
+        return;
+      }
+
       var lines = (data.lines && data.lines.length)
         ? data.lines
         : (data.text || '').split(/\r?\n/).map(function (s) { return s.trim(); }).filter(Boolean);
+
       if (!lines.length) {
-        fileStat.innerHTML = '<span class="text-amber-700">No text found — try a clearer file.</span>';
+        job.empty();
         return;
       }
+
       lines.forEach(function (line) {
         addRow(line.length > 500 ? line.slice(0, 500) : line, 'ocr');
       });
-      fileStat.innerHTML = '<span class="text-emerald-700">Added ' + lines.length +
-        ' competency ' + (lines.length === 1 ? 'line' : 'lines') + ' from file.</span>';
+
+      var total = rows.querySelectorAll('.cmp-input').length;
+      job.success(lines.length, total);
+
+      // Smooth scroll to the top of the competency rows so the user sees them
+      try { rows.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (_) {}
+
       if (errorBanner) errorBanner.style.display = 'none';
     } catch (err) {
-      fileStat.innerHTML = '<span class="text-red-600">Network error. Try again.</span>';
+      console.error('[competency upload]', err);
+      job.error('Network error. Check your connection and try again.');
     } finally {
       fileUpload.value = '';
       fileCamera.value = '';

@@ -525,6 +525,174 @@ def sync_logs(request):
 
 
 # ==========================================
+# AI CHAT — tiered context (Phase 5 perf fix)
+# ==========================================
+# Simple questions (greetings, counts, lists) do NOT need the 30-log dump.
+# Only drafting/analysis tasks need the full context. This cuts "hi" from
+# ~3-5 s to ~1 s by reducing input tokens from ~2,100 to ~50.
+
+def _detect_query_tier(user_message, has_image):
+    """
+    Classify the message to decide how much context to build.
+      - 'trivial' : greeting / ack, no question  → ~50 tokens
+      - 'simple'  : count / list / status query  → ~350 tokens
+      - 'complex' : drafting / analysis / file   → full context
+    """
+    if has_image:
+        return 'complex'
+
+    msg = (user_message or '').strip().lower()
+    if not msg:
+        return 'trivial'
+
+    # Very short → almost certainly a greeting / ack
+    if len(msg) <= 15:
+        return 'trivial'
+
+    # Strip punctuation for word-set comparison
+    words = set(w.strip('?.,!;:"\'') for w in msg.split() if w.strip('?.,!;:"\''))
+
+    trivial_vocab = {
+        'hi', 'hello', 'hey', 'yo', 'sup', 'hiya', 'howdy', 'greetings',
+        'thanks', 'thank', 'thx', 'ty', 'cheers', 'appreciated',
+        'ok', 'okay', 'cool', 'nice', 'great', 'awesome', 'good', 'fine',
+        'yes', 'no', 'yeah', 'nah', 'yep', 'nope', 'sure',
+        'bye', 'goodbye', 'goodnight', 'goodmorning', 'goodafternoon',
+        'lol', 'haha', 'np', 'welcome', 'alright',
+        'how', 'are', 'you', 'doing', 'there', 'what', 'is', 'up', 'today',
+    }
+    if len(words) <= 6 and words.issubset(trivial_vocab):
+        return 'trivial'
+
+    # Drafting / analysis indicators force full context
+    complex_indicators = (
+        'write', 'draft', 'compose', 'rewrite', 'rephrase', 'paraphrase',
+        'analyze', 'analyse', 'summarize', 'summarise',
+        'generate', 'create', 'build', 'produce', 'prepare',
+        'report', 'chapter', 'abstract', 'introduction', 'conclusion',
+        'methodology', 'recommendation', 'lesson', 'challenge',
+        'discuss', 'elaborate', 'essay', 'paragraph',
+    )
+    for indicator in complex_indicators:
+        if indicator in msg:
+            return 'complex'
+
+    # Long messages are usually complex requests
+    if len(msg) > 200:
+        return 'complex'
+
+    return 'simple'
+
+
+def _build_context(tier, user, active_session, chat_session):
+    """Build only as much context as the tier actually needs."""
+
+    # ── Tier: trivial ─────────────────────────────────────────────
+    if tier == 'trivial':
+        ctx = f"Student: {user.get_full_name() or user.username}\n"
+        if active_session:
+            ctx += f"Facility: {active_session.facility.name}\n"
+        return ctx
+
+    # ── Shared: profile ──────────────────────────────────────────
+    context = "STUDENT PROFILE:\n"
+    context += f"Name: {user.get_full_name() or user.username}\n"
+    context += f"Index Number: {user.index_number}\n"
+    context += f"Department: {user.get_department_display()}\n"
+    context += f"Level: {user.level}\n"
+
+    if not active_session:
+        context += "\n(No active attachment found.)\n"
+        return context
+
+    context += "\nCURRENT ATTACHMENT:\n"
+    context += f"Facility: {active_session.facility.name}\n"
+    context += f"Dates: {active_session.start_date.strftime('%d %B %Y')} to {active_session.end_date.strftime('%d %B %Y')}\n"
+    context += f"Supervisor: {active_session.assigned_supervisor_name or 'Not specified'}\n"
+
+    # ── Tier: simple ─────────────────────────────────────────────
+    # Only counts + light metadata. No per-log iteration, no skills/challenges.
+    if tier == 'simple':
+        context += f"Total Logs Recorded: {active_session.daily_logs.filter(is_deleted=False).count()}\n"
+
+        workshops = list(active_session.workshops.all()[:10])
+        context += f"Total Workshops: {len(workshops)}\n"
+        if workshops:
+            context += "WORKSHOPS:\n"
+            for w in workshops:
+                context += f"- {w.date.strftime('%d %b %Y')}: {w.activity[:100]} ({w.type})\n"
+
+        competencies = list(active_session.competencies.all()[:15])
+        context += f"\nCompetency Areas ({len(competencies)}):\n"
+        for c in competencies:
+            context += f"- {c.text[:100]}\n"
+
+        # Only 3 prior messages, trimmed to 150 chars
+        prior = chat_session.messages.exclude(role='').order_by('-created_at')[:3]
+        prior_list = list(prior)
+        if prior_list:
+            context += "\nRECENT CHAT:\n"
+            for m in reversed(prior_list):
+                label = "You" if m.role == 'user' else "Assistant"
+                _raw = m.content or ''
+                if _raw.startswith('[File attached:') or _raw.startswith('[Image attached:'):
+                    _close = _raw.find(']')
+                    clean = _raw[_close + 1:].strip() if _close != -1 else _raw.strip()
+                else:
+                    clean = _raw.strip()
+                context += f"{label}: {clean[:150]}\n"
+
+        return context
+
+    # ── Tier: complex ────────────────────────────────────────────
+    logs_qs = active_session.daily_logs.filter(is_deleted=False).order_by('-date')
+    total_logs = logs_qs.count()
+    context += f"Total Logs Recorded: {total_logs}\n\n"
+
+    recent_logs = list(logs_qs[:30])
+    if recent_logs:
+        context += f"RECENT ACTIVITIES (latest {len(recent_logs)}):\n"
+        for i, log in enumerate(recent_logs):
+            context += f"- {log.date.strftime('%d %b %Y')} | {log.unit_sub_department}: {log.activity_summary[:200]}\n"
+            # Only the 10 most recent get skills + challenges (they're what get
+            # quoted in reports; older ones just need date/unit/summary)
+            if i < 10:
+                if log.skills_acquired.strip():
+                    context += f"  Skills: {log.skills_acquired[:150]}\n"
+                if log.challenges_faced.strip():
+                    context += f"  Challenges: {log.challenges_faced[:150]}\n"
+
+    workshops = active_session.workshops.all()[:10]
+    if workshops:
+        context += "\nWORKSHOPS ATTENDED:\n"
+        for w in workshops:
+            context += f"- {w.date.strftime('%d %b %Y')}: {w.activity[:120]} ({w.type})\n"
+
+    competencies = active_session.competencies.all()[:15]
+    if competencies:
+        context += "\nCOMPETENCY AREAS (target skills):\n"
+        for c in competencies:
+            context += f"- {c.text[:150]}\n"
+
+    prior = chat_session.messages.exclude(role='').order_by('-created_at')[:10]
+    prior_list = list(prior)
+    if prior_list:
+        context += "\nPREVIOUS MESSAGES IN THIS CHAT:\n"
+        for m in reversed(prior_list):
+            label = "You" if m.role == 'user' else "Assistant"
+            _raw = m.content or ''
+            if _raw.startswith('[File attached:') or _raw.startswith('[Image attached:'):
+                _close = _raw.find(']')
+                clean = _raw[_close + 1:].strip() if _close != -1 else _raw.strip()
+            else:
+                clean = _raw.strip()
+            context += f"{label}: {clean[:300]}\n"
+        context += "\n"
+
+    return context
+
+
+# ==========================================
 # AI CHAT — conversation-based + ATTACHMENT
 # ==========================================
 # The actual SDK is only imported when an AI request comes in
@@ -573,77 +741,26 @@ def ai_chat(request):
             session=chat_session, user=user, role='user', content=stored_user_content,
         )
 
-        # ── Compact context: last 30 logs only, trimmed fields ───────────
+        # ── NEW: tiered context — skip the 30-log dump for greetings ─────
+        tier = _detect_query_tier(user_message, bool(image_b64))
         active_session = _get_active_session(request)
-        context = "STUDENT PROFILE:\n"
-        context += f"Name: {user.get_full_name() or user.username}\n"
-        context += f"Index Number: {user.index_number}\n"
-        context += f"Department: {user.get_department_display()}\n"
-        context += f"Level: {user.level}\n"
+        context = _build_context(tier, user, active_session, chat_session)
 
-        if active_session:
-            context += "\nCURRENT ATTACHMENT:\n"
-            context += f"Facility: {active_session.facility.name}\n"
-            context += f"Dates: {active_session.start_date.strftime('%d %B %Y')} to {active_session.end_date.strftime('%d %B %Y')}\n"
-            context += f"Supervisor: {active_session.assigned_supervisor_name or 'Not specified'}\n"
-
-            logs_qs = active_session.daily_logs.filter(is_deleted=False).order_by('-date')
-            total_logs = logs_qs.count()
-            context += f"Total Logs Recorded: {total_logs}\n\n"
-
-            # Only the most recent 30 to keep the prompt light and fast
-            recent_logs = list(logs_qs[:30])
-            if recent_logs:
-                context += f"RECENT ACTIVITIES (latest {len(recent_logs)}):\n"
-                for log in recent_logs:
-                    context += f"- {log.date.strftime('%d %b %Y')} | {log.unit_sub_department}: {log.activity_summary[:200]}\n"
-                    if log.skills_acquired.strip():
-                        context += f"  Skills: {log.skills_acquired[:150]}\n"
-                    if log.challenges_faced.strip():
-                        context += f"  Challenges: {log.challenges_faced[:150]}\n"
-
-            workshops = active_session.workshops.all()[:10]
-            if workshops:
-                context += "\nWORKSHOPS ATTENDED:\n"
-                for w in workshops:
-                    context += f"- {w.date.strftime('%d %b %Y')}: {w.activity[:120]} ({w.type})\n"
-
-            competencies = active_session.competencies.all()[:15]
-            if competencies:
-                context += "\nCOMPETENCY AREAS (target skills):\n"
-                for c in competencies:
-                    context += f"- {c.text[:150]}\n"
+        # Output format rules — omit entirely for trivial greetings
+        if tier == 'trivial':
+            format_rules = ""
         else:
-            context += "\n(No active attachment found.)\n"
-
-        # Only last 10 prior messages, each trimmed to 300 chars
-        prior = chat_session.messages.exclude(role='').order_by('-created_at')[:10]
-        if prior:
-            context += "\nPREVIOUS MESSAGES IN THIS CHAT:\n"
-            for m in reversed(list(prior)):
-                label = "You" if m.role == 'user' else "Assistant"
-                # ✅ FIX v2: handle both legacy "[Image attached:" and new "[File attached:"
-                _raw = m.content or ''
-                if _raw.startswith('[File attached:') or _raw.startswith('[Image attached:'):
-                    _close = _raw.find(']')
-                    clean = _raw[_close + 1:].strip() if _close != -1 else _raw.strip()
-                else:
-                    clean = _raw.strip()
-                context += f"{label}: {clean[:300]}\n"
-            context += "\n"
-
-        # ── Strict output format rules (kills dash lines) ───────────────
-        format_rules = (
-            "OUTPUT FORMAT (STRICT — follow exactly):\n"
-            "1. Do NOT use horizontal rules or section dividers of any kind.\n"
-            "   Never output ---, ***, ___, ===, or any line of dashes/underscores.\n"
-            "2. Do NOT echo the 'USER DATA CONTEXT' header or any '--- ... ---' marker.\n"
-            "3. Use short Markdown headings: ### Heading (3 hashes max).\n"
-            "4. Use bullet points with a single '* ' prefix. No nested bullets.\n"
-            "5. Keep paragraphs short (2-4 sentences). Leave one blank line between sections.\n"
-            "6. Use **bold** for emphasis. Never bold entire sentences.\n"
-            "7. No emojis unless the user used emojis first.\n\n"
-        )
+            format_rules = (
+                "OUTPUT FORMAT (STRICT — follow exactly):\n"
+                "1. Do NOT use horizontal rules or section dividers of any kind.\n"
+                "   Never output ---, ***, ___, ===, or any line of dashes/underscores.\n"
+                "2. Do NOT echo the 'USER DATA CONTEXT' header or any '--- ... ---' marker.\n"
+                "3. Use short Markdown headings: ### Heading (3 hashes max).\n"
+                "4. Use bullet points with a single '* ' prefix. No nested bullets.\n"
+                "5. Keep paragraphs short (2-4 sentences). Leave one blank line between sections.\n"
+                "6. Use **bold** for emphasis. Never bold entire sentences.\n"
+                "7. No emojis unless the user used emojis first.\n\n"
+            )
 
         if image_b64:
             system_prompt = (
@@ -653,6 +770,16 @@ def ai_chat(request):
                 "PRIORITY: Analyze the uploaded file first (describe, transcribe, or answer from it).\n"
                 "Do not give a generic summary of the user's logs unless they explicitly ask.\n\n"
                 f"User Question: {user_message}\n"
+            )
+        elif tier == 'trivial':
+            # Minimal prompt — no context dump for "hi"
+            system_prompt = (
+                "You are the MedPracticum Studio AI Assistant, a warm helper for "
+                "health students. The user sent a short greeting or acknowledgment. "
+                "Reply warmly in 1-2 short sentences, then invite them to ask about "
+                "their logs, competencies, or report. Do NOT use markdown formatting.\n\n"
+                f"{context}"
+                f"User message: {user_message}\n"
             )
         else:
             system_prompt = (
@@ -714,6 +841,7 @@ def ai_chat(request):
             'success': True,
             'reply': reply,
             'session_id': chat_session.id,
+            'tier': tier,   # NEW: for debugging — frontend can ignore it
         })
 
     except Exception as e:

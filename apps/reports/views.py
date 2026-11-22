@@ -65,7 +65,7 @@ def _build(request, session, use_ai=True, force_ai=False):
                 ai_note = drafts.pop('_ai_note', '')
                 if ai_note:
                     messages.warning(request, ai_note)
-                
+
                 report.content = drafts
                 report.save(update_fields=['content'])
                 logger.info('AI drafted %d sections for report %s', len(drafts), report.pk)
@@ -80,11 +80,45 @@ def _build(request, session, use_ai=True, force_ai=False):
         messages.error(request, f'Could not build the report: {exc}')
         return False
 
+    # ✅ PHASE 6: rich build summary — mirrors the PPTX style so the user
+    # always knows exactly what was built, what the target was, and whether
+    # the AI had enough source material to reach it.
     result = builder.result
-    text = f"Your report is ready: {result['pages']} pages."
-    if result.get('note'):
-        text += ' ' + result['note']
-    messages.success(request, text)
+    pages = result['pages']
+    target = result.get('target') or 0
+    note = (result.get('note') or '').strip()
+
+    ai_sections = len([k for k in (report.content or {}).keys()
+                       if not str(k).startswith('_')])
+    log_count = session.daily_logs.filter(is_deleted=False).count()
+    try:
+        comp_count = session.competencies.count()
+    except Exception:
+        comp_count = 0
+
+    summary_bits = [f"{pages} page{'s' if pages != 1 else ''}"]
+    if target:
+        summary_bits.append(f"target {target}")
+    summary_bits.append(f"{ai_sections} AI section{'s' if ai_sections != 1 else ''}")
+    summary_bits.append(f"{log_count} log{'s' if log_count != 1 else ''}")
+    summary_bits.append(f"{comp_count} competenc{'y' if comp_count == 1 else 'ies'}")
+    summary = " · ".join(summary_bits)
+
+    # Choose message level: success when target hit (or unset), warning otherwise
+    if target and pages != target:
+        if note:
+            messages.warning(request, f"⚠️ Report ready: {summary}. {note}")
+        else:
+            messages.warning(
+                request,
+                f"⚠️ Report ready: {summary}. (Report length didn't match your target — "
+                f"regenerate with more logs or a different target.)"
+            )
+    else:
+        if note:
+            messages.success(request, f"✅ Report ready: {summary}. {note}")
+        else:
+            messages.success(request, f"✅ Report ready: {summary}.")
     return True
 
 
@@ -214,8 +248,22 @@ def report_options(request):
             else:
                 messages.error(request, "Your custom settings couldn't be saved. Please check the form for errors below.")
         else:
-            report.options = normalize_options({})
-            report.options['include_signoff'] = False
+            # ✅ PHASE 6: honor the target the user typed in the Official form
+            # (the green card now exposes `official_target_pages`).
+            try:
+                official_target = int(request.POST.get('official_target_pages') or 0)
+            except (TypeError, ValueError):
+                official_target = 0
+
+            # Clamp to a sensible range — protects against abuse and typos
+            if official_target:
+                official_target = max(5, min(official_target, 50))
+
+            opts = normalize_options({})
+            opts['include_signoff'] = False
+            if official_target and official_target > 0:
+                opts['target_pages'] = official_target
+            report.options = opts
             report.save(update_fields=['options'])
             _build(request, session, use_ai=True, force_ai=True)
             # ✅ PHASE 3
@@ -486,7 +534,7 @@ def _ensure_ai_content(request, session, force_ai=False):
             ai_note = drafts.pop('_ai_note', '')
             if ai_note:
                 messages.warning(request, ai_note)
-                
+
             report.content = drafts
             report.save(update_fields=['content'])
             return True
@@ -543,13 +591,20 @@ def _apply_pptx_options(report, cleaned):
     """
     ✅ FIX v3: persist PptxOptionsForm data into report.pptx_options,
     keeping the same nested {'sections': {...}} shape the builder reads.
+
+    ✅ PHASE 7: now also persists the two font-family dropdowns. Empty
+    string means "use the template's built-in font" — the builder's
+    _apply_font_overrides() treats it as a no-op.
     """
     report.pptx_options = {
-        # ✅ NEW: body font size (10–28 pt)
+        # ✅ PHASE 7 — body font size range expanded 10–44 pt
         'font_size': int(cleaned.get('font_size') or 18),
         'max_bullets': int(cleaned.get('max_bullets') or 6),
         'max_chars_per_bullet': int(cleaned.get('max_chars_per_bullet') or 220),
         'include_speaker_notes': bool(cleaned.get('include_speaker_notes')),
+        # ✅ PHASE 7 — font overrides
+        'heading_font_family': (cleaned.get('heading_font_family') or '').strip(),
+        'body_font_family':    (cleaned.get('body_font_family')    or '').strip(),
         'sections': {f: bool(cleaned.get(f)) for f in PPTX_SECTION_FIELDS},
     }
     report.save(update_fields=['pptx_options'])
@@ -567,7 +622,16 @@ def pptx_options(request):
         action = request.POST.get('action')
 
         if action == 'build_official':
-            # Official always uses COHY Classic, but keeps any saved options
+            # ✅ PHASE 7: official build resets the font overrides + size,
+            # so a leftover Arial@40 choice from a previous custom build
+            # can't leak into what should be a standard COHY look.
+            # Other options (max_bullets, sections, speaker notes) are kept.
+            existing = dict(report.pptx_options or {})
+            existing['font_size'] = 18
+            existing['heading_font_family'] = ''
+            existing['body_font_family'] = ''
+            report.pptx_options = existing
+            report.save(update_fields=['pptx_options'])
             _build_pptx_from_scratch(request, session, 'cohy_classic', force_ai=False)
             # ✅ PHASE 3
             return _redirect_after_generation(request, 'pptx_options', session)
@@ -616,6 +680,9 @@ def pptx_options(request):
         'max_bullets': saved.get('max_bullets', 6),
         'max_chars_per_bullet': saved.get('max_chars_per_bullet', 220),
         'include_speaker_notes': saved.get('include_speaker_notes', True),
+        # ✅ PHASE 7 — pre-select saved font overrides (default = "template default")
+        'heading_font_family': saved.get('heading_font_family', ''),
+        'body_font_family':    saved.get('body_font_family', ''),
     }
     # Merge section toggles — default True if never set
     for f in PPTX_SECTION_FIELDS:
@@ -626,6 +693,10 @@ def pptx_options(request):
     all_attachments = request.user.attachments.filter(
         is_deleted=False
     ).order_by('-start_date', '-id')
+
+    # ✅ PHASE 7: surface overflow warnings from the last build so the
+    # amber banner on the template actually renders something.
+    overflow_warnings = (report.pptx_options or {}).get('last_overflow_warnings') or []
 
     return render(request, 'reports/pptx_options.html', {
         'session': session,
@@ -639,6 +710,8 @@ def pptx_options(request):
         'pptx_section_fields': PPTX_SECTION_FIELDS,
         # ✅ PHASE 3 — pass to template so JS can decide overlay visibility
         'generated': request.GET.get('generated') == '1',
+        # ✅ PHASE 7 — feeds the "Some slides may have cut-off text" banner
+        'overflow_warnings': overflow_warnings,
     })
 
 
