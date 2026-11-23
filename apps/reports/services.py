@@ -852,9 +852,18 @@ class PracticumReportBuilder:
 
         final_pages = chosen['pages']
         notes = []
+
+        # ✅ PHASE 4 — note logic split into TWO mutually-exclusive modes so
+        # the user never sees the COHY 25-page guideline nagging them about
+        # a personal page target they explicitly set (or vice versa).
+        #
+        # Mode A (target set):  talk about THAT target — how close we got,
+        #                       why we missed, how to reach it next time.
+        #                       NEVER mention COHY's 25-page reference.
+        # Mode B (no target):   natural-length mode. COHY's 25-page guideline
+        #                       appears as REFERENCE ONLY, and only when the
+        #                       report falls short. Framed as optional.
         if target:
-            # ✅ PHASE 6 FIX (part 3): explain WHY the target wasn't reached
-            # and how many more logs are needed — not just "add more detail".
             log_count = len(self.logs)
             try:
                 comp_count = self.attachment.competencies.count() if self.attachment else 0
@@ -863,7 +872,8 @@ class PracticumReportBuilder:
 
             if final_pages == target:
                 notes.append(f'Exactly {target} pages, as you asked.')
-            elif grow:
+            elif final_pages < target and grow:
+                # Tried to grow, didn't reach — need more source material.
                 if log_count < 10:
                     gap = 10 - log_count
                     notes.append(
@@ -878,12 +888,14 @@ class PracticumReportBuilder:
                 else:
                     notes.append(
                         f'Your report fills only {final_pages} pages at maximum spacing, '
-                        f'short of your {target}-page target. Why: the AI-generated content '
-                        f'totals ~{final_pages} pages. To reach {target}, add more detailed '
-                        f'daily logs — especially for units where you only logged once or twice — '
-                        f'and regenerate so the AI has more source material to expand.'
+                        f'short of your {target}-page target. The AI used all available '
+                        f'source material, but the draft is still shorter than {target}. '
+                        f'To reach {target}, add more detailed daily logs — especially '
+                        f'for units where you logged once or twice — and regenerate so '
+                        f'the AI has more material to expand.'
                     )
-            elif final_pages > target:
+            elif final_pages > target and not grow:
+                # Tried to shrink, couldn't — need to trim source material.
                 notes.append(
                     f'The smallest we could fit is {final_pages} pages, above your '
                     f'{target}-page target. Why: your {log_count} daily entries produce more '
@@ -891,11 +903,21 @@ class PracticumReportBuilder:
                     f'Either trim less-important logs, or accept the larger report.'
                 )
             else:
+                # Rare overshoot in either direction — report the closest fit.
                 notes.append(f'The closest fit was {final_pages} pages (target {target}).')
             if chosen['dropped']:
                 notes.append('To fit, we changed: ' + ', '.join(chosen['dropped']) + '.')
-        if final_pages < MIN_PAGES_GUIDELINE:
-            notes.append(f'The COHY guideline is at least {MIN_PAGES_GUIDELINE} pages.')
+        else:
+            # Natural length — COHY's 25-page guideline is a REFERENCE, not a
+            # default. Only mention it when the report falls short, and frame
+            # it as optional + actionable.
+            if final_pages < MIN_PAGES_GUIDELINE:
+                notes.append(
+                    f"COHY's guideline is at least {MIN_PAGES_GUIDELINE} pages; this "
+                    f"report is {final_pages}. To extend it, add more detailed daily "
+                    f"logs, or set a personal target under 'Customise format' so the "
+                    f"AI aims higher."
+                )
 
         self.result = {
             'pages': final_pages, 'spacing': chosen['spacing'], 'level': chosen['level'],

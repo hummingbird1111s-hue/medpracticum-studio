@@ -9,30 +9,46 @@
     <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 mb-4 shadow-sm text-3xl">
       💳
     </div>
-    <h1 class="text-3xl font-bold text-gray-900 mb-2">Unlock Report & Presentation Builder</h1>
+    <h1 class="text-3xl font-bold text-gray-900 mb-2">Unlock Report &amp; Presentation Builder</h1>
     <p class="text-sm text-gray-500 max-w-2xl mx-auto">
-      One payment. Unlimited daily logs, AI-drafted reports, and slide decks —
-      for the whole semester.
+      One payment covers your entire practicum period. Unlimited daily logs,
+      AI-drafted reports, and slide decks — from day one to your final defence.
     </p>
   </div>
 
   {% if subscribed %}
-  <!-- ✅ ALREADY SUBSCRIBED -->
+  {# ═══════════════ STATE A — ALREADY SUBSCRIBED ═══════════════ #}
   <div class="bg-emerald-50 border-2 border-emerald-300 rounded-2xl p-6 text-center shadow-sm">
     <div class="text-4xl mb-3">✅</div>
     <h2 class="text-xl font-bold text-emerald-900 mb-2">You're all set!</h2>
     <p class="text-sm text-emerald-800 mb-1">
       Your subscription is active
       {% if subscription.expires_at %}
-        until <strong>{{ subscription.expires_at|date:"j M Y" }}</strong>
+        until <strong>{{ subscription.expires_at|date:"j F Y" }}</strong>
       {% endif %}.
     </p>
+
+    {% if days_remaining == 0 %}
+    <div class="bg-amber-100 border border-amber-300 rounded-lg px-3 py-2 mb-3 mt-3 text-sm text-amber-900 inline-block">
+      ⏰ Your subscription expires <strong>today</strong>. Renew to keep access.
+    </div>
+    {% elif days_remaining <= 7 %}
+    <div class="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3 mt-3 text-sm text-amber-900 inline-block">
+      ⏰ Only <strong>{{ days_remaining }} day{{ days_remaining|pluralize }}</strong> remaining.
+    </div>
+    {% elif days_remaining %}
+    <p class="text-xs text-emerald-700 mb-3">
+      ⏳ {{ days_remaining }} day{{ days_remaining|pluralize }} remaining
+    </p>
+    {% endif %}
+
     {% if subscription.last_reference %}
     <p class="text-xs text-emerald-700 mb-4">
       Last payment ref: <code class="bg-emerald-100 px-1.5 py-0.5 rounded">{{ subscription.last_reference }}</code>
       · ₵{{ subscription.last_amount_paid }}
     </p>
     {% endif %}
+
     <div class="flex flex-wrap justify-center gap-3 mt-4">
       <a href="{% url 'report_options' %}" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-5 py-2.5 text-sm shadow-sm transition-colors">
         Build a Report →
@@ -43,24 +59,72 @@
     </div>
   </div>
 
+  {% elif not session %}
+  {# ═══════════════ STATE B — NO ACTIVE ATTACHMENT ═══════════════ #}
+  <div class="bg-amber-50 border-2 border-amber-300 rounded-2xl p-6 shadow-sm">
+    <div class="flex items-start gap-4">
+      <div class="text-4xl flex-shrink-0">📍</div>
+      <div class="flex-1 min-w-0">
+        <h2 class="text-lg font-bold text-amber-900 mb-2">Start your attachment first</h2>
+        <p class="text-sm text-amber-800 mb-4">
+          Your subscription is tied to your practicum period — that way you pay once
+          and stay active from your attachment's start date through 30 days after it ends.
+          We need to know which facility and which dates so your access matches.
+        </p>
+        <a href="{% url 'start_attachment' %}"
+           class="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg px-5 py-2.5 text-sm shadow-sm transition-colors">
+          Start an attachment →
+        </a>
+      </div>
+    </div>
+  </div>
+
   {% else %}
-  <!-- ⏳ NOT SUBSCRIBED — PRICING CARD -->
+  {# ═══════════════ STATE C — HAS ATTACHMENT, NOT SUBSCRIBED ═══════════════ #}
+
+  <!-- Session context bar -->
+  <div class="bg-white rounded-2xl shadow-sm border border-emerald-100 p-4 flex items-center gap-3">
+    <div class="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center flex-shrink-0">
+      🏥
+    </div>
+    <div class="min-w-0 flex-1">
+      <p class="text-xs font-bold text-gray-400 uppercase tracking-wide mb-0.5">Current attachment</p>
+      <p class="text-sm font-semibold text-gray-900 truncate">{{ session.facility.name }}</p>
+      <p class="text-xs text-gray-500">
+        {{ session.start_date|date:"j M Y" }} → {{ session.end_date|date:"j M Y" }}
+      </p>
+    </div>
+  </div>
+
+  <!-- Pricing card -->
   <div class="bg-white rounded-2xl shadow-lg border border-emerald-100 overflow-hidden">
 
     <!-- Price header -->
     <div class="bg-gradient-to-br from-emerald-700 to-emerald-500 text-white p-8 text-center">
-      <p class="text-xs uppercase tracking-widest text-emerald-200 font-bold mb-2">Semester Plan</p>
+      <p class="text-xs uppercase tracking-widest text-emerald-200 font-bold mb-2">Practicum Period Plan</p>
       <div class="flex items-baseline justify-center gap-2">
         <span class="text-2xl font-bold text-emerald-100">₵</span>
         <span class="text-6xl font-black">{{ price }}</span>
       </div>
       <p class="text-sm text-emerald-100 mt-2">
-        One payment · {{ months }} months of access
+        One payment · Full practicum period access
       </p>
     </div>
 
     <!-- Features -->
     <div class="p-6 md:p-8">
+      <!-- ⏰ Validity banner -->
+      <div class="bg-emerald-100 text-emerald-900 px-4 py-3 rounded-lg text-center mb-6">
+        <p class="text-xs font-bold uppercase tracking-wider mb-1">Access valid until</p>
+        <p class="text-2xl font-black">{{ expected_expires_at|date:"j F Y" }}</p>
+        {% if session_end_date %}
+        <p class="text-xs mt-1 text-emerald-800">
+          Aligned with your attachment end date ({{ session_end_date|date:"j M Y" }})
+          plus a 30-day grace period to finalize your report.
+        </p>
+        {% endif %}
+      </div>
+
       <h3 class="text-sm font-bold uppercase tracking-wide text-gray-500 mb-4">
         What's included
       </h3>
@@ -103,7 +167,7 @@
         </li>
       </ul>
 
-      <!-- Payment CTA — every Django value passed via data-* attributes -->
+      <!-- Payment CTA -->
       <div class="border-t border-gray-100 pt-6">
         <button type="button" id="paystack-btn"
                 data-callback-url="{% url 'paystack_callback' %}"
@@ -116,20 +180,31 @@
         <p class="text-xs text-gray-500 text-center mt-3">
           Secure checkout · Powered by Paystack · MTN MoMo, Visa, Mastercard accepted
         </p>
+        <p class="text-xs text-gray-400 text-center mt-1">
+          You'll enter your payment details on Paystack's secure page.
+        </p>
       </div>
 
-      <!-- Staff-only test activation -->
+      {# ═══════════════ STAFF TEST MODE — high-contrast card ═══════════════ #}
       {% if user.is_staff %}
-      <div class="mt-6 pt-6 border-t border-dashed border-gray-200">
-        <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 mb-3">
-          <strong>Staff-only test mode.</strong> Simulates a successful payment so you can verify the
-          report/presentation flow before Paystack is wired. Remove before launch.
-        </p>
+      <div class="mt-6 bg-gray-900 rounded-xl p-5 shadow-lg">
+        <div class="flex items-start gap-3 mb-4">
+          <div class="text-2xl flex-shrink-0">🧪</div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-bold text-white mb-1">Staff Test Mode</p>
+            <p class="text-xs text-gray-300 leading-relaxed">
+              Simulates a successful payment for <strong class="text-white">{{ session.facility.name }}</strong>'s
+              period (until {{ expected_expires_at|date:"j M Y" }}). Use this to verify the
+              report/presentation flow before Paystack is wired.
+              <strong class="text-amber-300">Remove before launch.</strong>
+            </p>
+          </div>
+        </div>
         <form method="post" action="{% url 'subscribe_activate_test' %}">
           {% csrf_token %}
           <button type="submit"
-                  class="w-full bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-lg py-2 text-sm shadow-sm transition-colors">
-            🧪 Activate for testing (staff only)
+                  class="w-full bg-amber-400 hover:bg-amber-300 text-gray-900 font-bold rounded-lg py-3 text-sm shadow-md transition-colors">
+            Activate for testing (staff only)
           </button>
         </form>
       </div>
@@ -167,10 +242,19 @@
         return;
       }
 
-      // Paystack Inline JS is not enabled yet. To wire it up:
-      //   1. Load the Paystack inline script inside the head (served from js.paystack.co/v1/inline.js).
-      //   2. Replace the alert below with the PaystackPop.setup() call using
-      //      publicKey, userEmail, price * 100 (kobo), 'GHS', and callbackUrl.
+      // Paystack Inline JS wiring (planned):
+      //   1. Add <script src="https://js.paystack.co/v1/inline.js"></script> to base.html
+      //   2. Replace the alert below with:
+      //        PaystackPop.setup({
+      //          key: publicKey,
+      //          email: userEmail,
+      //          amount: Math.round(price * 100),   // pesewas
+      //          currency: 'GHS',
+      //          callback: function (response) {
+      //            window.location.href = callbackUrl + '?reference=' + response.reference;
+      //          },
+      //          onClose: function () { /* no-op */ }
+      //        }).openIframe();
       alert('Paystack checkout not wired yet — public key is set, but the JS snippet still needs to be enabled.');
     });
   });

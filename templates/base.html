@@ -273,6 +273,46 @@
       0% { opacity: 0; transform: scale(0.95) translateY(10px); }
       100% { opacity: 1; transform: scale(1) translateY(0); }
     }
+
+    /* ================= PWA UPDATE BANNER ================= */
+    #mp-update-banner {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      padding-top: calc(12px + env(safe-area-inset-top, 0px));
+      padding-bottom: 12px;
+      padding-left: 16px;
+      padding-right: 16px;
+      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      z-index: 9992;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.22);
+      transform: translateY(-100%);
+      transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+      box-sizing: border-box;
+    }
+    #mp-update-banner.show { transform: translateY(0); }
+    #mp-update-banner .mp-update-icon { font-size: 22px; flex-shrink: 0; }
+    #mp-update-banner .mp-update-text { flex: 1; min-width: 0; }
+    #mp-update-banner .mp-update-title { margin: 0; font-weight: 700; font-size: 14px; line-height: 1.2; }
+    #mp-update-banner .mp-update-sub { margin: 2px 0 0; font-size: 12px; color: #e0e7ff; line-height: 1.35; }
+    #mp-update-banner .mp-update-cta {
+      flex-shrink: 0; background: #ffffff; color: #4f46e5; font-weight: 700; font-size: 13px;
+      padding: 8px 14px; border-radius: 8px; text-decoration: none; white-space: nowrap;
+      transition: background 0.15s;
+    }
+    #mp-update-banner .mp-update-cta:hover { background: #eef2ff; }
+    #mp-update-banner .mp-update-close {
+      flex-shrink: 0; background: transparent; border: 0; color: #e0e7ff;
+      font-size: 20px; line-height: 1; cursor: pointer; padding: 4px 6px; margin-left: -4px;
+      transition: color 0.15s;
+    }
+    #mp-update-banner .mp-update-close:hover { color: #ffffff; }
+    @media (max-width: 480px) {
+      #mp-update-banner .mp-update-sub { display: none; }
+    }
   </style>
 
   <!-- ===== FLOATING AI STYLES ===== -->
@@ -430,11 +470,15 @@
   })();
   </script>
 
-  {% if user.is_authenticated %}
-  <div id="mp-backdrop" class="mp-backdrop" onclick="mpCloseSidebar()"></div>
-  {% endif %}
-
+  <!-- ============================================================ -->
+  <!-- ✅ SHELL — backdrop is now INSIDE the shell so it can never   -->
+  <!--    sit above the sidebar (fixes unclickable sidebar).         -->
+  <!-- ============================================================ -->
   <div class="mp-shell">
+
+    {% if user.is_authenticated %}
+    <div id="mp-backdrop" class="mp-backdrop" onclick="mpCloseSidebar()"></div>
+    {% endif %}
 
     {% if user.is_authenticated %}
     <aside id="mp-sidebar" class="mp-sidebar" aria-label="Main navigation">
@@ -505,7 +549,7 @@
 
       <div class="mp-sidebar__footer" style="display: flex; flex-direction: column; gap: 8px;">
 
-        <!-- ✅ SUBSCRIPTION BADGE — renamed to "Unlock Full Potential" with gradient look -->
+        <!-- ✅ SUBSCRIPTION BADGE -->
         <a href="{% url 'subscribe' %}"
            class="mp-sidebar__subscription {% if user_has_subscription %}mp-sidebar__subscription--active{% else %}mp-sidebar__subscription--inactive{% endif %}">
           {% if user_has_subscription %}
@@ -523,6 +567,19 @@
           </svg>
           How to Use System
         </a>
+
+        <!-- ✅ NEW: Manual page refresh (soft reload — no cache purge) -->
+        <button type="button"
+                onclick="mpManualRefresh()"
+                style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 12px; background: rgba(255,255,255,0.1); border-radius: 8px; font-weight: 500; font-size: 14px; color: #ecfdf5; text-decoration: none; transition: background 0.15s ease; border: 0; cursor: pointer; font-family: inherit; width: 100%;"
+                onmouseover="this.style.background='rgba(255,255,255,0.2)'"
+                onmouseout="this.style.background='rgba(255,255,255,0.1)'">
+          <svg viewBox="0 0 24 24" style="width: 18px; height: 18px; flex-shrink: 0; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;">
+            <path d="M23 4v6h-6M1 20v-6h6"/>
+            <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+          </svg>
+          Refresh page
+        </button>
 
         <form method="post" action="{% url 'logout' %}" data-logout style="margin: 0;">
           {% csrf_token %}
@@ -1577,9 +1634,6 @@
 
   {# ============================================================ #}
   {# ✅ PAYMENT BANNER — pops up 3s after welcome closes.          #}
-  {# Now stays visible with the pop-up animation until the user   #}
-  {# clicks the × to dismiss. After dismissal, it re-appears      #}
-  {# automatically after 8 seconds (insistent reminder).          #}
   {# ============================================================ #}
   {% if user.is_authenticated and show_payment_banner %}
   <style>
@@ -1647,7 +1701,6 @@
     var banner = document.getElementById('mp-pay-banner');
     if (!banner) return;
 
-    // Don't show on the subscribe page itself or in admin
     var p = window.location.pathname;
     if (p.indexOf('/payments/') === 0 || p.indexOf('/admin/') === 0) {
       banner.remove();
@@ -1656,41 +1709,30 @@
 
     var showTimer = null;
     var reshowTimer = null;
-    var RESHOW_MS = 8000; // 8 seconds between dismiss and re-show (within your 7-10s range)
+    var RESHOW_MS = 8000;
 
     function showBanner() {
       if (!banner || !document.body.contains(banner)) return;
       banner.classList.add('show');
     }
-
-    function hideBanner() {
-      banner.classList.remove('show');
-    }
-
+    function hideBanner() { banner.classList.remove('show'); }
     function scheduleReshow() {
       if (reshowTimer) clearTimeout(reshowTimer);
       reshowTimer = setTimeout(function () {
-        if (banner && document.body.contains(banner)) {
-          showBanner();
-        }
+        if (banner && document.body.contains(banner)) showBanner();
       }, RESHOW_MS);
     }
-
     function startBannerLoop() {
-      // Show once with pop-up animation after 3s; then STAY visible
-      // (no cycling) until the user clicks × to dismiss.
       if (showTimer) clearTimeout(showTimer);
       showTimer = setTimeout(showBanner, 3000);
     }
 
-    // × button: hide banner, then re-show automatically after 8s
     window.dismissPaymentBanner = function () {
       if (showTimer) clearTimeout(showTimer);
       hideBanner();
       scheduleReshow();
     };
 
-    // 3s after welcome closes (or 3s after load if welcome already seen)
     if (localStorage.getItem('mp_welcome_seen')) {
       startBannerLoop();
     } else {
@@ -1700,8 +1742,85 @@
   </script>
   {% endif %}
 
+  {# ============================================================ #}
+  {# ✅ PWA UPDATE BANNER — appears when a new service worker is   #}
+  {# waiting. Clicking "Update →" takes the user to /update/.      #}
+  {# ============================================================ #}
+  {% if user.is_authenticated %}
+  <div id="mp-update-banner" role="alert" aria-live="polite">
+    <div class="mp-update-icon">🔄</div>
+    <div class="mp-update-text">
+      <p class="mp-update-title">Update available</p>
+      <p class="mp-update-sub">A newer version of MedPracticum is ready</p>
+    </div>
+    <a href="{% url 'pwa_update' %}" class="mp-update-cta">Update →</a>
+    <button type="button" class="mp-update-close" onclick="mpDismissUpdateBanner()" aria-label="Dismiss">×</button>
+  </div>
+  {% endif %}
+
   <script src="{% static 'js/offline-sync.js' %}"></script>
   <script src="{% static 'js/pwa.js' %}"></script>
+
+  <!-- ================= PWA UPDATE CHECKER + MANUAL REFRESH ================= -->
+  <script>
+  /* Sidebar "Refresh page" button → soft reload, no cache purge */
+  function mpManualRefresh() {
+    if (confirm('Refresh this page? Any unsaved changes will be lost.')) {
+      window.location.reload();
+    }
+  }
+
+  /* Detect when a new service worker is waiting → show banner */
+  (function () {
+    if (!('serviceWorker' in navigator)) return;
+    if (window.location.pathname.indexOf('/update') === 0) return;
+
+    var banner = document.getElementById('mp-update-banner');
+    if (!banner) return;
+
+    function showBanner() { banner.classList.add('show'); }
+    function hideBanner() { banner.classList.remove('show'); }
+
+    window.mpDismissUpdateBanner = function () {
+      hideBanner();
+      sessionStorage.setItem('mp_update_dismissed', '1');
+    };
+
+    if (sessionStorage.getItem('mp_update_dismissed') === '1') return;
+
+    navigator.serviceWorker.getRegistration().then(function (reg) {
+      if (!reg) return;
+
+      // New SW already installed and waiting to activate
+      if (reg.waiting && navigator.serviceWorker.controller) {
+        showBanner();
+      }
+
+      // Future installs
+      reg.addEventListener('updatefound', function () {
+        var nw = reg.installing;
+        if (!nw) return;
+        nw.addEventListener('statechange', function () {
+          if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+            showBanner();
+          }
+        });
+      });
+
+      // Poll every 60s + on tab focus
+      setInterval(function () {
+        reg.update().catch(function () {});
+      }, 60000);
+
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible') {
+          reg.update().catch(function () {});
+        }
+      });
+    }).catch(function () {});
+  })();
+  </script>
+
   {% block scripts %}{% endblock %}
 </body>
 </html>

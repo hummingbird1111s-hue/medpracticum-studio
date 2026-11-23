@@ -1,5 +1,7 @@
-{% load static %}
-const VERSION = 'v2'; // bump this number when you want everyone to drop old caches
+// {% load static %}
+const VERSION = 'v5'; // ✅ bumped from 'v3' — this deploy removes skipWaiting() so the update prompt can actually appear.
+                     // ⚠️ BUMP THIS ON EVERY DEPLOY. The browser uses the file content to detect updates;
+                     //    if only Django code changes and this file is byte-identical, no update prompt fires.
 const STATIC_CACHE = 'mp-static-' + VERSION;
 const PAGES_CACHE = 'mp-pages-' + VERSION;
 const OFFLINE_URL = '/offline/';
@@ -16,14 +18,22 @@ const PRECACHE = [
   '{% static "icons/icon-192.png" %}',
 ];
 
+// ─────────────────────────────────────────────────────────────
+// INSTALL — cache the shell. Do NOT skipWaiting(), or the update
+// banner in base.html can never detect a waiting SW.
+// ─────────────────────────────────────────────────────────────
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(STATIC_CACHE)
       .then((cache) => cache.addAll(PRECACHE))
-      .then(() => self.skipWaiting())
+    // NOTE: no self.skipWaiting() here on purpose.
   );
 });
 
+// ─────────────────────────────────────────────────────────────
+// ACTIVATE — clean up any old "mp-*" caches from previous versions
+// and claim clients (harmless once we're actually activated).
+// ─────────────────────────────────────────────────────────────
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
@@ -36,6 +46,22 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// ─────────────────────────────────────────────────────────────
+// MESSAGE — support an explicit SKIP_WAITING trigger.
+// The /update/ page in this build purges caches + unregisters,
+// so this handler is defensive (not strictly required), but it
+// lets a future "quick update" path activate immediately.
+// ─────────────────────────────────────────────────────────────
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// FETCH — same routing as before. Never touch /api/, /admin/,
+// or the /update/ page (which must always come from network).
+// ─────────────────────────────────────────────────────────────
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
@@ -43,6 +69,8 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/admin/')) return;
+  if (url.pathname.startsWith('/update')) return;          // always fresh
+  if (url.pathname === '/service-worker.js') return;       // never cache the SW itself
 
   if (url.pathname.startsWith('/static/')) {
     event.respondWith(staleWhileRevalidate(req));

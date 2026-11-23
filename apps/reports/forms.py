@@ -83,30 +83,89 @@ class ReportOptionsForm(StyledFormMixin, forms.Form):
 
 
 class ReportContentForm(StyledFormMixin, forms.Form):
-    abstract = forms.CharField(
-        required=False, label='Abstract', widget=forms.Textarea(attrs={'rows': 8}),
-        help_text='About 150 to 250 words summarising the attachment.',
-    )
-    keywords = forms.CharField(required=False, label='Keywords', help_text='Separate with commas.')
-    acknowledgments = forms.CharField(
-        required=False, label='Acknowledgments', widget=forms.Textarea(attrs={'rows': 8}),
+    """
+    ✅ Edit-Report-Manually form — exactly the 10 body sections that
+    report.html renders, in the same order (Introduction → Conclusion).
+    Field names MUST match the content keys read by report.html
+    (`content.introduction`, `content.facility_profile`, …).
+
+    Removed vs the previous version:
+      • abstract, keywords            — not rendered in the PDF (Phase 2
+                                        removed the abstract page). The
+                                        preview overlay still reads the
+                                        AI-drafted abstract from
+                                        report.content directly.
+      • acknowledgments               — not rendered in the PDF.
+      • references                    — not rendered in the PDF.
+      • facility_recs, academic_recs  — dead keys; the Recommendations
+                                        chapter reads content.recommendations.
+
+    Kept in report.content (untouched by this form): abstract, keywords,
+    acknowledgments, references — merged-on-save by report_content view
+    so future overlays / rebuilds still find the AI's original prose.
+    """
+
+    introduction = forms.CharField(
+        required=False,
+        label='Introduction (Chapter 1)',
+        widget=forms.Textarea(attrs={'rows': 10}),
         help_text='Separate paragraphs with a blank line.',
+    )
+    facility_profile = forms.CharField(
+        required=False,
+        label='Facility Profile (Chapter 2)',
+        widget=forms.Textarea(attrs={'rows': 10}),
+        help_text='Write in THIRD person (e.g. "The hospital has 150 beds" — '
+                  'avoid "I" / "we"). First-person text here is rejected and '
+                  'the facility record is used instead.',
+    )
+    activities_performed = forms.CharField(
+        required=False,
+        label='Activities Performed (Chapter 3)',
+        widget=forms.Textarea(attrs={'rows': 12}),
+        help_text='Separate paragraphs with a blank line. Sub-headings per unit are fine.',
+    )
+    skills_acquired = forms.CharField(
+        required=False,
+        label='Skills Acquired (Chapter 4)',
+        widget=forms.Textarea(attrs={'rows': 10}),
+        help_text='One skill per line — bullet points applied automatically.',
+    )
+    workshops = forms.CharField(
+        required=False,
+        label='Workshops (Chapter 5)',
+        widget=forms.Textarea(attrs={'rows': 8}),
+        help_text='Leave blank to use the workshop records from your logbook.',
+    )
+    lessons_learnt = forms.CharField(
+        required=False,
+        label='Lessons Learnt (Chapter 6)',
+        widget=forms.Textarea(attrs={'rows': 10}),
+        help_text='One lesson per line — bullet points applied automatically.',
+    )
+    observation = forms.CharField(
+        required=False,
+        label='Observations (Chapter 7)',
+        widget=forms.Textarea(attrs={'rows': 10}),
+        help_text='Separate paragraphs with a blank line.',
+    )
+    challenges = forms.CharField(
+        required=False,
+        label='Challenges (Chapter 8)',
+        widget=forms.Textarea(attrs={'rows': 10}),
+        help_text='Separate paragraphs with a blank line.',
+    )
+    recommendations = forms.CharField(
+        required=False,
+        label='Recommendations (Chapter 9)',
+        widget=forms.Textarea(attrs={'rows': 10}),
+        help_text='One recommendation per line — bullet points applied automatically.',
     )
     conclusion = forms.CharField(
-        required=False, label='Conclusion (Chapter 5)', widget=forms.Textarea(attrs={'rows': 8}),
+        required=False,
+        label='Conclusion (Chapter 10)',
+        widget=forms.Textarea(attrs={'rows': 10}),
         help_text='Separate paragraphs with a blank line.',
-    )
-    facility_recs = forms.CharField(
-        required=False, label='Recommendations to the facility', widget=forms.Textarea(attrs={'rows': 5}),
-        help_text='One recommendation per line.',
-    )
-    academic_recs = forms.CharField(
-        required=False, label='Recommendations to the college', widget=forms.Textarea(attrs={'rows': 5}),
-        help_text='One recommendation per line.',
-    )
-    references = forms.CharField(
-        required=False, label='References (APA 7th edition)', widget=forms.Textarea(attrs={'rows': 8}),
-        help_text='One reference per line, in alphabetical order. Leave blank if you cited no sources.',
     )
 
 

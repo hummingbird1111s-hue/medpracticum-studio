@@ -23,11 +23,13 @@ logger = logging.getLogger(__name__)
 # The Facility Profile is built purely from the facility record in the
 # database (see PracticumReportBuilder._build_facility_profile).
 #
-# LENGTH PHILOSOPHY (v4):
+# LENGTH PHILOSOPHY (v5):
 #   The old prompts hard-capped sections at 80–200 words, which caused the
 #   AI to under-write and the report to fall short of the user's page target.
 #   These prompts instead give the AI a per-section WORD TARGET computed from
 #   the user's chosen page count — under-writing is now treated as failure.
+#   When the user has NOT set a target, the budget is estimated from log
+#   volume (sparse logs → short report; rich logs → near COHY 25 pages).
 #   The only remaining hard constraints are STRUCTURAL (bullet count, sub-
 #   heading organization), never word count.
 
@@ -330,41 +332,71 @@ def get_ai_reply_with_image(prompt, image_bytes, mime='image/jpeg'):
 # Per-section word budgets — computed from target_pages
 # ============================================================
 
-def _compute_word_budget(target_pages):
+# Absolute floors so short reports don't produce a 67-word abstract.
+# These match the pre-v5 hardcoded fallback budget (~3,000 words) so nothing
+# regresses for users with very few logs and no explicit target.
+_SECTION_FLOORS = {
+    'abstract':              180,
+    'acknowledgments':       120,
+    'introduction':          300,
+    'activities_performed':  800,
+    'skills_acquired':       350,
+    'workshops':             120,
+    'lessons_learnt':        350,
+    'observation':           250,
+    'challenges':            250,
+    'recommendations':       250,
+    'conclusion':            180,
+}
+
+# Distribution percentages (sum ≈ 1.0) — governs how a page-target's word
+# budget is split across sections.
+_BUDGET_DISTRIBUTION = {
+    'abstract':              0.045,
+    'acknowledgments':       0.030,
+    'introduction':          0.070,
+    'activities_performed':  0.340,   # biggest section
+    'skills_acquired':       0.115,
+    'workshops':             0.025,
+    'lessons_learnt':        0.115,
+    'observation':           0.075,
+    'challenges':            0.070,
+    'recommendations':       0.060,
+    'conclusion':            0.050,
+}
+
+
+def _compute_word_budget(target_pages, log_count=0):
     """
-    Compute per-section word targets so the total prose fills the user's
-    target page count. ~300 words per page of prose (leaving room for
-    cover, TOC, tables, figures, and references).
+    Per-section word targets.
 
-    Returns a dict: {section_key: word_target_int}
+    Two modes:
+      • target_pages set (>= 5)  → scale budgets to fill that page count
+      • target_pages None/< 5    → estimate natural length from log volume
+                                    (sparse → short, rich → near COHY 25)
+
+    Floors are applied so tiny targets still produce a substantive abstract,
+    conclusion, etc. ~300 prose words per page.
     """
-    if not target_pages or target_pages < 5:
-        # Fallback — short report default
-        return {
-            'abstract': 180, 'acknowledgments': 120, 'introduction': 250,
-            'activities_performed': 800, 'skills_acquired': 350, 'workshops': 100,
-            'lessons_learnt': 350, 'observation': 250, 'challenges': 250,
-            'recommendations': 250, 'conclusion': 180,
-        }
+    if target_pages and target_pages >= 5:
+        effective_pages = target_pages
+    else:
+        # Natural-length estimate — no padding, matches what the source
+        # material can realistically support.
+        if log_count < 5:
+            effective_pages = 5
+        elif log_count < 10:
+            effective_pages = 8
+        elif log_count < 20:
+            effective_pages = 12
+        else:
+            effective_pages = 18   # rich logs — just under COHY guideline
 
-    total_prose_words = int(target_pages * 300)
-
-    # Distribution percentages (sum ≈ 1.0)
-    distribution = {
-        'abstract':             0.045,   # 25 pages → ~340
-        'acknowledgments':      0.030,   # 25 pages → ~225
-        'introduction':         0.070,   # 25 pages → ~525
-        'activities_performed': 0.340,   # 25 pages → ~2,550 (the biggest section)
-        'skills_acquired':      0.115,   # 25 pages → ~860
-        'workshops':            0.025,   # 25 pages → ~190
-        'lessons_learnt':       0.115,   # 25 pages → ~860
-        'observation':          0.075,   # 25 pages → ~560
-        'challenges':           0.070,   # 25 pages → ~525
-        'recommendations':      0.060,   # 25 pages → ~450
-        'conclusion':           0.050,   # 25 pages → ~375
+    total_prose_words = int(effective_pages * 300)
+    return {
+        section: max(int(total_prose_words * pct), _SECTION_FLOORS.get(section, 0))
+        for section, pct in _BUDGET_DISTRIBUTION.items()
     }
-    return {section: int(total_prose_words * pct)
-            for section, pct in distribution.items()}
 
 
 # ============================================================
@@ -392,7 +424,7 @@ _QUALITY_RULES = (
     "like NHIS, DHIMS, LHIMS, ICD-10 are fine and should be used.)\n"
     "14. TARGET WORD COUNT IS REAL. The section instruction below includes a TARGET WORD COUNT. "
     "Write within ±20% of that target. Under-writing is treated as FAILURE — the report will fall "
-    "short of the user's page target and they will be disappointed. When in doubt, write MORE, not less.\n"
+    "short of expectations and the user will be disappointed. When in doubt, write MORE, not less.\n"
 )
 
 
@@ -400,7 +432,15 @@ _QUALITY_RULES = (
 # Entry point 1 — report prose drafting
 # ============================================================
 
-def draft_sections_with_ai(session, samples=None, target_pages=25):
+def draft_sections_with_ai(session, samples=None, target_pages=None):
+    """
+    Draft the prose sections with AI.
+
+    target_pages:
+        The user's explicit page preference (from report.options.target_pages).
+        None means "no target set" — the AI will aim for a natural length
+        estimated from log volume.
+    """
     if not getattr(settings, 'REPORT_AI_DRAFTING_ENABLED', True):
         return {}
 
@@ -444,13 +484,19 @@ def draft_sections_with_ai(session, samples=None, target_pages=25):
     # Log volume affects how aggressively the AI must expand
     log_count = session.daily_logs.filter(is_deleted=False).count()
     if log_count < 5:
+        if target_pages:
+            length_phrase = f"to reach the {target_pages}-page target"
+        else:
+            length_phrase = (
+                "so the report is substantive and professional — not a bare summary"
+            )
         expansion_rule = (
             "\nCRITICAL (EXPANSION REQUIRED): The student has very few daily logs "
             f"({log_count}). You MUST heavily expand on the units and activities "
             "mentioned using your extensive knowledge of Ghanaian Health Information "
             "Management workflows. Invent realistic, professional activities consistent "
-            "with the facilities and units mentioned, to ensure the report reaches the "
-            "targeted page count. Do NOT copy raw logs verbatim.\n"
+            "with the facilities and units mentioned, "
+            f"{length_phrase}. Do NOT copy raw logs verbatim.\n"
         )
     elif log_count < 15:
         expansion_rule = (
@@ -463,24 +509,33 @@ def draft_sections_with_ai(session, samples=None, target_pages=25):
 
     note = ""
     if log_count < 5:
-        note = (
-            f"Note: You have very few logs ({log_count}). The AI expanded the content, "
-            f"but adding more logs will improve depth and help reach your "
-            f"{target_pages}-page target."
-        )
+        if target_pages:
+            note = (
+                f"Note: You have very few logs ({log_count}). The AI expanded the content, "
+                f"but adding more logs will improve depth and help reach your "
+                f"{target_pages}-page target."
+            )
+        else:
+            note = (
+                f"Note: You have very few logs ({log_count}). The AI expanded the content "
+                f"using your competency areas; adding more logs will further improve depth."
+            )
     elif log_count < 15:
-        note = (
-            f"Note: If the generated report falls short of your {target_pages}-page "
-            f"target, adding more daily logs will provide the AI with more material "
-            f"to synthesize."
-        )
+        if target_pages:
+            note = (
+                f"Note: If the generated report falls short of your {target_pages}-page "
+                f"target, adding more daily logs will provide the AI with more material "
+                f"to synthesize."
+            )
+        else:
+            note = ""
 
     drafts = {}
     if note:
         drafts['_ai_note'] = note
 
-    # Compute per-section word budgets from the user's page target
-    budgets = _compute_word_budget(target_pages)
+    # Compute per-section word budgets (from target_pages, or natural length)
+    budgets = _compute_word_budget(target_pages, log_count=log_count)
 
     max_seconds = getattr(settings, 'REPORT_AI_DRAFTING_MAX_SECONDS', DEFAULT_MAX_SECONDS)
     unique_seed = random.randint(1000, 9999)
@@ -503,10 +558,18 @@ def draft_sections_with_ai(session, samples=None, target_pages=25):
         if word_budget:
             lo = int(word_budget * 0.8)
             hi = int(word_budget * 1.2)
+            if target_pages:
+                context_sentence = (
+                    f"Write enough to fill your share of the {target_pages}-page report."
+                )
+            else:
+                context_sentence = (
+                    "Write enough to make this section substantive — not a bare summary."
+                )
             budget_hint = (
                 f"\nTARGET WORD COUNT FOR THIS SECTION: approximately {word_budget} words "
-                f"(acceptable range {lo}-{hi}). Write enough to fill your share of the "
-                f"{target_pages}-page report. Under-writing is a FAILURE.\n"
+                f"(acceptable range {lo}-{hi}). {context_sentence} "
+                f"Under-writing is a FAILURE.\n"
             )
 
         prompt = (
@@ -561,7 +624,7 @@ def draft_sections_with_ai(session, samples=None, target_pages=25):
     if drafts:
         logger.info(
             'AI drafting complete: %d/%d sections drafted in %.1fs (competencies=%d, '
-            'target_pages=%d, log_count=%d)',
+            'target_pages=%s, log_count=%d)',
             len([k for k in drafts if not k.startswith('_')]),
             total, time.time() - total_start, len(competencies),
             target_pages, log_count,

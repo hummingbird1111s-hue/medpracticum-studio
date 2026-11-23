@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+{% block title %}Update · MedPracticum Studio{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-6">
+  <div class="text-center mt-4">
+    <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-100 text-indigo-600 mb-4 shadow-sm text-3xl">🔄</div>
+    <h1 class="text-3xl font-bold text-gray-900 mb-2">Update available</h1>
+    <p class="text-sm text-gray-600 max-w-lg mx-auto">
+      A newer version of MedPracticum Studio is ready. Click below to install it.
+      The app cache will be cleared and the page will reload fresh — no saved data is lost.
+    </p>
+  </div>
+
+  <div class="bg-white rounded-2xl shadow-lg border border-indigo-100 p-6 md:p-8">
+    <ul class="space-y-3 mb-6">
+      <li class="flex items-start gap-3">
+        <span class="text-indigo-500 mt-0.5 flex-shrink-0">✓</span>
+        <div>
+          <p class="text-sm font-semibold text-gray-900">Clears the app cache</p>
+          <p class="text-xs text-gray-600">Old cached files are removed so the new version loads correctly.</p>
+        </div>
+      </li>
+      <li class="flex items-start gap-3">
+        <span class="text-indigo-500 mt-0.5 flex-shrink-0">✓</span>
+        <div>
+          <p class="text-sm font-semibold text-gray-900">Refreshes the service worker</p>
+          <p class="text-xs text-gray-600">The old background worker is replaced with the new one.</p>
+        </div>
+      </li>
+      <li class="flex items-start gap-3">
+        <span class="text-indigo-500 mt-0.5 flex-shrink-0">✓</span>
+        <div>
+          <p class="text-sm font-semibold text-gray-900">Keeps your data intact</p>
+          <p class="text-xs text-gray-600">Logs, attachments, and reports stay on the server — this only updates the app shell.</p>
+        </div>
+      </li>
+    </ul>
+
+    <div id="update-status" style="display:none;"
+         class="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mb-4 text-sm text-indigo-900">
+      <p id="update-status-text">Updating…</p>
+    </div>
+
+    <button type="button" id="update-now-btn" onclick="mpPerformUpdate()"
+            class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg py-3 text-base shadow-md transition-colors disabled:opacity-60 disabled:cursor-wait">
+      Update to latest version
+    </button>
+    <p class="text-xs text-gray-500 text-center mt-3">The page will reload automatically when the update completes.</p>
+  </div>
+
+  <div class="text-center">
+    <a href="/" class="text-sm text-indigo-700 hover:text-indigo-900 underline">← Back to dashboard</a>
+  </div>
+</div>
+
+<script>
+async function mpPerformUpdate() {
+  var btn = document.getElementById('update-now-btn');
+  var status = document.getElementById('update-status');
+  var statusText = document.getElementById('update-status-text');
+  btn.disabled = true;
+  btn.textContent = 'Updating…';
+  status.style.display = 'block';
+
+  try {
+    statusText.textContent = 'Clearing caches…';
+    if ('caches' in window) {
+      var names = await caches.keys();
+      await Promise.all(names.map(function (n) { return caches.delete(n); }));
+    }
+
+    statusText.textContent = 'Removing old service worker…';
+    if ('serviceWorker' in navigator) {
+      var regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(function (r) { return r.unregister(); }));
+    }
+
+    statusText.textContent = 'Reloading fresh version…';
+    await new Promise(function (r) { setTimeout(r, 400); });
+    window.location.replace('/?updated=' + Date.now());
+  } catch (err) {
+    console.error('Update failed:', err);
+    statusText.textContent = 'Update failed — reloading anyway…';
+    await new Promise(function (r) { setTimeout(r, 800); });
+    window.location.reload();
+  }
+}
+</script>
+{% endblock %}

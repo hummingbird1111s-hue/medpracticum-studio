@@ -3,6 +3,7 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 from django.views.generic import RedirectView
+from apps.payments.views import pwa_update
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -10,6 +11,7 @@ urlpatterns = [
     path('reports/', include('apps.reports.urls')),
     path('payments/', include('apps.payments.urls')),   # ✅ NEW: subscriptions + Paystack
     path('', include('apps.logs.urls')),
+    path('update/', pwa_update, name='pwa_update'),
 
     # Silence the browser's automatic /favicon.ico request by pointing it at the PWA icon.
     path('favicon.ico',

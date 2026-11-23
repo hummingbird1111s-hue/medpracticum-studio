@@ -377,8 +377,9 @@
   <!-- Observations -->
   <h1 id="ch7" class="chapter-title">Observations</h1>
   <div class="ai-content">
-    {% if content.observation %}
-      {{ content.observation|linebreaks }}
+    {% if content.observation or content.observations %}
+      {% if content.observation %}{{ content.observation|linebreaks }}{% endif %}
+      {% if content.observations %}{{ content.observations|linebreaks }}{% endif %}
     {% else %}
       {% for para in observation %}
         <p>{{ para }}</p>

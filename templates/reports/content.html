@@ -78,6 +78,47 @@
     margin: 0;
     line-height: 1.4;
   }
+
+  /* ===== Section-order map and section visual separators ===== */
+  .mp-section-map {
+    counter-reset: section;
+  }
+  .mp-section-map li {
+    counter-increment: section;
+    position: relative;
+    padding-left: 28px;
+    line-height: 1.6;
+  }
+  .mp-section-map li::before {
+    content: counter(section);
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 20px;
+    height: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #ecfdf5;
+    color: #047857;
+    border-radius: 50%;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  /* Highlight each editable section a bit — makes long forms easier to scan */
+  #edit-form textarea {
+    min-height: 140px;
+    font-family: inherit;
+    line-height: 1.55;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  #edit-form textarea:focus {
+    outline: none;
+    border-color: #059669;
+    box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.15);
+  }
+  /* Section anchor smooth scroll */
+  html { scroll-behavior: smooth; }
 </style>
 
 <div class="max-w-3xl mx-auto">
@@ -98,13 +139,42 @@
     </a>
   </div>
 
-  <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 mb-6">
+  <!-- How-this-works card -->
+  <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 mb-4">
     <p class="text-sm text-emerald-800">
       <strong>How this works:</strong> the fields below show the AI draft built
       from your logs and format samples. Edit any section, then hit
       <strong>Regenerate Report</strong> to rebuild the PDF with your changes.
       Sections you don't touch stay exactly as the AI drafted them.
     </p>
+  </div>
+
+  <!-- Section order reference card -->
+  <div class="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-6">
+    <div class="flex items-start justify-between gap-3 flex-wrap mb-3">
+      <div>
+        <p class="text-sm font-bold text-blue-900">📖 Report structure — edit in this order</p>
+        <p class="text-xs text-blue-700 mt-1">
+          Each section below follows the COHY canonical order. Fields load in this sequence automatically.
+        </p>
+      </div>
+      <span class="text-xs bg-white text-blue-800 px-2 py-1 rounded-md font-semibold whitespace-nowrap border border-blue-200">
+        COHY Standard
+      </span>
+    </div>
+    <ol class="mp-section-map grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm text-blue-900">
+      <li>Introduction</li>
+      <li>Facility Profile</li>
+      <li>Activities Performed</li>
+      <li>Skills Acquired</li>
+      <li>Workshops</li>
+      <li>Lessons Learnt</li>
+      <li>Observations</li>
+      <li>Challenges</li>
+      <li>Recommendations</li>
+      <li>Conclusion</li>
+      <li>Signature and Date</li>
+    </ol>
   </div>
 
   <!-- Main Edit Form -->
@@ -158,13 +228,103 @@
 </div>
 
 <script>
+  // ============================================================
+  // A) Reorder form fields to match COHY canonical section order
+  //    (runs automatically; safely no-ops if field names don't match)
+  // ============================================================
+  (function () {
+    var form = document.getElementById('edit-form');
+    if (!form) return;
+
+    var SECTION_KEYS = [
+      ['introduction', 'intro'],
+      ['facility_profile', 'facility profile', 'facility'],
+      ['activities_performed', 'activities performed', 'activities'],
+      ['skills_acquired', 'skills acquired', 'skills'],
+      ['workshops', 'workshop'],
+      ['lessons_learnt', 'lessons learned', 'lessons'],
+      ['observations', 'observation'],
+      ['challenges', 'challenge'],
+      ['recommendations', 'recommendation'],
+      ['conclusion'],
+      ['signature_and_date', 'signature and date', 'signature', 'date']
+    ];
+
+    function normalize(s) {
+      return String(s || '').toLowerCase().replace(/[_\-\s]+/g, ' ').trim();
+    }
+
+    function detectSection(text) {
+      var t = normalize(text);
+      if (!t) return -1;
+      for (var i = 0; i < SECTION_KEYS.length; i++) {
+        for (var j = 0; j < SECTION_KEYS[i].length; j++) {
+          if (t === normalize(SECTION_KEYS[i][j]) ||
+              t.indexOf(normalize(SECTION_KEYS[i][j])) !== -1) {
+            return i;
+          }
+        }
+      }
+      return -1;
+    }
+
+    // Find each textarea and try to detect its section
+    var textareas = form.querySelectorAll('textarea');
+    if (!textareas.length) return;
+
+    var items = [];
+    textareas.forEach(function (ta) {
+      var labelEl = form.querySelector('label[for="' + ta.id + '"]');
+      if (!labelEl) {
+        var parent = ta.closest('div');
+        if (parent) labelEl = parent.querySelector('label');
+      }
+      var labelText = labelEl ? labelEl.textContent : '';
+      var idx = detectSection(labelText);
+      if (idx === -1) idx = detectSection(ta.name || ta.id || '');
+      if (idx === -1) return;
+
+      // Find the wrapper (div that contains both the label and the textarea)
+      var wrapper = labelEl ? labelEl.closest('div') : ta.parentElement;
+      if (!wrapper || !wrapper.contains(ta)) {
+        wrapper = ta.parentElement;
+      }
+      if (!wrapper) return;
+      if (labelEl && !wrapper.contains(labelEl)) return;
+
+      items.push({ wrapper: wrapper, order: idx, name: ta.name || ta.id });
+    });
+
+    if (items.length < 3) return;
+
+    // If already sorted, no-op
+    var sorted = items.slice().sort(function (a, b) { return a.order - b.order; });
+    var alreadySorted = items.every(function (it, i) { return it === sorted[i]; });
+    if (alreadySorted) return;
+
+    // Only reorder if all wrappers share the same parent
+    var parent = items[0].wrapper.parentElement;
+    if (!parent) return;
+    var allSameParent = items.every(function (it) { return it.wrapper.parentElement === parent; });
+    if (!allSameParent) return;
+
+    try {
+      sorted.forEach(function (it) { parent.appendChild(it.wrapper); });
+      console.log('[edit-form] Reordered ' + items.length + ' section(s) to COHY canonical order');
+    } catch (err) {
+      console.warn('[edit-form] Reorder skipped:', err);
+    }
+  })();
+
+  // ============================================================
+  // B) Saving / regenerating overlay logic
+  // ============================================================
   (function () {
     var overlay = document.getElementById('edit-overlay');
     var heading = document.getElementById('edit-overlay-heading');
     var statusText = document.getElementById('edit-status-text');
     if (!overlay) return;
 
-    // Context-specific copy per action
     var MODES = {
       regenerate: {
         heading: 'Regenerating your report',
@@ -224,7 +384,6 @@
       if (stepTimer) { clearInterval(stepTimer); stepTimer = null; }
     }
 
-    // Wire the main edit form — check which submit button was clicked
     var editForm = document.getElementById('edit-form');
     var regenBtn = document.getElementById('edit-regenerate-btn');
     var saveBtn = document.getElementById('edit-save-btn');
@@ -235,12 +394,10 @@
           e.preventDefault();
           return;
         }
-        // Detect which button triggered the submit
         var submitter = e.submitter || document.activeElement;
         var mode = 'regenerate';
         if (submitter && submitter.value === 'save') mode = 'save';
 
-        // Disable the buttons so double-clicks can't fire twice
         if (regenBtn) regenBtn.disabled = true;
         if (saveBtn) saveBtn.disabled = true;
 
@@ -248,12 +405,10 @@
       });
     }
 
-    // Wire the reset form
     var resetForm = document.getElementById('edit-reset-form');
     var resetBtn = document.getElementById('edit-reset-btn');
     if (resetForm) {
       resetForm.addEventListener('submit', function (e) {
-        // onclick confirm() runs first — if user cancels, no submit event fires
         if (overlay.classList.contains('show')) {
           e.preventDefault();
           return;
@@ -263,7 +418,6 @@
       });
     }
 
-    // bfcache guard
     window.addEventListener('pageshow', function (e) {
       if (e.persisted) hideOverlay();
     });

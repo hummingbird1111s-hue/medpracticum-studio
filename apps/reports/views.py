@@ -58,7 +58,10 @@ def _build(request, session, use_ai=True, force_ai=False):
         try:
             from .ai_drafting import draft_sections_with_ai
             samples = list(ReportFormatSample.objects.filter(department=request.user.department))
-            target_pages = report.options.get('target_pages') or MIN_PAGES_GUIDELINE
+            # ✅ PHASE 3: pass the user's preference verbatim. None = natural
+            # length. The AI computes its word budget from log volume instead
+            # of being forced to 25 pages (which caused padding / false notes).
+            target_pages = report.options.get('target_pages')
             drafts = draft_sections_with_ai(session, samples, target_pages=target_pages)
             if drafts:
                 # ✅ Extract the AI note for the UI and remove it from the saved content
@@ -85,7 +88,7 @@ def _build(request, session, use_ai=True, force_ai=False):
     # the AI had enough source material to reach it.
     result = builder.result
     pages = result['pages']
-    target = result.get('target') or 0
+    target = result.get('target')
     note = (result.get('note') or '').strip()
 
     ai_sections = len([k for k in (report.content or {}).keys()
@@ -238,8 +241,9 @@ def report_options(request):
             form = ReportOptionsForm(request.POST)
             if form.is_valid():
                 cleaned_data = form.cleaned_data
-                if not cleaned_data.get('target_pages'):
-                    cleaned_data['target_pages'] = MIN_PAGES_GUIDELINE
+                # ✅ PHASE 3: no fallback to MIN_PAGES_GUIDELINE. An empty
+                # target means "natural length" — normalize_options() coerces
+                # '' / None / invalid to None.
                 report.options = normalize_options(cleaned_data)
                 report.save(update_fields=['options'])
                 _build(request, session, use_ai=True, force_ai=True)
@@ -248,21 +252,16 @@ def report_options(request):
             else:
                 messages.error(request, "Your custom settings couldn't be saved. Please check the form for errors below.")
         else:
-            # ✅ PHASE 6: honor the target the user typed in the Official form
-            # (the green card now exposes `official_target_pages`).
-            try:
-                official_target = int(request.POST.get('official_target_pages') or 0)
-            except (TypeError, ValueError):
-                official_target = 0
-
-            # Clamp to a sensible range — protects against abuse and typos
-            if official_target:
-                official_target = max(5, min(official_target, 50))
-
+            # ✅ PHASE 3: the official form no longer has an
+            # `official_target_pages` input. We preserve whatever target the
+            # user previously saved via the custom form (or None for natural
+            # length) — that is the "preferred pages" the AI must respect.
+            existing_opts = dict(report.options or {})
             opts = normalize_options({})
             opts['include_signoff'] = False
-            if official_target and official_target > 0:
-                opts['target_pages'] = official_target
+            saved_target = existing_opts.get('target_pages')
+            if saved_target:
+                opts['target_pages'] = saved_target
             report.options = opts
             report.save(update_fields=['options'])
             _build(request, session, use_ai=True, force_ai=True)
@@ -350,11 +349,21 @@ def report_content(request):
 
         form = ReportContentForm(request.POST)
         if form.is_valid():
-            report.content = {
-                key: value.strip()
-                for key, value in form.cleaned_data.items()
-                if value.strip()
-            }
+            # ✅ MERGE instead of REPLACE — preserves AI-drafted abstract,
+            # keywords, acknowledgments, references (not shown in the form
+            # but still consumed by the options-page preview overlay and
+            # by report.html's optional sections). The 10 body-section
+            # fields the form owns are still fully overwritten on every save.
+            merged = dict(report.content or {})
+            for key, value in form.cleaned_data.items():
+                v = (value or '').strip()
+                if v:
+                    merged[key] = v
+                elif key in merged:
+                    # User cleared a field → drop it so report.html falls
+                    # back to the template default for that section.
+                    merged.pop(key, None)
+            report.content = merged
             report.save(update_fields=['content'])
 
             if action == 'regenerate':
@@ -527,7 +536,9 @@ def _ensure_ai_content(request, session, force_ai=False):
     try:
         from .ai_drafting import draft_sections_with_ai
         samples = list(ReportFormatSample.objects.filter(department=request.user.department))
-        target_pages = report.options.get('target_pages') or MIN_PAGES_GUIDELINE
+        # ✅ PHASE 3: same as _build — pass the user's preference through
+        # verbatim. None means "natural length".
+        target_pages = report.options.get('target_pages')
         drafts = draft_sections_with_ai(session, samples, target_pages=target_pages)
         if drafts:
             # ✅ Extract the AI note for the UI and remove it from the saved content
