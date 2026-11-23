@@ -167,7 +167,7 @@
         </li>
       </ul>
 
-      <!-- Payment CTA -->
+      <!-- Payment CTA — Paystack placeholder (wire real checkout later) -->
       <div class="border-t border-gray-100 pt-6">
         <button type="button" id="paystack-btn"
                 data-callback-url="{% url 'paystack_callback' %}"
@@ -242,8 +242,11 @@
         return;
       }
 
-      // Paystack Inline JS wiring (planned):
-      //   1. Add <script src="https://js.paystack.co/v1/inline.js"></script> to base.html
+      // ─────────────────────────────────────────────────────────────
+      // Paystack Inline JS wiring — placeholder for now.
+      // When you're ready to go live:
+      //   1. Add this to base.html <head>:
+      //        <script src="https://js.paystack.co/v1/inline.js"></script>
       //   2. Replace the alert below with:
       //        PaystackPop.setup({
       //          key: publicKey,
@@ -255,6 +258,7 @@
       //          },
       //          onClose: function () { /* no-op */ }
       //        }).openIframe();
+      // ─────────────────────────────────────────────────────────────
       alert('Paystack checkout not wired yet — public key is set, but the JS snippet still needs to be enabled.');
     });
   });

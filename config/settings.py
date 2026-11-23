@@ -5,7 +5,9 @@ Django settings for config project (MedPracticum Studio).
 import logging
 import os
 from pathlib import Path
+
 import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 load_dotenv()  # Must run before DATABASES is defined
@@ -15,14 +17,11 @@ load_dotenv()  # Must run before DATABASES is defined
 # Without them, numpy spawns cpu_count() BLAS threads and matplotlib's
 # default backend loads GUI libs — together adding ~180 MB of RSS that
 # pushes the 512 MB free-tier worker into SIGKILL during chart rendering.
-# Setting them at module load guarantees they're in place before any view
-# code (apps/reports/charts.py) triggers the import.
-os.environ.setdefault('MPLBACKEND', 'Agg')           # no GUI backend → saves ~80MB
-os.environ.setdefault('OMP_NUM_THREADS', '1')        # numpy single-threaded
-os.environ.setdefault('OPENBLAS_NUM_THREADS', '1')   # stop OpenBLAS thread pool
-os.environ.setdefault('MKL_NUM_THREADS', '1')        # Intel MKL thread pool (if used)
+os.environ.setdefault('MPLBACKEND', 'Agg')
+os.environ.setdefault('OMP_NUM_THREADS', '1')
+os.environ.setdefault('OPENBLAS_NUM_THREADS', '1')
+os.environ.setdefault('MKL_NUM_THREADS', '1')
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
@@ -71,7 +70,6 @@ if not OPENROUTER_API_KEY:
         BASE_DIR / '.env',
     )
 
-# Push keys into os.environ so apps/logs/ai_client.py can see them seamlessly.
 if GROQ_API_KEY and not os.environ.get('GROQ_API_KEY'):
     os.environ['GROQ_API_KEY'] = GROQ_API_KEY
 
@@ -85,31 +83,110 @@ if os.name == 'nt' and os.path.isdir(_MSYS_BIN):
     os.environ.setdefault('WEASYPRINT_DLL_DIRECTORIES', _MSYS_BIN)
 
 
-# ===== SECURITY =====
-# Read SECRET_KEY from environment on Render, fallback to insecure for local dev
-SECRET_KEY = os.environ.get(
-    'SECRET_KEY', 
-    'django-insecure-e+%5l=_a=tv=bq$6qjwp=vf@!7g8h$9f)4n6j^lw3obzs8vy_f'
-)
-
-# DEBUG is False if we are running on Render
+# ═══════════════════════════════════════════════════════════════════════
+# DEBUG — determined first so SECRET_KEY / security decisions can use it
+# ═══════════════════════════════════════════════════════════════════════
+# On Render → DEBUG=False. Locally (no RENDER env var) → DEBUG=True.
 DEBUG = 'RENDER' not in os.environ
 
-# ✅ NEW: one-shot override — set DJANGO_DEBUG=1 in Render env vars to force
-# DEBUG=True temporarily (for viewing the yellow error page in your browser).
-# Remove the env var afterwards to return to normal.
+# One-shot override: set DJANGO_DEBUG=1 on Render to force DEBUG=True
+# temporarily (for viewing yellow error page in the browser).
+# ⚠️  Remove this env var immediately after debugging — DEBUG=True in prod
+#     exposes source code + settings to anyone who can trigger an error.
 if os.environ.get('DJANGO_DEBUG', '').lower() in ('1', 'true', 'yes'):
     DEBUG = True
 
-# Render provides RENDER_EXTERNAL_HOSTNAME automatically
+
+# ═══════════════════════════════════════════════════════════════════════
+# SECRET_KEY — required in production, safe fallback for local dev only
+# ═══════════════════════════════════════════════════════════════════════
+_INSECURE_LOCAL_FALLBACK = (
+    'django-insecure-e+%5l=_a=tv=bq$6qjwp=vf@!7g8h$9f)4n6j^lw3obzs8vy_f'
+)
+
+SECRET_KEY = os.environ.get('SECRET_KEY', '').strip()
+if not SECRET_KEY:
+    if DEBUG:
+        # Local dev only — triggers W009 warning in `check --deploy`,
+        # which is correct and expected. Set SECRET_KEY in .env to silence.
+        SECRET_KEY = _INSECURE_LOCAL_FALLBACK
+    else:
+        raise ImproperlyConfigured(
+            '\n'
+            '═══════════════════════════════════════════════════════════════════════════\n'
+            '  SECRET_KEY is required in production (DEBUG=False).\n'
+            '═══════════════════════════════════════════════════════════════════════════\n'
+            '\n'
+            '  Generate one locally:\n'
+            '      python -c "import secrets; print(secrets.token_urlsafe(50))"\n'
+            '\n'
+            '  Then set it as an environment variable on your host:\n'
+            '      Render → your service → Environment → Add Environment Variable\n'
+            '          Key:   SECRET_KEY\n'
+            '          Value: <paste the generated value>\n'
+            '\n'
+            '  Render will auto-redeploy once the variable is saved.\n'
+            '═══════════════════════════════════════════════════════════════════════════\n'
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# ALLOWED_HOSTS + CSRF trusted origins
+# ═══════════════════════════════════════════════════════════════════════
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 
 ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
-# Required for Django 4+ to allow form submissions on Render's HTTPS domain
-CSRF_TRUSTED_ORIGINS = [f'https://{host}' for host in ALLOWED_HOSTS if host not in ('localhost', '127.0.0.1')]
+# Allow extra hosts via env var (comma-separated). Useful later for custom
+# domains, e.g. ALLOWED_HOSTS_EXTRA=medpracticum.com,www.medpracticum.com
+_extra_hosts = os.environ.get('ALLOWED_HOSTS_EXTRA', '').strip()
+if _extra_hosts:
+    ALLOWED_HOSTS.extend(h.strip() for h in _extra_hosts.split(',') if h.strip())
+
+# Trusted origins for CSRF POSTs (Django 4+ requires this for HTTPS domains)
+CSRF_TRUSTED_ORIGINS = [
+    f'https://{host}'
+    for host in ALLOWED_HOSTS
+    if host not in ('localhost', '127.0.0.1')
+]
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Production security headers
+# ═══════════════════════════════════════════════════════════════════════
+# These are safe to enable globally — they only affect HTTPS responses,
+# so they're no-ops on local HTTP. Setting them globally (instead of only
+# inside `if not DEBUG`) lets `manage.py check --deploy` see them and
+# clears W004 (HSTS).
+
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = 'same-origin'      # default in Django 5; explicit is clearer
+X_FRAME_OPTIONS = 'DENY'
+
+# HSTS: tell browsers to always use HTTPS for this domain.
+# ONLY applies over HTTPS responses — HTTP localhost is unaffected.
+SECURE_HSTS_SECONDS = 60 * 60 * 24 * 30     # 30 days; raise to 1 year once stable
+SECURE_HSTS_INCLUDE_SUBDOMAINS = False      # keep off unless you own all subdomains
+SECURE_HSTS_PRELOAD = False                 # keep off unless you've registered at hstspreload.org
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Production-only hardening (would break HTTP local dev — hence conditional)
+# ═══════════════════════════════════════════════════════════════════════
+if not DEBUG:
+    # Force all HTTP → HTTPS
+    SECURE_SSL_REDIRECT = True
+
+    # Required on Render / any proxy that terminates SSL. Without this,
+    # `request.is_secure()` returns False on HTTPS requests → SSL redirect
+    # goes into an infinite loop.
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+    # Cookies only over HTTPS
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
 
 
 # ===== Application definition =====
@@ -126,12 +203,12 @@ INSTALLED_APPS = [
     'apps.facilities',
     'apps.logs',
     'apps.reports',
-    'apps.payments',   # ✅ NEW: subscriptions + Paystack
+    'apps.payments',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',  # <--- ADDED FOR RENDER
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -152,7 +229,6 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
-                # ✅ NEW: exposes user_has_subscription + show_payment_banner in every template
                 'apps.payments.context_processors.subscription_status',
             ],
         },
@@ -163,41 +239,27 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 
 # ===== Database =====
-# If DATABASE_URL exists (on Render), use it (Supabase).
-# Otherwise, fallback to SQLite for local development.
 DATABASES = {
     'default': dj_database_url.config(
         default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
         conn_max_age=600,
     )
 }
-# Postgres needs sslmode=require; SQLite doesn't accept the kwarg at all
 if DATABASES['default']['ENGINE'].endswith('postgresql'):
     DATABASES['default'].setdefault('OPTIONS', {})['sslmode'] = 'require'
 
 
-# Custom user model
 AUTH_USER_MODEL = 'accounts.User'
 
 
-# ===== Password validation =====
 AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
+    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
 
-# ===== Internationalization =====
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'Africa/Accra'
 USE_I18N = True
@@ -206,10 +268,9 @@ USE_TZ = True
 
 # ===== Static and Media files =====
 STATIC_URL = '/static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles') # Destination for collectstatic
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_DIRS = [BASE_DIR / 'static']
 
-# WhiteNoise compression for production
 if not DEBUG:
     STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 else:
@@ -225,16 +286,12 @@ LOGIN_REDIRECT_URL = 'dashboard'
 LOGOUT_REDIRECT_URL = 'login'
 
 
-# Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
-# Used inside the QR code so supervisors can open the verification page
-# On Render, you must set SITE_URL in the Environment Variables (e.g., https://your-app.onrender.com)
 SITE_URL = os.environ.get('SITE_URL', 'http://127.0.0.1:8000')
 
 
-# Set to False to force every report into the official COHY format
 REPORT_ALLOW_CUSTOM_FORMAT = True
 
 
@@ -248,12 +305,11 @@ EMAIL_HOST_USER = _load_key_from_env_or_file('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = _load_key_from_env_or_file('EMAIL_HOST_PASSWORD')
 
 EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 465                # Changed to 465 (SSL) to bypass firewall blocks
-EMAIL_USE_TLS = False           # Turned off TLS
-EMAIL_USE_SSL = True            # Turned on SSL
+EMAIL_PORT = 465
+EMAIL_USE_TLS = False
+EMAIL_USE_SSL = True
 
 if EMAIL_HOST_USER and EMAIL_HOST_PASSWORD:
-    # Use our custom backend to fix Gmail's local_hostname rejection
     EMAIL_BACKEND = 'apps.accounts.email_backend.CustomEmailBackend'
     DEFAULT_FROM_EMAIL = f'MedPracticum Studio <{EMAIL_HOST_USER}>'
     logging.getLogger(__name__).info('Email: using Gmail SMTP as %s', EMAIL_HOST_USER)
@@ -266,28 +322,22 @@ else:
         'Add them to .env when you\u2019re ready for real delivery.'
     )
 
-# How long a password reset link stays valid (in seconds).
-PASSWORD_RESET_TIMEOUT = 60 * 60  # 1 hour
+PASSWORD_RESET_TIMEOUT = 60 * 60
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# ✅ NEW: PAYSTACK — fill these via environment variables when ready
+# PAYSTACK
 # ═══════════════════════════════════════════════════════════════════════
 PAYSTACK_PUBLIC_KEY = os.environ.get('PAYSTACK_PUBLIC_KEY', '')
 PAYSTACK_SECRET_KEY = os.environ.get('PAYSTACK_SECRET_KEY', '')
 PAYSTACK_CURRENCY   = 'GHS'
 
-# Subscription plan
-SUBSCRIPTION_PRICE  = 50      # GHS — per semester
-SUBSCRIPTION_MONTHS = 6       # months of access per payment
+SUBSCRIPTION_PRICE  = 50
+SUBSCRIPTION_MONTHS = 6
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# ✅ NEW: LOGGING — dumps tracebacks to stdout so Render's log stream
-# shows the actual Python error, not just "500 Internal Server Error".
-# By default Django sends django.request ERROR to admin email only,
-# which is why you've only been seeing 500 status codes and not the
-# underlying traceback. This forces everything to console (stdout).
+# LOGGING
 # ═══════════════════════════════════════════════════════════════════════
 LOGGING = {
     'version': 1,
@@ -318,7 +368,6 @@ LOGGING = {
             'level': 'INFO',
             'propagate': False,
         },
-        # ✅ The key one — captures the full traceback of any 500 error
         'django.request': {
             'handlers': ['console'],
             'level': 'ERROR',

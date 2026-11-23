@@ -436,9 +436,7 @@
 
 <!-- ===== GENERATE / EDIT ACTION GRID ===== -->
 <div class="mp-action-grid mb-4">
-  {# ✅ Target-page input lives in the CUSTOM form below. The official form
-     reuses the user's saved preferred target (or None for natural length if
-     the user hasn't set one). #}
+  {# ✅ Target-page input lives in the CUSTOM form below; official form reuses saved target or natural length. #}
   <form method="post" id="gen-official-form" class="bg-emerald-600 rounded-2xl p-5 text-white shadow-lg">
     {% csrf_token %}
     <input type="hidden" name="attachment_id" value="{{ session.id }}">
@@ -640,7 +638,7 @@
           <div class="report-sheet report-sheet--cover">
             <p class="cover-school">COLLEGE OF HEALTH, YAMFO</p>
             <p class="cover-dept">DEPARTMENT OF HEALTH INFORMATION MANAGEMENT</p>
-            
+
             <div class="cover-logo-box">
               <svg viewBox="0 0 100 100" width="100" height="100">
                 <circle cx="50" cy="50" r="46" fill="#f9fafb" stroke="#e5e7eb" stroke-width="2"/>
@@ -651,7 +649,7 @@
             <p class="cover-title">VACATION PRACTICUM II</p>
             <p class="cover-code">BHIM 102</p>
             <p class="cover-level">LEVEL 200 SECOND SEMESTER</p>
-            
+
             <p class="cover-name">OXBEE</p>
             <p class="cover-index">COHY/HIM/25/042</p>
           </div>
@@ -684,7 +682,7 @@
             <h2>INTRODUCTION</h2>
             <p>I undertook a health-information practicum at Bolgatanga Regional Hospital, the principal referral centre for Ghana's Upper East Region, from 2 November to 29 November 2026. The attachment aimed to consolidate my competencies in patient registration, electronic record management, and data reporting.</p>
             <p>During the month I rotated through the Records Unit, the Reproductive-Child Health Unit and the outpatient booking desk, applying LHIMS/HAMS for registration, appointment scheduling and data extraction, thereby reinforcing my skills in accurate information capture and confidentiality.</p>
-            
+
             <h2>FACILITY PROFILE</h2>
             <p>Bolgatanga Regional Hospital is a regional hospital located in the Bolgatanga Municipal of the Upper East Region, Ghana.</p>
             <p>Bolgatanga Regional Hospital serves as the main referral centre for the Upper East Region.</p>
@@ -751,7 +749,7 @@
             <div style="margin-top: 60px;">
               <div style="border-bottom: 1px solid #000; width: 300px; height: 40px; margin-bottom: 5px;"></div>
               <p>Student's Signature</p>
-              
+
               <div style="border-bottom: 1px solid #000; width: 300px; height: 40px; margin-bottom: 5px; margin-top: 40px;"></div>
               <p>Date</p>
             </div>

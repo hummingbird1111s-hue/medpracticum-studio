@@ -1,5 +1,5 @@
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from django.conf import settings
 from django.contrib import messages
@@ -29,18 +29,27 @@ def _compute_expected_expiry(session):
     """
     Predicted expiry if the user pays now, tied to their practicum period
     with a 30-day grace so they can finalize the report after the end date.
+
+    Returns a `date` object (not `datetime`) because `session.end_date` is
+    a DateField. Comparing a `date` to a `datetime` raises TypeError in Python.
     """
     if session and getattr(session, 'end_date', None):
-        grace_end = timezone.now() + timedelta(days=30)
-        # If the attachment already ended, grace_end wins (never expired-on-arrival)
-        return max(session.end_date, grace_end)
+        grace_end = (timezone.now() + timedelta(days=30)).date()
+        end = session.end_date
+        # Defensive: if the model is ever migrated to DateTimeField, still return date
+        if isinstance(end, datetime):
+            end = end.date()
+        return max(end, grace_end)
+
     # No attachment → 90-day fallback (rare; UI blocks payment for this case)
-    return timezone.now() + timedelta(days=90)
+    return (timezone.now() + timedelta(days=90)).date()
+
 
 @login_required
 def pwa_update(request):
     return render(request, 'pwa_update.html')
-    
+
+
 @login_required
 def subscribe(request):
     """Show the subscription page (plan + Paystack checkout placeholder)."""
