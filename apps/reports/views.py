@@ -47,6 +47,30 @@ def _get_session(request):
     return request.user.attachments.filter(is_deleted=False).order_by('-start_date', '-id').first()
 
 
+def _rebuild_report_files(request, session):
+    """
+    ✅ NEW: Rebuild the report PDF + DOCX from the saved report.content.
+
+    Used by download/view handlers when the physical file has gone missing
+    (Render's free tier wipes /media/ on every redeploy). Does NOT call the
+    AI — just re-renders WeasyPrint + python-docx from what's already in
+    report.content (which always has every section filled thanks to
+    effective_content() in services.py).
+
+    Returns True on success, False on failure.
+    """
+    try:
+        builder = PracticumReportBuilder(session)
+        builder.save()
+        return True
+    except Exception:
+        logger.exception(
+            'Rebuild failed for attachment %s — user will need to regenerate',
+            session.pk,
+        )
+        return False
+
+
 def _build(request, session, use_ai=True, force_ai=False):
     report, _ = GeneratedReport.objects.get_or_create(attachment=session)
 
@@ -352,8 +376,7 @@ def report_content(request):
             # ✅ MERGE instead of REPLACE — preserves AI-drafted abstract,
             # keywords, acknowledgments, references (not shown in the form
             # but still consumed by the options-page preview overlay and
-            # by report.html's optional sections). The 10 body-section
-            # fields the form owns are still fully overwritten on every save.
+            # by report.html's optional sections).
             merged = dict(report.content or {})
             for key, value in form.cleaned_data.items():
                 v = (value or '').strip()
@@ -366,12 +389,33 @@ def report_content(request):
             report.content = merged
             report.save(update_fields=['content'])
 
+            # ✅ FIX: rebuild the PDF+DOCX from the saved content on EVERY
+            # save (not just on regenerate). This is what makes "Save without
+            # regenerating" actually update the downloadable/viewable PDF —
+            # previously it only saved text, leaving the PDF stale.
+            #
+            # use_ai=False → no AI call, just WeasyPrint re-render (~5s).
+            rebuild_ok = _build(request, session, use_ai=False)
+
             if action == 'regenerate':
-                _build(request, session, use_ai=False)
-                # ✅ PHASE 3
+                if rebuild_ok:
+                    messages.success(request, 'Report regenerated with your edits.')
+                # _build already showed error if it failed
                 return _redirect_after_generation(request, 'report_options', session)
 
-            messages.success(request, 'Your text has been saved.')
+            # action == 'save' (or unspecified)
+            if rebuild_ok:
+                messages.success(
+                    request,
+                    'Your text has been saved and the PDF refreshed. '
+                    'Click "View / Print PDF" to see it.'
+                )
+            else:
+                messages.warning(
+                    request,
+                    'Your text has been saved, but the PDF rebuild failed. '
+                    'Try "Regenerate Report" or go back to the options page.'
+                )
             return redirect(f"{reverse('report_content')}?attachment_id={session.id}")
     else:
         form = ReportContentForm(initial=builder.effective_content())
@@ -415,20 +459,95 @@ def verify_report(request, token):
     })
 
 
+# ---------- File serving helpers ----------
+
+def _serve_file(report, field_name, inline, content_type, filename_override=None):
+    """
+    Return a FileResponse for report.<field_name>. Raises FileNotFoundError
+    when the file record exists but the file on disk does not.
+    """
+    file_field = getattr(report, field_name)
+    return FileResponse(
+        file_field.open('rb'),
+        as_attachment=not inline,
+        filename=filename_override or os.path.basename(file_field.name),
+        content_type=content_type,
+    )
+
+
+def _try_serve_report_file(request, session, field_name, inline, content_type,
+                            rebuild_ok_message=None, rebuild_fail_message=None):
+    """
+    ✅ NEW: unified file-serving with auto-rebuild fallback.
+
+    Flow:
+      1. Report + file record must exist, else 404.
+      2. Try to open the file and return the response (fast path).
+      3. If FileNotFoundError (Render wiped /media/) → rebuild from
+         report.content (no AI) and try again.
+      4. If rebuild fails → friendly message + redirect to options page.
+
+    This is what makes "View PDF" and "Download Word" work reliably across
+    Render redeploys without 500s.
+    """
+    report = getattr(session, 'report', None) if session else None
+    if not report or not getattr(report, field_name):
+        raise Http404('No report file has been generated yet.')
+
+    # Fast path — file exists on disk
+    try:
+        response = _serve_file(report, field_name, inline, content_type)
+        response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        return response
+    except FileNotFoundError:
+        logger.warning(
+            'Report file missing on disk: report=%s field=%s — rebuilding',
+            report.pk, field_name,
+        )
+
+    # File gone — rebuild from saved content (no AI, just re-render)
+    rebuilt = _rebuild_report_files(request, session)
+    if rebuilt:
+        if rebuild_ok_message:
+            messages.info(request, rebuild_ok_message)
+        report.refresh_from_db()
+        try:
+            response = _serve_file(report, field_name, inline, content_type)
+            response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+            return response
+        except FileNotFoundError:
+            logger.error(
+                'Rebuild succeeded but file still missing for report=%s field=%s',
+                report.pk, field_name,
+            )
+
+    messages.error(
+        request,
+        rebuild_fail_message or (
+            'The file is missing and could not be rebuilt. '
+            'Go back to the options page and click "Generate Official Report".'
+        )
+    )
+    return redirect(f"{reverse('report_options')}?attachment_id={session.id}")
+
+
 def _pdf_response(request, inline):
     session = _get_session(request)
-    report = getattr(session, 'report', None) if session else None
-    if not report or not report.pdf_file:
-        raise Http404('No report has been generated yet.')
-
-    response = FileResponse(
-        report.pdf_file.open('rb'),
-        as_attachment=not inline,
-        filename=os.path.basename(report.pdf_file.name),
+    return _try_serve_report_file(
+        request, session,
+        field_name='pdf_file',
+        inline=inline,
         content_type='application/pdf',
+        rebuild_ok_message=(
+            'Your PDF was rebuilt from your saved content. '
+            '(The server clears temporary files on every redeploy; '
+            'this rebuild is a one-time cost per deploy.)'
+        ),
+        rebuild_fail_message=(
+            'The PDF file is missing and could not be rebuilt automatically. '
+            'Click "Generate Official Report" on the options page to rebuild it.'
+        ),
     )
-    response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-    return response
 
 
 @login_required
@@ -439,18 +558,19 @@ def download_report(request):
 @login_required
 def download_docx(request):
     session = _get_session(request)
-    report = getattr(session, 'report', None) if session else None
-    if not report or not report.docx_file:
-        raise Http404('No Word document has been generated yet.')
-
-    response = FileResponse(
-        report.docx_file.open('rb'),
-        as_attachment=True,
-        filename=os.path.basename(report.docx_file.name),
+    return _try_serve_report_file(
+        request, session,
+        field_name='docx_file',
+        inline=False,
         content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        rebuild_ok_message=(
+            'Your Word document was rebuilt from your saved content.'
+        ),
+        rebuild_fail_message=(
+            'The Word file is missing and could not be rebuilt. '
+            'Click "Generate Official Report" to rebuild from scratch.'
+        ),
     )
-    response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-    return response
 
 
 @login_required
@@ -495,17 +615,30 @@ def download_pptx(request):
     if not report or not report.pptx_file:
         raise Http404('No presentation has been generated yet.')
 
-    response = FileResponse(
-        report.pptx_file.open('rb'),
-        as_attachment=True,
-        filename=os.path.basename(report.pptx_file.name),
-        content_type=(
-            'application/vnd.openxmlformats-officedocument'
-            '.presentationml.presentation'
-        ),
-    )
-    response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-    return response
+    # PPTX rebuild requires running the full slide-builder (and possibly
+    # the AI). Rather than force that from a download click, tell the user
+    # to regenerate explicitly. This is intentional — PPTX builds are
+    # slower and heavier than report PDF rebuilds.
+    try:
+        response = FileResponse(
+            report.pptx_file.open('rb'),
+            as_attachment=True,
+            filename=os.path.basename(report.pptx_file.name),
+            content_type=(
+                'application/vnd.openxmlformats-officedocument'
+                '.presentationml.presentation'
+            ),
+        )
+        response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        return response
+    except FileNotFoundError:
+        logger.warning('PPTX missing for report %s', report.pk)
+        messages.warning(
+            request,
+            'The presentation file was cleared when the server redeployed. '
+            'Go to the presentations page and click "Regenerate" to rebuild it.'
+        )
+        return redirect(f"{reverse('pptx_options')}?attachment_id={session.id}")
 
 
 @login_required
@@ -805,14 +938,23 @@ def view_pptx_pdf(request):
     if not report or not report.pptx_pdf_file:
         raise Http404('No presentation has been generated yet.')
 
-    response = FileResponse(
-        report.pptx_pdf_file.open('rb'),
-        as_attachment=False,
-        filename=os.path.basename(report.pptx_pdf_file.name),
-        content_type='application/pdf',
-    )
-    response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-    return response
+    try:
+        response = FileResponse(
+            report.pptx_pdf_file.open('rb'),
+            as_attachment=False,
+            filename=os.path.basename(report.pptx_pdf_file.name),
+            content_type='application/pdf',
+        )
+        response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        return response
+    except FileNotFoundError:
+        logger.warning('PPTX PDF missing for report %s', report.pk)
+        messages.warning(
+            request,
+            'The presentation PDF was cleared when the server redeployed. '
+            'Go to the presentations page and click "Regenerate" to rebuild it.'
+        )
+        return redirect(f"{reverse('pptx_options')}?attachment_id={session.id}")
 
 
 @login_required
@@ -822,14 +964,23 @@ def download_pptx_pdf(request):
     if not report or not report.pptx_pdf_file:
         raise Http404('No presentation PDF has been generated yet.')
 
-    response = FileResponse(
-        report.pptx_pdf_file.open('rb'),
-        as_attachment=True,
-        filename=os.path.basename(report.pptx_pdf_file.name),
-        content_type='application/pdf',
-    )
-    response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-    return response
+    try:
+        response = FileResponse(
+            report.pptx_pdf_file.open('rb'),
+            as_attachment=True,
+            filename=os.path.basename(report.pptx_pdf_file.name),
+            content_type='application/pdf',
+        )
+        response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        return response
+    except FileNotFoundError:
+        logger.warning('PPTX PDF missing for report %s (download)', report.pk)
+        messages.warning(
+            request,
+            'The presentation PDF was cleared when the server redeployed. '
+            'Go to the presentations page and click "Regenerate" to rebuild it.'
+        )
+        return redirect(f"{reverse('pptx_options')}?attachment_id={session.id}")
 
 
 # ---------- Format samples ----------

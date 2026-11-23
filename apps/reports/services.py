@@ -28,6 +28,31 @@ from .standards import (
 logger = logging.getLogger(__name__)
 
 
+# ✅ Every key that can appear in effective_content()'s output.
+# build_context() and build_docx() rely on these existing, so we ALWAYS
+# populate every key — empty string when no AI content and no template
+# fallback exists. Prevents the KeyError: 'references' crash that hit on
+# 23 Nov when AI timed out at 3/12 sections.
+_CONTENT_SECTION_KEYS = (
+    'abstract',
+    'keywords',
+    'acknowledgments',
+    'introduction',
+    'facility_profile',
+    'activities_performed',
+    'skills_acquired',
+    'workshops',
+    'lessons_learnt',
+    'observation',
+    'challenges',
+    'recommendations',
+    'conclusion',
+    'references',
+    'facility_recs',
+    'academic_recs',
+)
+
+
 # ---------------------------------------------------------------- helpers
 
 def _num(value):
@@ -120,7 +145,6 @@ def _dedupe_activities(items):
                 denom = min(len(kw_i), len(kw_j))
                 overlap = len(kw_i & kw_j) / denom if denom else 0.0
                 if overlap >= 0.7:
-                    # Keep the longer text (more descriptive)
                     if len(sum_j) > len(sum_i):
                         result[i] = result[j]
                         kw_i = kw_j
@@ -129,6 +153,35 @@ def _dedupe_activities(items):
             j += 1
         i += 1
     return result
+
+
+def _build_activities_narrative(unit_activities):
+    """
+    Build the activities_performed default text from unit_activities.
+    Used as fallback when the AI didn't draft this section — so the edit
+    page and PDF still show the log-derived narrative instead of blank.
+    """
+    if not unit_activities:
+        return ''
+    parts = ["During the practicum period, I was involved in the following activities as recorded in my logbook:"]
+    for group in unit_activities:
+        parts.append(group['narrative'])
+    return '\n\n'.join(parts)
+
+
+def _build_recommendations_text(dynamic_facility_recs, recs):
+    """
+    Build the recommendations default text from log-derived solutions
+    (dynamic_facility_recs) plus template recommendations. Used as fallback
+    when the AI didn't draft this section.
+    """
+    lines = []
+    if dynamic_facility_recs:
+        lines.extend(dynamic_facility_recs)
+    else:
+        lines.extend(recs.get('facility', []))
+    lines.extend(recs.get('academic', []))
+    return '\n'.join(lines)
 
 
 class PracticumReportBuilder:
@@ -186,7 +239,6 @@ class PracticumReportBuilder:
 
             logo_image = None
 
-            # --- 1) Per-report custom logo ---
             if self.report_obj and self.report_obj.custom_logo:
                 try:
                     from PIL import Image
@@ -196,7 +248,6 @@ class PracticumReportBuilder:
                 except Exception as e:
                     logger.warning("Custom report logo missing or unreadable: %s", e)
 
-            # --- 2) School logo from DB ---
             if logo_image is None and school and school.logo:
                 try:
                     from PIL import Image
@@ -206,7 +257,6 @@ class PracticumReportBuilder:
                 except Exception as e:
                     logger.warning("School logo missing or unreadable: %s", e)
 
-            # --- 3) Static fallback (guaranteed present in repo) ---
             if logo_image is None:
                 static_path = finders.find('branding/school-logo.png')
                 if static_path:
@@ -258,7 +308,6 @@ class PracticumReportBuilder:
         fac = self.facility
         parts = []
 
-        # Opening sentence: name, type, location.
         opening = f"{fac.name} is a "
         opening += f"{fac.facility_type.strip().lower()}" if (fac.facility_type and fac.facility_type.strip()) else "health facility"
         if fac.district and fac.region:
@@ -271,15 +320,12 @@ class PracticumReportBuilder:
             opening += "."
         parts.append(opening)
 
-        # Background stored in the database.
         if getattr(fac, 'history_and_background', '') and fac.history_and_background.strip():
             parts.append(fac.history_and_background.strip())
 
-        # Vision / mission (label kept plain so it renders everywhere).
         if getattr(fac, 'vision_mission', '') and fac.vision_mission.strip():
             parts.append(f"Vision and Mission: {fac.vision_mission.strip()}")
 
-        # Organogram description from the database.
         if getattr(fac, 'organogram_description', '') and fac.organogram_description.strip():
             parts.append(f"Organisational Structure: {fac.organogram_description.strip()}")
 
@@ -345,7 +391,7 @@ class PracticumReportBuilder:
 
         Used ONLY as a fallback when the AI failed to draft the 'challenges'
         section. Wraps each raw challenge in a sentence frame so the report
-        never shows raw log text verbatim. See services.py fix (Phase 6, part 2).
+        never shows raw log text verbatim.
         """
         if not challenges:
             return ''
@@ -363,7 +409,6 @@ class PracticumReportBuilder:
             raw = ch['challenge_text'].rstrip('. ').strip()
             if not raw:
                 continue
-            # lowercase first char since it's embedded in a sentence
             if raw[0].isupper() and len(raw) > 1:
                 raw = raw[0].lower() + raw[1:]
             conn = connectives[i] if i < len(connectives) else "A further challenge was that "
@@ -412,7 +457,6 @@ class PracticumReportBuilder:
             if not summaries:
                 continue
 
-            # Don't say "family health unit unit".
             if re.search(r'\b(unit|department|ward|center|centre|clinic|division|section)\b', unit, re.IGNORECASE):
                 unit_label = unit
             else:
@@ -474,10 +518,6 @@ class PracticumReportBuilder:
                 ch_text = f"{ch[0].upper() + ch[1:]}."
                 challenges.append({'challenge_text': ch_text, 'solution_text': ''})
 
-            # Only use the *student's own* solution as a recommendation.
-            # Never auto-generate "Further attention and resources should be
-            # directed towards addressing <raw challenge>" — that produced
-            # gibberish when the raw log was terse.
             if sol and len(sol) >= 15 and sol.lower() not in seen_recs:
                 seen_recs.add(sol.lower())
                 rec = sol[0].upper() + sol[1:]
@@ -524,13 +564,19 @@ class PracticumReportBuilder:
         facility_type = (self.facility.facility_type if self.facility else 'health facility').lower()
         keywords = f"practicum, clinical attachment, {dept_name.lower()}, {facility_type}"
 
-        # ✅ PHASE 6 FIX (part 2): wrap raw challenges in academic prose.
-        # This runs ONLY when the AI failed to draft 'challenges' — the
-        # effective_content() overlay prefers the AI draft when it exists.
         default_challenges = self._synthesize_challenges_prose(challenges)
         default_skills = '\n'.join(text for _, text in skills)
 
         facility_profile_text = self._build_facility_profile()
+
+        # ✅ NEW: build defaults for activities_performed and recommendations
+        # so they're always available as fallback. Previously these two keys
+        # were completely missing from defaults, so when the AI timed out
+        # (which happens often — they're deep in the DRAFT_SECTIONS list),
+        # effective_content() returned a dict without them → edit page blank
+        # fields + build_context KeyError.
+        default_activities = _build_activities_narrative(unit_activities)
+        default_recommendations = _build_recommendations_text(dynamic_facility_recs, recs)
 
         defaults = {
             'abstract': abstract,
@@ -548,6 +594,9 @@ class PracticumReportBuilder:
             'challenges': default_challenges,
             'skills_acquired': default_skills,
             'facility_profile': facility_profile_text,
+            # ✅ NEW keys — previously missing entirely
+            'activities_performed': default_activities,
+            'recommendations': default_recommendations,
         }
 
         self._data = {
@@ -572,14 +621,18 @@ class PracticumReportBuilder:
         """
         Merge template defaults with AI-drafted saved content.
 
-        ⚠️ PHASE 6 ROOT-CAUSE FIX: the old version iterated ONLY over
-        `defaults`, so any section the AI drafted that has no template
-        fallback (activities_performed, recommendations) was silently
-        discarded before rendering. This version iterates over the union
-        of both key sets so every AI draft reaches the report.
+        ✅ Always returns a dict containing EVERY key in _CONTENT_SECTION_KEYS.
+        Missing data becomes an empty string — never absent — so callers can
+        safely do content['references'] without KeyError.
+
+        This fixes the 23 Nov crash:
+            KeyError: 'references' at build_context() line 777
+        which happened because the previous implementation skipped empty values
+        (references is '' by default → filtered out → later hard access crashed).
         """
         defaults = self.content_defaults()
         saved = self.saved_content or {}
+
         title_variants = {
             'abstract':             ['abstract'],
             'acknowledgments':      ['acknowledgments', 'acknowledgements'],
@@ -595,18 +648,15 @@ class PracticumReportBuilder:
             'conclusion':           ['conclusion'],
             'references':           ['references'],
         }
+
         result = {}
 
-        # Internal keys (e.g. '_ai_note') are never content.
-        all_keys = [k for k in (set(defaults.keys()) | set(saved.keys()))
-                    if not str(k).startswith('_')]
-
-        for k in all_keys:
+        # Iterate over the canonical key list FIRST — guarantees every key
+        # ends up in the result dict even when both defaults and saved lack it.
+        for k in _CONTENT_SECTION_KEYS:
             default = defaults.get(k, '')
 
-            # Facility Profile: DB-only. If the saved content contains any
-            # student narrative ("I was attached", "I assisted", etc.),
-            # discard it and fall back to the DB-sourced text.
+            # Facility Profile special-case: DB-only, reject student narratives.
             if k == 'facility_profile':
                 saved_val = str(saved.get(k, '')).strip()
                 if saved_val and not _STUDENT_NARRATIVE_RE.search(saved_val):
@@ -617,21 +667,28 @@ class PracticumReportBuilder:
 
             saved_val = str(saved.get(k, '')).strip()
             val = saved_val or default
-            if not val:
-                continue
 
-            # 1) Strip Markdown heading markers (##, ###, …) at line start.
-            val = re.sub(r'^[ \t]*#+[ \t]*', '', val, flags=re.MULTILINE).strip()
+            # Strip markdown heading markers if present.
+            if val:
+                val = re.sub(r'^[ \t]*#+[ \t]*', '', val, flags=re.MULTILINE).strip()
+                # Strip a leading section title line (e.g. "INTRODUCTION\n\n").
+                for variant in title_variants.get(k, []):
+                    pattern = r'^' + re.escape(variant) + r'[ \t]*\n+'
+                    new_val = re.sub(pattern, '', val, count=1, flags=re.IGNORECASE)
+                    if new_val != val:
+                        val = new_val.strip()
+                        break
 
-            # 2) Strip a leading section title line (e.g. "INTRODUCTION\n\n").
-            for variant in title_variants.get(k, []):
-                pattern = r'^' + re.escape(variant) + r'[ \t]*\n+'
-                new_val = re.sub(pattern, '', val, count=1, flags=re.IGNORECASE)
-                if new_val != val:
-                    val = new_val.strip()
-                    break
-
+            # ✅ ALWAYS include the key — even when empty. This is the fix.
             result[k] = val
+
+        # Include any extra saved keys not in the canonical list (future-proofing).
+        for k, v in saved.items():
+            if str(k).startswith('_') or k in result:
+                continue
+            sv = str(v).strip()
+            if sv:
+                result[k] = sv
 
         return result
 
@@ -774,7 +831,9 @@ class PracticumReportBuilder:
                 counter += 1
                 nums[key] = f'3.{counter}'
 
-        references = _lines(content['references'])
+        # ✅ Use .get() for every content access. Belt + suspenders alongside
+        # the effective_content() guarantee that all keys are present.
+        references = _lines(content.get('references', ''))
         report = self.report_obj
 
         return {
@@ -793,15 +852,17 @@ class PracticumReportBuilder:
             'introduction_paras': _paragraphs(content.get('introduction', '')),
             'workshops': d['workshops'], 'lessons_learnt': _lines(content.get('lessons_learnt', '')),
             'observation': _paragraphs(content.get('observation', '')), 'unit_activities': d['unit_activities'],
-            'declaration': d['declaration'], 'acknowledgments': _paragraphs(content['acknowledgments']),
-            'abstract_paras': _paragraphs(content['abstract']), 'keywords': content['keywords'],
+            'declaration': d['declaration'], 'acknowledgments': _paragraphs(content.get('acknowledgments', '')),
+            'abstract_paras': _paragraphs(content.get('abstract', '')), 'keywords': content.get('keywords', ''),
             'objectives': d['objectives'], 'methodology': d['methodology'],
             'weeks': d['weeks'], 'table_base': table_base, 'tables': tables, 'nums': nums,
             'unit_rows': d['unit_rows'], 'tally_table': d['tally_table'],
             'charts': charts, 'results': d['results'], 'skills': d['skills'], 'challenges': d['challenges'],
             'top_skills': d['skills'][:5], 'top_challenges': d['challenges'][:5],
-            'conclusion': _paragraphs(content['conclusion']), 'facility_recs': _lines(content['facility_recs']),
-            'academic_recs': _lines(content['academic_recs']), 'references': references,
+            'conclusion': _paragraphs(content.get('conclusion', '')),
+            'facility_recs': _lines(content.get('facility_recs', '')),
+            'academic_recs': _lines(content.get('academic_recs', '')),
+            'references': references,
             'all_logs': self.logs, 'total_days': d['total_days'],
             'qr_uri': self._qr() if f['signoff'] else '', 'verify_url': self._verify_url(),
             'signed_off': bool(report and report.is_signed_off),
@@ -853,16 +914,6 @@ class PracticumReportBuilder:
         final_pages = chosen['pages']
         notes = []
 
-        # ✅ PHASE 4 — note logic split into TWO mutually-exclusive modes so
-        # the user never sees the COHY 25-page guideline nagging them about
-        # a personal page target they explicitly set (or vice versa).
-        #
-        # Mode A (target set):  talk about THAT target — how close we got,
-        #                       why we missed, how to reach it next time.
-        #                       NEVER mention COHY's 25-page reference.
-        # Mode B (no target):   natural-length mode. COHY's 25-page guideline
-        #                       appears as REFERENCE ONLY, and only when the
-        #                       report falls short. Framed as optional.
         if target:
             log_count = len(self.logs)
             try:
@@ -873,7 +924,6 @@ class PracticumReportBuilder:
             if final_pages == target:
                 notes.append(f'Exactly {target} pages, as you asked.')
             elif final_pages < target and grow:
-                # Tried to grow, didn't reach — need more source material.
                 if log_count < 10:
                     gap = 10 - log_count
                     notes.append(
@@ -895,7 +945,6 @@ class PracticumReportBuilder:
                         f'the AI has more material to expand.'
                     )
             elif final_pages > target and not grow:
-                # Tried to shrink, couldn't — need to trim source material.
                 notes.append(
                     f'The smallest we could fit is {final_pages} pages, above your '
                     f'{target}-page target. Why: your {log_count} daily entries produce more '
@@ -903,14 +952,10 @@ class PracticumReportBuilder:
                     f'Either trim less-important logs, or accept the larger report.'
                 )
             else:
-                # Rare overshoot in either direction — report the closest fit.
                 notes.append(f'The closest fit was {final_pages} pages (target {target}).')
             if chosen['dropped']:
                 notes.append('To fit, we changed: ' + ', '.join(chosen['dropped']) + '.')
         else:
-            # Natural length — COHY's 25-page guideline is a REFERENCE, not a
-            # default. Only mention it when the report falls short, and frame
-            # it as optional + actionable.
             if final_pages < MIN_PAGES_GUIDELINE:
                 notes.append(
                     f"COHY's guideline is at least {MIN_PAGES_GUIDELINE} pages; this "
@@ -950,7 +995,6 @@ class PracticumReportBuilder:
         """Generates a Word document with the cover logo and official formatting."""
         doc = Document()
 
-        # Force Times New Roman 12pt across all standard styles
         for style_name in ['Normal', 'Heading 1', 'Heading 2', 'Heading 3', 'Title']:
             try:
                 style = doc.styles[style_name]
@@ -1026,7 +1070,6 @@ class PracticumReportBuilder:
                 run.font.color.rgb = RGBColor(0, 0, 0)
             return h
 
-        # Introduction
         add_heading('INTRODUCTION')
         if content.get('introduction'):
             for para in _paragraphs(content['introduction']):
@@ -1038,7 +1081,6 @@ class PracticumReportBuilder:
                 f"{self.user.get_full_name() or self.user.username}...",
             )
 
-        # Facility Profile
         add_heading('FACILITY PROFILE')
         if content.get('facility_profile'):
             for para in _paragraphs(content['facility_profile']):
@@ -1051,7 +1093,6 @@ class PracticumReportBuilder:
                     f"{self.facility.district} of the {self.facility.region} Region.",
                 )
 
-        # Activities
         add_heading('ACTIVITIES PERFORMED')
         if content.get('activities_performed'):
             for para in _paragraphs(content['activities_performed']):
@@ -1064,7 +1105,6 @@ class PracticumReportBuilder:
             for group in d['unit_activities']:
                 self._add_rich_paragraph(doc, group['narrative'])
 
-        # Skills
         add_heading('SKILLS ACQUIRED')
         if content.get('skills_acquired'):
             for line in _clean_list_lines(content['skills_acquired']):
@@ -1073,7 +1113,6 @@ class PracticumReportBuilder:
             for _, skill in d['skills']:
                 self._add_rich_paragraph(doc, skill, style='List Bullet')
 
-        # Workshops
         add_heading('WORKSHOPS')
         if content.get('workshops'):
             for para in _paragraphs(content['workshops']):
@@ -1081,7 +1120,6 @@ class PracticumReportBuilder:
         else:
             self._add_rich_paragraph(doc, "No formal workshop was attended during the practicum period.")
 
-        # Lessons Learnt
         add_heading('LESSONS LEARNT')
         if content.get('lessons_learnt'):
             for line in _clean_list_lines(content['lessons_learnt']):
@@ -1090,13 +1128,11 @@ class PracticumReportBuilder:
             for l in _lines(content.get('lessons_learnt', '')):
                 self._add_rich_paragraph(doc, l, style='List Bullet')
 
-        # Observations
         add_heading('OBSERVATIONS')
         if content.get('observation'):
             for para in _paragraphs(content['observation']):
                 self._add_rich_paragraph(doc, para)
 
-        # Challenges
         add_heading('CHALLENGES')
         if content.get('challenges'):
             for para in _paragraphs(content['challenges']):
@@ -1104,39 +1140,33 @@ class PracticumReportBuilder:
         else:
             self._add_rich_paragraph(doc, "No specific challenges were recorded.")
 
-        # Recommendations
         add_heading('RECOMMENDATIONS')
         if content.get('recommendations'):
             for line in _clean_list_lines(content['recommendations']):
                 self._add_rich_paragraph(doc, line, style='List Bullet')
         else:
-            for r in _lines(content['facility_recs']):
+            # ✅ .get() instead of hard access — fixes KeyError when
+            # facility_recs / academic_recs are missing.
+            for r in _lines(content.get('facility_recs', '')):
                 self._add_rich_paragraph(doc, r, style='List Bullet')
-            for r in _lines(content['academic_recs']):
+            for r in _lines(content.get('academic_recs', '')):
                 self._add_rich_paragraph(doc, r, style='List Bullet')
 
-        # Conclusion
         add_heading('CONCLUSION')
         if content.get('conclusion'):
             for para in _paragraphs(content['conclusion']):
                 self._add_rich_paragraph(doc, para)
 
-        # Signature
         add_heading('SIGNATURE AND DATE')
         self._add_rich_paragraph(doc, "\n\n______________________________________")
         self._add_rich_paragraph(doc, "Student's Signature")
         self._add_rich_paragraph(doc, "\n\n______________________________________")
         self._add_rich_paragraph(doc, "Date")
 
-        # ---- ✅ Page numbers in the footer (bottom-centre), if enabled ----
-        # Uses a real Word PAGE field so it recalculates on open and after
-        # pagination. The cover page is suppressed (different first page) so
-        # numbering starts from the body — standard academic convention.
         if self.options.get('page_numbers', True):
             section = doc.sections[0]
-            section.different_first_page_header_footer = True   # cover has no footer
+            section.different_first_page_header_footer = True
 
-            # Regular footer (body pages)
             footer = section.footer
             footer.is_linked_to_previous = False
             fp = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
@@ -1163,7 +1193,6 @@ class PracticumReportBuilder:
             run._r.append(instr)
             run._r.append(fld_end)
 
-            # Leave the first-page footer empty (cover has no number)
             first_footer = section.first_page_footer
             first_footer.is_linked_to_previous = False
             if first_footer.paragraphs:
@@ -1176,28 +1205,14 @@ class PracticumReportBuilder:
 
     # ---------- PowerPoint ----------
     def build_pptx(self, template_key='cohy_classic'):
-        """
-        Build the PowerPoint deck using the given template key.
-        Returns the raw .pptx bytes (nothing is written to disk).
-        """
         from .pptx_builder import PracticumPptxBuilder
         return PracticumPptxBuilder(self, template_key).build()
 
     def save_pptx(self, template_key='cohy_classic', force_ai=False):
-        """
-        Build BOTH the .pptx and its PDF preview from a single template, and
-        persist them on the GeneratedReport.
-
-        After the call, `self._last_pptx_summary` holds:
-            { 'slides_built': int, 'slides_selected': int | None,
-              'ai_fallback_count': int, 'template': str,
-              'overflow_warnings': list }
-        """
         from .pptx_builder import PracticumPptxBuilder
 
         report, _ = GeneratedReport.objects.get_or_create(attachment=self.attachment)
 
-        # --- Draft slide-specific AI content lazily ---
         if force_ai:
             report.pptx_content = {}
             report.save(update_fields=['pptx_content'])
@@ -1218,13 +1233,10 @@ class PracticumReportBuilder:
                     'PPTX AI drafting failed — builder will fall back to trimmed report text'
                 )
 
-        # --- Build both files from the same builder instance ---
         builder = PracticumPptxBuilder(self, template_key)
         pptx_bytes = builder.build()
         pdf_bytes = builder.build_pdf()
 
-        # ✅ PHASE 7: persist overflow warnings onto pptx_options so the
-        # template can surface them on subsequent page loads.
         opts = dict(report.pptx_options or {})
         if getattr(builder, 'overflow_warnings', None):
             opts['last_overflow_warnings'] = builder.overflow_warnings
@@ -1263,13 +1275,17 @@ class PracticumReportBuilder:
         if report.docx_file:
             report.docx_file.delete(save=False)
 
+        # ✅ Persist the merged content (AI + defaults) so the edit page shows
+        # exactly what went into this PDF. This survives even if a later
+        # regeneration attempt crashes partway through, and it means the edit
+        # page always reflects the current PDF — even when AI only drafted
+        # a subset of sections.
+        report.content = self.effective_content()
+
         report.options = {
             **self.options,
             'last_page_count': self.result['pages'],
             'last_spacing': self.result['spacing'],
-            # ✅ PHASE 6: persist the "why it fell short" note so the amber
-            # info box on options.html survives page reloads. Without this,
-            # the message only lives for the redirect after generation.
             'last_page_note': self.result.get('note', ''),
         }
         filename = f"practicum-report-{slugify(self.user.index_number)}"

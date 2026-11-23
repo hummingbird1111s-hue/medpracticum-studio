@@ -129,6 +129,15 @@
     }
     .mp-sidebar__subscription:active { transform: translateY(0); }
 
+    /* ✅ UPDATE INDICATOR on the sidebar brand "check for updates" button */
+    @keyframes mp-update-pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%      { opacity: 0.5; transform: scale(1.2); }
+    }
+    .mp-sidebar__update-btn:hover { transform: scale(1.04); }
+    .mp-sidebar__update-btn:active { transform: scale(0.97); }
+    #mp-update-indicator.show { display: block !important; }
+
     /* ================= MAIN COLUMN ================= */
     .mp-main-column {
       flex: 1 1 0;
@@ -236,7 +245,10 @@
     .mp-messages { max-width: 1200px; width: 100%; margin: 0 auto; padding: 16px 16px 0; flex-shrink: 0; }
     .mp-message { padding: 8px 16px; border-radius: 8px; font-size: 14px; margin-bottom: 8px; }
     .mp-message--error   { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
-    .mp-message--default { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+    .mp-message--success { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+    .mp-message--warning { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+    .mp-message--info    { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+    .mp-message--default { background: #f9fafb; color: #374151; border: 1px solid #e5e7eb; }
 
     /* ================= MAIN CONTENT ================= */
     .mp-main { flex: 1 1 0; min-height: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
@@ -483,10 +495,37 @@
     {% if user.is_authenticated %}
     <aside id="mp-sidebar" class="mp-sidebar" aria-label="Main navigation">
 
-      <div class="mp-sidebar__brand">
-        <a href="{% url 'dashboard' %}">
-          MedPracticum Studio
-          <small>HIM PRACTICUM</small>
+      <!-- ✅ BRAND + CHECK-FOR-UPDATES BUTTON -->
+      <div class="mp-sidebar__brand" style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+        <a href="{% url 'dashboard' %}" style="flex: 1; min-width: 0; text-decoration: none;">
+          <span style="color: #ffffff; font-weight: 700; font-size: 17px; display: block; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            MedPracticum Studio
+          </span>
+          <small style="display: block; color: #6ee7b7; font-size: 11px; letter-spacing: 1px; margin-top: 2px; font-weight: 500;">
+            HIM PRACTICUM
+          </small>
+        </a>
+        <a href="{% url 'pwa_update' %}"
+           id="mp-check-update-btn"
+           class="mp-sidebar__update-btn"
+           title="Check for updates"
+           aria-label="Check for updates"
+           style="display: inline-flex; align-items: center; justify-content: center;
+                  width: 36px; height: 36px; border-radius: 10px;
+                  background: rgba(255,255,255,0.12); color: #ecfdf5;
+                  text-decoration: none; flex-shrink: 0; position: relative;
+                  transition: background 0.15s ease, transform 0.15s ease;"
+           onmouseover="this.style.background='rgba(255,255,255,0.22)'"
+           onmouseout="this.style.background='rgba(255,255,255,0.12)'">
+          <svg viewBox="0 0 24 24" style="width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;">
+            <path d="M23 4v6h-6M1 20v-6h6"/>
+            <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+          </svg>
+          <span id="mp-update-indicator"
+                style="display: none; position: absolute; top: 3px; right: 3px;
+                       width: 10px; height: 10px; border-radius: 50%;
+                       background: #fbbf24; box-shadow: 0 0 0 2px #047857;
+                       animation: mp-update-pulse 1.8s ease-out infinite;"></span>
         </a>
       </div>
 
@@ -568,7 +607,7 @@
           How to Use System
         </a>
 
-        <!-- ✅ NEW: Manual page refresh (soft reload — no cache purge) -->
+        <!-- ✅ Manual page refresh (soft reload — no cache purge) -->
         <button type="button"
                 onclick="mpManualRefresh()"
                 style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 12px; background: rgba(255,255,255,0.1); border-radius: 8px; font-weight: 500; font-size: 14px; color: #ecfdf5; text-decoration: none; transition: background 0.15s ease; border: 0; cursor: pointer; font-family: inherit; width: 100%;"
@@ -649,7 +688,12 @@
       {% if messages %}
       <div class="mp-messages">
         {% for message in messages %}
-          <div class="mp-message {% if message.tags == 'error' %}mp-message--error{% else %}mp-message--default{% endif %}">
+          <div class="mp-message
+            {% if message.tags == 'error' %}mp-message--error
+            {% elif message.tags == 'success' %}mp-message--success
+            {% elif message.tags == 'warning' %}mp-message--warning
+            {% elif message.tags == 'info' %}mp-message--info
+            {% else %}mp-message--default{% endif %}">
             {{ message }}
           </div>
         {% endfor %}
@@ -1770,16 +1814,22 @@
     }
   }
 
-  /* Detect when a new service worker is waiting → show banner */
+  /* Detect when a new service worker is waiting → show banner + light up sidebar dot */
   (function () {
     if (!('serviceWorker' in navigator)) return;
     if (window.location.pathname.indexOf('/update') === 0) return;
 
     var banner = document.getElementById('mp-update-banner');
-    if (!banner) return;
+    var indicator = document.getElementById('mp-update-indicator');
 
-    function showBanner() { banner.classList.add('show'); }
-    function hideBanner() { banner.classList.remove('show'); }
+    function showBanner() {
+      if (banner) banner.classList.add('show');
+      if (indicator) indicator.style.display = 'block';
+    }
+    function hideBanner() {
+      if (banner) banner.classList.remove('show');
+      if (indicator) indicator.style.display = 'none';
+    }
 
     window.mpDismissUpdateBanner = function () {
       hideBanner();

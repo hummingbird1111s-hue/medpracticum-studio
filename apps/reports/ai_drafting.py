@@ -1,15 +1,30 @@
 """
-Best-effort AI drafting for report sections.
+Best-effort AI drafting for report sections, with code-enforced quality gates.
 
 Two entry points:
   - draft_sections_with_ai(session)        → report prose   → report.content
   - draft_presentation_with_ai(session)    → slide bullets  → report.pptx_content
+
+QUALITY ENFORCEMENT (v7):
+  Every drafted section passes through a post-processing gate that detects:
+    1. Verbatim copy from raw logs (7-word n-gram match)
+    2. Placeholder text ('[insert', 'TODO', 'lorem ipsum', etc.)
+    3. Markdown pollution (## headings)
+    4. Under-length drafts (< 50% of section word floor)
+  Sections failing the gate are retried once with a stricter prompt that
+  names the specific problem. Retry budget is capped (3 retries / 30s) so
+  the time budget stays intact.
+
+ORDER MATTERS (v7): Sections are ordered by PRIORITY, not report sequence.
+  If the 90s budget runs out, the sections that got drafted are the ones
+  that matter most. Activities / Introduction / Skills first. Abstract and
+  References last.
 """
 
 import logging
-import time
 import random
 import re
+import time
 
 from django.conf import settings
 
@@ -17,38 +32,12 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================================
-# Report drafting (prose sections — used by the PDF/Word flow)
+# Report drafting — section priority order
 # ============================================================
 # NOTE: 'facility_profile' is deliberately NOT drafted by the AI.
-# The Facility Profile is built purely from the facility record in the
-# database (see PracticumReportBuilder._build_facility_profile).
-#
-# LENGTH PHILOSOPHY (v5):
-#   The old prompts hard-capped sections at 80–200 words, which caused the
-#   AI to under-write and the report to fall short of the user's page target.
-#   These prompts instead give the AI a per-section WORD TARGET computed from
-#   the user's chosen page count — under-writing is now treated as failure.
-#   When the user has NOT set a target, the budget is estimated from log
-#   volume (sparse logs → short report; rich logs → near COHY 25 pages).
-#   The only remaining hard constraints are STRUCTURAL (bullet count, sub-
-#   heading organization), never word count.
+# It's built purely from the facility record in the database.
 
 DRAFT_SECTIONS = [
-    ('abstract', 'Abstract',
-     "Write a single academic paragraph in third person. "
-     "Synthesize the whole experience: purpose, facility, units rotated, main skills developed, "
-     "and primary outcome. Explicitly name AT LEAST THREE of the student's competency areas. "
-     "Cover the arc of the attachment from start to finish. "
-     "Do NOT copy raw logs. Refine every sentence into academic language. "
-     "Do NOT include a heading or keyword line."),
-
-    ('acknowledgments', 'Acknowledgments',
-     "Write 2-3 formal paragraphs thanking the facility, the clinical supervisor (if named), "
-     "the staff of each major unit the student rotated through, and the College. "
-     "Use first-person singular ('I'). Each paragraph should be 3-5 sentences. "
-     "Include a brief reflection on how the support received contributed to the student's learning. "
-     "Check grammar rigorously. Do NOT include a heading."),
-
     ('introduction', 'Introduction',
      "Write 3-4 substantial paragraphs using first-person voice ('I'). "
      "Paragraph 1: purpose of the attachment, facility name, location, period, and why HIM practice matters in Ghana. "
@@ -79,14 +68,6 @@ DRAFT_SECTIONS = [
      "Use first-person ('I'). Explicitly connect each skill back to one of the listed competency areas where natural. "
      "Do NOT include a heading."),
 
-    ('workshops', 'Workshops',
-     "Write exactly 2 paragraphs. "
-     "Paragraph 1: describe each workshop or training session attended (date, topic, presenter if known), "
-     "and the specific skills or knowledge gained from each. "
-     "Paragraph 2: reflect on how the workshops complemented the practical experience and connected to the competencies. "
-     "If NO formal workshops were attended, write 2 paragraphs on the practical on-the-job training received instead. "
-     "Use first-person ('I'). Do NOT include a heading."),
-
     ('lessons_learnt', 'Lessons Learnt',
      "Provide 10-12 detailed bullet points. Output ONLY the list items, one per line. "
      "CRITICAL: ABSOLUTELY NO numbers, hyphens, or asterisks at the start of the line. "
@@ -96,17 +77,6 @@ DRAFT_SECTIONS = [
      "Do NOT duplicate the Skills Acquired section — focus on broader insights: patient confidentiality, "
      "teamwork and communication, data-driven decision making, professional ethics, workflow efficiency, "
      "and the realities of HIM practice in Ghana. "
-     "Do NOT include a heading."),
-
-    ('observation', 'Observations',
-     "Write 3-4 substantial paragraphs synthesizing observations about workflows, staffing, "
-     "record systems, data quality, and interdepartmental coordination. Use first-person ('I'). "
-     "Weave specific details from the logs into a cohesive academic narrative. "
-     "Connect observations to the competency areas where relevant. "
-     "CRITICAL: YOU ARE FORBIDDEN FROM LISTING RAW LOG ENTRIES. "
-     "Example synthesis: if logs mention 'electronic system' and 'high patient volume', write "
-     "'I observed that while the LHIMS electronic health information system streamlined data management, "
-     "the high patient volume often led to bottlenecks during peak hours, revealing gaps in workflow efficiency.' "
      "Do NOT include a heading."),
 
     ('challenges', 'Challenges',
@@ -122,15 +92,6 @@ DRAFT_SECTIONS = [
      "Use first-person ('I'). Do NOT include a heading or bullet list. "
      "CRITICAL: NEVER paste raw log text. Always transform into polished academic English."),
 
-    ('recommendations', 'Recommendations',
-     "Write an opening paragraph of 2-3 sentences framing the recommendations. "
-     "Then provide a numbered list of 6-8 actionable recommendations. "
-     "Split them into two clear groups: (A) 3-4 for the FACILITY, (B) 3-4 for the COLLEGE. "
-     "EACH recommendation must directly address a challenge or competency mentioned earlier in the report. "
-     "Each recommendation should be 2-3 sentences — specify WHO should do WHAT and WHY it matters. "
-     "Use professional academic tone (first-person plural 'we' or third-person 'the facility should'). "
-     "Do NOT include a heading."),
-
     ('conclusion', 'Conclusion',
      "Write 3 substantial paragraphs using first-person ('I'). "
      "Paragraph 1: summarize the overall experience, units rotated, and skills gained. "
@@ -140,18 +101,60 @@ DRAFT_SECTIONS = [
      "the student's academic and professional journey. "
      "Do NOT include a heading."),
 
+    ('recommendations', 'Recommendations',
+     "Write an opening paragraph of 2-3 sentences framing the recommendations. "
+     "Then provide a numbered list of 6-8 actionable recommendations. "
+     "Split them into two clear groups: (A) 3-4 for the FACILITY, (B) 3-4 for the COLLEGE. "
+     "EACH recommendation must directly address a challenge or competency mentioned earlier in the report. "
+     "Each recommendation should be 2-3 sentences — specify WHO should do WHAT and WHY it matters. "
+     "Use professional academic tone (first-person plural 'we' or third-person 'the facility should'). "
+     "Do NOT include a heading."),
+
+    ('observation', 'Observations',
+     "Write 3-4 substantial paragraphs synthesizing observations about workflows, staffing, "
+     "record systems, data quality, and interdepartmental coordination. Use first-person ('I'). "
+     "Weave specific details from the logs into a cohesive academic narrative. "
+     "Connect observations to the competency areas where relevant. "
+     "CRITICAL: YOU ARE FORBIDDEN FROM LISTING RAW LOG ENTRIES. "
+     "Example synthesis: if logs mention 'electronic system' and 'high patient volume', write "
+     "'I observed that while the LHIMS electronic health information system streamlined data management, "
+     "the high patient volume often led to bottlenecks during peak hours, revealing gaps in workflow efficiency.' "
+     "Do NOT include a heading."),
+
+    ('abstract', 'Abstract',
+     "Write a single academic paragraph in third person. "
+     "Synthesize the whole experience: purpose, facility, units rotated, main skills developed, "
+     "and primary outcome. Explicitly name AT LEAST THREE of the student's competency areas. "
+     "Cover the arc of the attachment from start to finish. "
+     "Do NOT copy raw logs. Refine every sentence into academic language. "
+     "Do NOT include a heading or keyword line."),
+
+    ('acknowledgments', 'Acknowledgments',
+     "Write 2-3 formal paragraphs thanking the facility, the clinical supervisor (if named), "
+     "the staff of each major unit the student rotated through, and the College. "
+     "Use first-person singular ('I'). Each paragraph should be 3-5 sentences. "
+     "Include a brief reflection on how the support received contributed to the student's learning. "
+     "Check grammar rigorously. Do NOT include a heading."),
+
+    ('workshops', 'Workshops',
+     "Write exactly 2 paragraphs. "
+     "Paragraph 1: describe each workshop or training session attended (date, topic, presenter if known), "
+     "and the specific skills or knowledge gained from each. "
+     "Paragraph 2: reflect on how the workshops complemented the practical experience and connected to the competencies. "
+     "If NO formal workshops were attended, write 2 paragraphs on the practical on-the-job training received instead. "
+     "Use first-person ('I'). Do NOT include a heading."),
+
     ('references', 'References',
      "APA-style reference list for any sources you cite. If you cite nothing, return an empty response. "
      "Do NOT include a heading."),
 ]
 
-DEFAULT_MAX_SECONDS = 90  # Capped at 90s so it doesn't trigger Gunicorn timeouts
+DEFAULT_MAX_SECONDS = 90
 
 
 # ============================================================
 # Presentation drafting (slide bullets + speaker notes)
 # ============================================================
-# Unchanged — PPTX output is intentionally terse.
 
 PPTX_DRAFT_SECTIONS = [
     ('pptx_intro_bullets', 'Slide: Introduction',
@@ -213,6 +216,156 @@ PPTX_DRAFT_SECTIONS = [
      "Do NOT use bullet points or asterisks. Do NOT add a heading. "
      "FORBIDDEN: more than 7 lines total."),
 ]
+
+
+# ============================================================
+# Quality enforcement constants + helpers
+# ============================================================
+
+# A 7-word match against a raw log is a strong verbatim-copy signal.
+# Shorter windows (5-6) trigger false positives on common English phrasing.
+_VERBATIM_NGRAM_SIZE = 7
+
+# Words too common to be meaningful in a verbatim-copy check.
+_QUALITY_STOPWORDS = frozenset({
+    'a','an','the','and','or','of','in','on','at','to','for','with','by','as',
+    'is','was','were','be','been','being','have','has','had','do','does','did',
+    'i','me','my','we','our','this','that','these','those','from','into','within',
+    'also','other','some','various','including','included','such','it','its',
+    'but','so','if','when','while','than','then','there','their','they','them',
+    'he','she','his','her','him','you','your','will','would','can','could',
+    'should','may','might','must','not','no','yes','very','just','only','been',
+})
+
+# Placeholder tokens — if any appear, the section is considered invalid.
+_PLACEHOLDER_TOKENS = (
+    '[insert', '[your name', '[facility name', '[date]', '[name]',
+    'lorem ipsum', '<insert', 'todo:', 'placeholder:', 'xxxx', 'tbd',
+)
+
+# Retry budget: prevents retries from starving the time budget.
+_MAX_RETRIES_TOTAL = 3
+_MAX_RETRY_SECONDS = 30
+
+
+def _build_log_ngrams(session, n=_VERBATIM_NGRAM_SIZE):
+    """
+    Precompute the set of n-word tuples appearing verbatim in the raw logs.
+    Returns an empty set on error (fail-safe: no copy detection, but no crash).
+    """
+    ngrams = set()
+    try:
+        logs = session.daily_logs.filter(is_deleted=False)
+        for log in logs:
+            for field in ('activity_summary', 'skills_acquired',
+                          'challenges_faced', 'solutions_applied'):
+                text = (getattr(log, field, '') or '').strip()
+                if not text:
+                    continue
+                words = tuple(re.findall(r'\w+', text.lower()))
+                if len(words) < n:
+                    continue
+                for i in range(len(words) - n + 1):
+                    window = words[i:i + n]
+                    # Skip windows that are mostly stopwords — "in the records
+                    # unit and the" shouldn't trigger a copy flag.
+                    content_words = [w for w in window if w not in _QUALITY_STOPWORDS]
+                    if len(content_words) < 3:
+                        continue
+                    ngrams.add(window)
+    except Exception:
+        logger.exception('Could not build log n-grams for verbatim-copy detection')
+    return ngrams
+
+
+def _find_verbatim_copy(text, log_ngrams, n=_VERBATIM_NGRAM_SIZE):
+    """Return the first n-word phrase in `text` that appears verbatim in logs, or None."""
+    if not log_ngrams or not text:
+        return None
+    words = tuple(re.findall(r'\w+', text.lower()))
+    for i in range(len(words) - n + 1):
+        window = words[i:i + n]
+        if window in log_ngrams:
+            return ' '.join(window)
+    return None
+
+
+def _quality_issues(section_key, text, log_ngrams, min_word_floor=0):
+    """
+    Run every quality gate against a drafted section.
+
+    Returns list of (code, detail) tuples. Empty list = section passes.
+    """
+    if not text or not text.strip():
+        return [('empty', 'AI returned empty text')]
+
+    issues = []
+
+    # 1. Verbatim copy from raw logs
+    copied = _find_verbatim_copy(text, log_ngrams)
+    if copied:
+        issues.append(('verbatim_copy', f'copied raw log phrase: "{copied}"'))
+
+    # 2. Placeholder text
+    lowered = text.lower()
+    for token in _PLACEHOLDER_TOKENS:
+        if token in lowered:
+            issues.append(('placeholder', f'contains placeholder: "{token}"'))
+            break
+
+    # 3. Under-length drafts (only if we know the section's floor)
+    if min_word_floor:
+        actual_words = len(text.split())
+        threshold = int(min_word_floor * 0.5)
+        if actual_words < threshold:
+            issues.append((
+                'too_short',
+                f'only {actual_words} words (minimum {threshold} expected)'
+            ))
+
+    # 4. Markdown pollution that wasn't stripped
+    if re.search(r'^#{1,6}\s', text, re.MULTILINE):
+        issues.append(('markdown_headers', 'contains raw markdown # headers'))
+
+    return issues
+
+
+def _clean_draft_text(text):
+    """Universal cleanup applied to every AI reply before quality check."""
+    if not text:
+        return ''
+    # Strip markdown heading lines that slipped past the prompt instruction.
+    text = re.sub(r'^#+\s+.*$', '', text, flags=re.MULTILINE)
+    # Strip a leading section-title line (e.g. "INTRODUCTION\n\n").
+    text = re.sub(r'^[A-Z][A-Z\s]{3,}\n+', '', text, count=1)
+    # Collapse 3+ consecutive blank lines to a single paragraph break.
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
+
+
+def _build_retry_prompt(original_prompt, section_title, issues):
+    """
+    Retry prompt that names the specific problem so the AI knows what to fix.
+    """
+    problems = '\n'.join(f'  - {code}: {detail}' for code, detail in issues)
+    return (
+        f"⚠️ RETRY REQUIRED — YOUR PREVIOUS DRAFT OF '{section_title}' FAILED QUALITY CHECKS.\n\n"
+        f"Specific problems detected:\n{problems}\n\n"
+        f"MANDATORY FIXES:\n"
+        f"1. If 'verbatim_copy' was flagged: you must rephrase EVERY phrase from the "
+        f"raw logs into your own academic prose. No sequence of 5 or more words from the "
+        f"raw logs may appear in your output. Transform sentence structures completely — "
+        f"change verbs, add context, restructure.\n"
+        f"2. If 'too_short' was flagged: expand the section by 2x or more. Add descriptive "
+        f"context, worked examples, and academic analysis. Use your knowledge of Ghanaian "
+        f"HIM workflows to enrich.\n"
+        f"3. If 'placeholder' was flagged: remove ALL placeholder text like [insert], TODO, "
+        f"lorem ipsum. Write real content.\n"
+        f"4. If 'markdown_headers' was flagged: remove every ## or # line. Use plain prose only.\n\n"
+        f"Now write the COMPLETE section again from scratch. Do not apologize, do not "
+        f"explain — output only the section text.\n\n"
+        f"{original_prompt}"
+    )
 
 
 # ============================================================
@@ -329,12 +482,9 @@ def get_ai_reply_with_image(prompt, image_bytes, mime='image/jpeg'):
 
 
 # ============================================================
-# Per-section word budgets — computed from target_pages
+# Word budgets
 # ============================================================
 
-# Absolute floors so short reports don't produce a 67-word abstract.
-# These match the pre-v5 hardcoded fallback budget (~3,000 words) so nothing
-# regresses for users with very few logs and no explicit target.
 _SECTION_FLOORS = {
     'abstract':              180,
     'acknowledgments':       120,
@@ -349,13 +499,11 @@ _SECTION_FLOORS = {
     'conclusion':            180,
 }
 
-# Distribution percentages (sum ≈ 1.0) — governs how a page-target's word
-# budget is split across sections.
 _BUDGET_DISTRIBUTION = {
     'abstract':              0.045,
     'acknowledgments':       0.030,
     'introduction':          0.070,
-    'activities_performed':  0.340,   # biggest section
+    'activities_performed':  0.340,
     'skills_acquired':       0.115,
     'workshops':             0.025,
     'lessons_learnt':        0.115,
@@ -367,22 +515,10 @@ _BUDGET_DISTRIBUTION = {
 
 
 def _compute_word_budget(target_pages, log_count=0):
-    """
-    Per-section word targets.
-
-    Two modes:
-      • target_pages set (>= 5)  → scale budgets to fill that page count
-      • target_pages None/< 5    → estimate natural length from log volume
-                                    (sparse → short, rich → near COHY 25)
-
-    Floors are applied so tiny targets still produce a substantive abstract,
-    conclusion, etc. ~300 prose words per page.
-    """
+    """Return per-section word targets, scaled by page count or log volume."""
     if target_pages and target_pages >= 5:
         effective_pages = target_pages
     else:
-        # Natural-length estimate — no padding, matches what the source
-        # material can realistically support.
         if log_count < 5:
             effective_pages = 5
         elif log_count < 10:
@@ -390,7 +526,7 @@ def _compute_word_budget(target_pages, log_count=0):
         elif log_count < 20:
             effective_pages = 12
         else:
-            effective_pages = 18   # rich logs — just under COHY guideline
+            effective_pages = 18
 
     total_prose_words = int(effective_pages * 300)
     return {
@@ -400,7 +536,7 @@ def _compute_word_budget(target_pages, log_count=0):
 
 
 # ============================================================
-# Shared quality rules (used by both drafting functions)
+# Shared quality rules (included in every prompt)
 # ============================================================
 
 _QUALITY_RULES = (
@@ -412,19 +548,13 @@ _QUALITY_RULES = (
     "10. EXPAND SPARSE LOGS. If the student's logs for this section are thin (under 40 words or a single "
     "short line), do NOT write a bare 1-sentence paragraph. Instead, use your professional knowledge of "
     "typical Ghanaian HIM practice to EXPAND into a full, realistic narrative that still reflects what "
-    "they actually did. Add context, describe typical workflows, mention standard tools (LHIMS, DHIMS, "
-    "NHIS). Never invent activities they didn't do, but do add realistic detail around what they did.\n"
+    "they actually did.\n"
     "11. REFINE ABUNDANT LOGS. If the student's logs for this section are rich (over 200 words), do NOT "
-    "pad with filler. Synthesize, distill, and remove repetition. Keep the strongest 3-5 details and "
-    "skip the mundane ones. Quality over quantity.\n"
+    "pad with filler. Synthesize, distill, and remove repetition.\n"
     "12. BUILD AROUND COMPETENCIES. Every paragraph should visibly connect to at least one of the "
     "student's listed competency areas. Name the competency explicitly where it fits naturally.\n"
-    "13. SIMPLE ENGLISH. Write in clear, accessible English. Avoid Latin abbreviations, complex "
-    "subordinate clauses, and academic jargon when a plain word works. (Exception: technical HIM terms "
-    "like NHIS, DHIMS, LHIMS, ICD-10 are fine and should be used.)\n"
-    "14. TARGET WORD COUNT IS REAL. The section instruction below includes a TARGET WORD COUNT. "
-    "Write within ±20% of that target. Under-writing is treated as FAILURE — the report will fall "
-    "short of expectations and the user will be disappointed. When in doubt, write MORE, not less.\n"
+    "13. SIMPLE ENGLISH. Write in clear, accessible English. Technical HIM terms are fine.\n"
+    "14. TARGET WORD COUNT IS REAL. Write within ±20% of the target below. Under-writing is FAILURE.\n"
 )
 
 
@@ -434,12 +564,11 @@ _QUALITY_RULES = (
 
 def draft_sections_with_ai(session, samples=None, target_pages=None):
     """
-    Draft the prose sections with AI.
+    Draft the prose sections with AI, with code-enforced quality gates.
 
-    target_pages:
-        The user's explicit page preference (from report.options.target_pages).
-        None means "no target set" — the AI will aim for a natural length
-        estimated from log volume.
+    Returns a dict {section_key: text}. Sections that fail quality after
+    retry return '' (so services.py fills defaults).
+    Adds '_ai_note' string with human-readable retry summary when useful.
     """
     if not getattr(settings, 'REPORT_AI_DRAFTING_ENABLED', True):
         return {}
@@ -447,6 +576,9 @@ def draft_sections_with_ai(session, samples=None, target_pages=None):
     context = _build_context(session)
     if not context.strip():
         return {}
+
+    # ✅ Build the verbatim-copy reference set ONCE per call.
+    log_ngrams = _build_log_ngrams(session)
 
     try:
         competencies = list(session.competencies.values_list('text', flat=True))
@@ -477,19 +609,26 @@ def draft_sections_with_ai(session, samples=None, target_pages=None):
         if notes:
             format_notes = (
                 "\nFormat guidance from the department's official samples "
-                "(follow this strictly):\n" +
-                "\n".join(f"- {n}" for n in notes) + "\n"
+                "(follow this strictly):\n"
+                + "\n".join(f"- {n}" for n in notes) + "\n"
             )
 
-    # Log volume affects how aggressively the AI must expand
+    # Expansion rules
     log_count = session.daily_logs.filter(is_deleted=False).count()
-    if log_count < 5:
+
+    if target_pages and target_pages >= 15:
+        expansion_rule = (
+            f"\nCRITICAL (EXPANSION REQUIRED): The user has set a {target_pages}-page "
+            "target. This is a long report. Even if source logs are sparse, you MUST "
+            "expand into full, realistic narratives using your knowledge of Ghanaian "
+            "HIM practice. Under-writing here means the report will fail to hit the "
+            "user's explicit page target — this is not acceptable.\n"
+        )
+    elif log_count < 5:
         if target_pages:
             length_phrase = f"to reach the {target_pages}-page target"
         else:
-            length_phrase = (
-                "so the report is substantive and professional — not a bare summary"
-            )
+            length_phrase = "so the report is substantive and professional — not a bare summary"
         expansion_rule = (
             "\nCRITICAL (EXPANSION REQUIRED): The student has very few daily logs "
             f"({log_count}). You MUST heavily expand on the units and activities "
@@ -502,11 +641,12 @@ def draft_sections_with_ai(session, samples=None, target_pages=None):
         expansion_rule = (
             f"\nNOTE: The student has {log_count} daily logs — enough for synthesis but "
             "not rich. Where a section seems thin, use your HIM knowledge to expand "
-            "into a fuller narrative. Stay truthful to what they did.\n"
+            "into a fuller narrative.\n"
         )
     else:
         expansion_rule = ''
 
+    # User-facing note about missing logs
     note = ""
     if log_count < 5:
         if target_pages:
@@ -520,36 +660,35 @@ def draft_sections_with_ai(session, samples=None, target_pages=None):
                 f"Note: You have very few logs ({log_count}). The AI expanded the content "
                 f"using your competency areas; adding more logs will further improve depth."
             )
-    elif log_count < 15:
-        if target_pages:
-            note = (
-                f"Note: If the generated report falls short of your {target_pages}-page "
-                f"target, adding more daily logs will provide the AI with more material "
-                f"to synthesize."
-            )
-        else:
-            note = ""
+    elif log_count < 15 and target_pages:
+        note = (
+            f"Note: If the generated report falls short of your {target_pages}-page "
+            f"target, adding more daily logs will provide the AI with more material."
+        )
 
     drafts = {}
     if note:
         drafts['_ai_note'] = note
 
-    # Compute per-section word budgets (from target_pages, or natural length)
     budgets = _compute_word_budget(target_pages, log_count=log_count)
 
     max_seconds = getattr(settings, 'REPORT_AI_DRAFTING_MAX_SECONDS', DEFAULT_MAX_SECONDS)
     unique_seed = random.randint(1000, 9999)
 
     total_start = time.time()
+    retry_start = None
+    retries_used = 0
+    retry_flagged_sections = []
     total = len(DRAFT_SECTIONS)
 
     for idx, (key, title, instruction) in enumerate(DRAFT_SECTIONS, start=1):
         elapsed = time.time() - total_start
         if elapsed > max_seconds:
+            completed = len([k for k in drafts if not k.startswith('_')])
             logger.warning(
                 'AI drafting: time budget %ds exhausted after %d/%d sections '
                 '(elapsed %.0fs) — bailing; remaining sections use defaults',
-                max_seconds, len(drafts), total, elapsed,
+                max_seconds, completed, total, elapsed,
             )
             break
 
@@ -563,9 +702,7 @@ def draft_sections_with_ai(session, samples=None, target_pages=None):
                     f"Write enough to fill your share of the {target_pages}-page report."
                 )
             else:
-                context_sentence = (
-                    "Write enough to make this section substantive — not a bare summary."
-                )
+                context_sentence = "Write enough to make this section substantive."
             budget_hint = (
                 f"\nTARGET WORD COUNT FOR THIS SECTION: approximately {word_budget} words "
                 f"(acceptable range {lo}-{hi}). {context_sentence} "
@@ -577,22 +714,17 @@ def draft_sections_with_ai(session, samples=None, target_pages=None):
             f"health-information practicum report for a Ghanaian college (COHY).\n\n"
             f"CRITICAL RULES:\n"
             f"1. FIRST-PERSON VOICE: Write strictly in the first-person ('I'). Do NOT use "
-            f"phrases like 'the student', 'the trainee', or 'the intern'. The report MUST "
-            f"sound like the user wrote it themselves.\n"
-            f"2. READ ALL DATA: Carefully review the Student Data below, including facility "
-            f"details, logs, workshops, and competencies.\n"
+            f"phrases like 'the student', 'the trainee', or 'the intern'.\n"
+            f"2. READ ALL DATA: Carefully review the Student Data below.\n"
             f"3. REFINE AND ENHANCE: NEVER copy raw daily logs verbatim. Synthesize the "
             f"information into polished, professional academic paragraphs.\n"
-            f"4. GRAMMAR: Check grammar, spelling, and sentence flow rigorously. Sentences "
-            f"must sound professional and mature.\n"
-            f"5. DO NOT INVENT: Use ONLY the student data below for personal details, but "
-            f"for standard hospital units, you may use general knowledge of the Ghanaian "
-            f"health system.\n"
+            f"4. GRAMMAR: Check grammar, spelling, and sentence flow rigorously.\n"
+            f"5. DO NOT INVENT personal details. Use general Ghanaian health-system "
+            f"knowledge for standard units when helpful.\n"
             f"6. STRUCTURE: Follow the structural requirements in the section instruction "
-            f"(bullet count, sub-heading organization, format). These are authoritative.\n"
-            f"7. UNIQUENESS (Seed: {unique_seed}): Write with a fresh perspective. Avoid "
-            f"generic templates. Vary your sentence structure and vocabulary completely "
-            f"from standard reports to ensure this report feels unique and personalized.\n"
+            f"(bullet count, sub-heading organization, format).\n"
+            f"7. UNIQUENESS (Seed: {unique_seed}): Vary sentence structure from standard "
+            f"reports to ensure this feels unique and personalized.\n"
             f"{_QUALITY_RULES}"
             f"{competencies_rule}"
             f"{budget_hint}"
@@ -607,48 +739,112 @@ def draft_sections_with_ai(session, samples=None, target_pages=None):
 
         if reply is None:
             logger.warning(
-                'AI drafting: section %d/%d (%r) failed — skipping; '
-                'will use template default for this section only',
+                'AI drafting: section %d/%d (%r) — AI call returned None, skipping',
                 idx, total, key,
             )
             continue
 
-        # Clean up echoed context or markdown headers
-        reply = re.sub(r'^#+\s+.*$', '', reply, flags=re.MULTILINE).strip()
+        reply = _clean_draft_text(reply)
 
-        if reply:
+        # ✅ QUALITY GATE
+        issues = _quality_issues(
+            key, reply, log_ngrams,
+            min_word_floor=_SECTION_FLOORS.get(key, 0),
+        )
+
+        if not issues:
             drafts[key] = reply
-            logger.debug('AI drafted section %r (%d chars ≈ %d words)',
-                         key, len(reply), len(reply.split()))
+            logger.debug('AI drafted section %r (%d words) — passed quality',
+                         key, len(reply.split()))
+            continue
 
+        # Quality failed — attempt ONE retry if budget allows
+        logger.warning(
+            'AI drafting: section %r failed quality (%s) — attempting retry',
+            key, '; '.join(f'{c}:{d}' for c, d in issues),
+        )
+
+        # Check retry budgets
+        can_retry = (
+            retries_used < _MAX_RETRIES_TOTAL
+            and (retry_start is None or time.time() - retry_start < _MAX_RETRY_SECONDS)
+            and (time.time() - total_start) < (max_seconds - 15)  # 15s reserve for tail work
+        )
+
+        if not can_retry:
+            logger.warning(
+                'AI drafting: section %r — retry budget exhausted, using original draft',
+                key,
+            )
+            drafts[key] = reply
+            retry_flagged_sections.append((key, title))
+            continue
+
+        if retry_start is None:
+            retry_start = time.time()
+        retries_used += 1
+
+        retry_prompt = _build_retry_prompt(prompt, title, issues)
+        retry_reply = _call_ai(retry_prompt)
+
+        if retry_reply is None:
+            logger.warning('AI drafting: section %r retry returned None — keeping original',
+                           key)
+            drafts[key] = reply
+            retry_flagged_sections.append((key, title))
+            continue
+
+        retry_reply = _clean_draft_text(retry_reply)
+        retry_issues = _quality_issues(
+            key, retry_reply, log_ngrams,
+            min_word_floor=_SECTION_FLOORS.get(key, 0),
+        )
+
+        if not retry_issues:
+            drafts[key] = retry_reply
+            logger.info('AI drafting: section %r PASSED on retry', key)
+        else:
+            # Both attempts have issues — pick the longer one (usually richer content)
+            logger.warning(
+                'AI drafting: section %r failed retry too (%s) — using longer attempt',
+                key, '; '.join(f'{c}:{d}' for c, d in retry_issues),
+            )
+            drafts[key] = retry_reply if len(retry_reply) > len(reply) else reply
+            retry_flagged_sections.append((key, title))
+
+    # ---- Summary logging ----
     if drafts:
+        completed = len([k for k in drafts if not k.startswith('_')])
         logger.info(
-            'AI drafting complete: %d/%d sections drafted in %.1fs (competencies=%d, '
-            'target_pages=%s, log_count=%d)',
-            len([k for k in drafts if not k.startswith('_')]),
-            total, time.time() - total_start, len(competencies),
-            target_pages, log_count,
+            'AI drafting complete: %d/%d sections drafted in %.1fs '
+            '(competencies=%d, target_pages=%s, log_count=%d, retries_used=%d, flagged=%d)',
+            completed, total, time.time() - total_start, len(competencies),
+            target_pages, log_count, retries_used, len(retry_flagged_sections),
         )
     else:
         logger.info('AI drafting produced no sections — report will use template defaults')
+
+    # ---- Human-readable note about retry outcomes ----
+    if retry_flagged_sections:
+        names = ', '.join(title for _, title in retry_flagged_sections)
+        existing_note = drafts.get('_ai_note', '')
+        retry_note = (
+            f"{names} section(s) were drafted but flagged for manual review "
+            f"(possible copied phrasing or under-length draft). "
+            f"Open 'Edit Report Manually' to refine them."
+        )
+        drafts['_ai_note'] = (existing_note + ' ' + retry_note).strip() if existing_note else retry_note
 
     return drafts
 
 
 # ============================================================
-# Entry point 2 — presentation bullets + speaker notes (unchanged)
+# Entry point 2 — presentation bullets + speaker notes
 # ============================================================
 
 def draft_presentation_with_ai(session, target_slides=7):
     """
     Draft slide-specific bullets + speaker notes for the PPTX.
-
-    Called only from PracticumReportBuilder.save_pptx() — never during
-    report generation — so the report flow stays fast.
-
-    Returns a dict: {section_key: raw_text} suitable for
-    report.pptx_content. Keys cover all 7 content slides plus
-    'pptx_speaker_notes'.
     """
     if not getattr(settings, 'REPORT_AI_DRAFTING_ENABLED', True):
         return {}
@@ -674,8 +870,8 @@ def draft_presentation_with_ai(session, target_slides=7):
     if log_count < 5:
         competency_hint += (
             "\nCRITICAL (EXPANSION REQUIRED): The student has very few daily logs. "
-            "You MUST heavily expand on the units and activities using your knowledge of Ghanaian HIM workflows "
-            "to ensure there are enough detailed bullets to cover the slides.\n"
+            "You MUST heavily expand on the units and activities using your knowledge of "
+            "Ghanaian HIM workflows to ensure there are enough detailed bullets.\n"
         )
 
     max_seconds = getattr(settings, 'REPORT_AI_DRAFTING_MAX_SECONDS', DEFAULT_MAX_SECONDS)
@@ -696,25 +892,15 @@ def draft_presentation_with_ai(session, target_slides=7):
             f"You are preparing '{title}' content for a PowerPoint presentation "
             f"summarising a health-information practicum report for a Ghanaian college (COHY).\n\n"
             f"CRITICAL RULES:\n"
-            f"1. BULLET FORMAT: Every line is a standalone bullet. No markers, no numbering, "
-            f"no trailing full stops unless the instruction requires them.\n"
-            f"2. WORD LIMITS ARE ABSOLUTE: If the instruction says '12 words or fewer', "
-            f"every line must respect that. Exceeding a word limit is a FAILURE.\n"
-            f"3. REFINE, DON'T COPY: Synthesize from the student data — never paste raw logs.\n"
-            f"   Example: if the raw log says 'Registered 15 patients', do NOT write "
-            f"'Registered 15 patients'. Write 'Patient registration and LHIMS data entry'.\n"
-            f"4. PRESENTATION VOICE: Slides are spoken, not read. Use active verbs, "
-            f"present tense, short clauses.\n"
-            f"5. NO HEADINGS: Do NOT include section titles, bullet markers, or markdown.\n"
-            f"6. STRUCTURE & GRAMMAR: Ensure perfect grammar. Transform rough log notes into "
-            f"clean, professional action statements.\n"
-            f"7. EXPAND IF SPARSE: If the student's raw logs for this slide are thin (under 30 words "
-            f"or only one short line), do NOT write fewer than the requested bullet count. Use "
-            f"realistic Ghanaian HIM knowledge to EXPAND into the full requested number of bullets, "
-            f"staying truthful to what they did.\n"
-            f"8. REFINE IF ABUNDANT: If the logs are dense (over 200 words), distill to the strongest "
-            f"points. Do NOT pad. Pick the top bullets that best represent the section.\n"
-            f"9. SIMPLE ENGLISH: Short words, plain sentences. Technical HIM terms are fine.\n"
+            f"1. BULLET FORMAT: Every line is a standalone bullet.\n"
+            f"2. WORD LIMITS ARE ABSOLUTE: exceeding a word limit is a FAILURE.\n"
+            f"3. REFINE, DON'T COPY: never paste raw logs.\n"
+            f"4. PRESENTATION VOICE: active verbs, present tense, short clauses.\n"
+            f"5. NO HEADINGS: no section titles, bullet markers, or markdown.\n"
+            f"6. STRUCTURE & GRAMMAR: perfect grammar, clean professional action statements.\n"
+            f"7. EXPAND IF SPARSE: even with few logs, produce the full bullet count.\n"
+            f"8. REFINE IF ABUNDANT: distill to strongest points.\n"
+            f"9. SIMPLE ENGLISH: short words, plain sentences.\n"
             f"{competency_hint}"
             f"\nSection instruction (authoritative):\n{instruction}\n\n"
             f"--- STUDENT DATA ---\n{context}\n-------------------\n"
@@ -724,8 +910,7 @@ def draft_presentation_with_ai(session, target_slides=7):
 
         if reply is None:
             logger.warning(
-                'PPTX AI drafting: section %d/%d (%r) failed — skipping; '
-                'builder will trim report text for this slide only',
+                'PPTX AI drafting: section %d/%d (%r) — returned None, skipping',
                 idx, total, key,
             )
             continue

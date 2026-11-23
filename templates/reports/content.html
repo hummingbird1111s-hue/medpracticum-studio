@@ -105,6 +105,43 @@
     font-size: 11px;
     font-weight: 700;
   }
+  .mp-section-map li.mp-voice-third::before {
+    background: #fef3c7;
+    color: #92400e;
+  }
+  .mp-section-map li.mp-voice-prof::before {
+    background: #eff6ff;
+    color: #1e40af;
+  }
+  .mp-section-voice {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    margin-left: 4px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    vertical-align: 1px;
+  }
+  .mp-section-voice--first { background: #ecfdf5; color: #047857; }
+  .mp-section-voice--third { background: #fef3c7; color: #92400e; }
+  .mp-section-voice--prof  { background: #eff6ff; color: #1e40af; }
+
+  /* ===== Voice badge injected above each textarea ===== */
+  .mp-voice-note {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    padding: 6px 10px;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    display: inline-block;
+    line-height: 1.4;
+  }
+  .mp-voice-note--first { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+  .mp-voice-note--third { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+  .mp-voice-note--prof  { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+
   /* Highlight each editable section a bit — makes long forms easier to scan */
   #edit-form textarea {
     min-height: 140px;
@@ -139,23 +176,63 @@
     </a>
   </div>
 
-  <!-- How-this-works card -->
+  <!-- Voice guide card — most important clarity fix -->
+  <div class="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 mb-4">
+    <p class="text-sm text-amber-900 leading-relaxed">
+      <strong>✍️ Voice: everything here is written in FIRST PERSON ("I").</strong>
+      Every section narrates <em>your</em> experience — use
+      <em>"I registered…"</em>, <em>"I observed…"</em>, <em>"I learnt…"</em>.
+    </p>
+    <p class="text-sm text-amber-900 leading-relaxed mt-2">
+      <strong>Two exceptions:</strong>
+    </p>
+    <ul class="text-sm text-amber-900 leading-relaxed mt-1 ml-5 list-disc space-y-1">
+      <li>
+        <strong>Facility Profile</strong> — always <strong>third person</strong>
+        ("The hospital has…", never "I visited…"). This section is auto-built from the
+        facility record in the database — the AI never drafts it.
+      </li>
+      <li>
+        <strong>Recommendations</strong> — <strong>professional tone</strong>
+        ("The facility should…" or "We recommend…"). Never use first-person singular "I"
+        in recommendations.
+      </li>
+    </ul>
+  </div>
+
+  <!-- How-this-works card — updated for new save behavior -->
   <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 mb-4">
-    <p class="text-sm text-emerald-800">
-      <strong>How this works:</strong> the fields below show the AI draft built
-      from your logs and format samples. Edit any section, then hit
-      <strong>Regenerate Report</strong> to rebuild the PDF with your changes.
+    <p class="text-sm text-emerald-900">
+      <strong>How this works:</strong> the fields below show the AI draft built from
+      your logs and format samples. Edit any section, then choose one of the two buttons
+      at the bottom:
+    </p>
+    <ul class="text-sm text-emerald-800 mt-2 ml-5 list-disc space-y-1">
+      <li>
+        <strong>Regenerate with AI</strong> — re-drafts any <em>blank</em> fields with
+        the AI (or regenerates everything if you click "Reset" below), then rebuilds the
+        PDF. Takes 1–3 minutes.
+      </li>
+      <li>
+        <strong>Save &amp; rebuild PDF</strong> — saves your edits and rebuilds the PDF
+        <em>without</em> calling the AI. Takes ~5 seconds.
+      </li>
+    </ul>
+    <p class="text-xs text-emerald-700 mt-2">
       Sections you don't touch stay exactly as the AI drafted them.
     </p>
   </div>
 
-  <!-- Section order reference card -->
+  <!-- Section order reference card — now annotated with voice -->
   <div class="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-6">
     <div class="flex items-start justify-between gap-3 flex-wrap mb-3">
       <div>
         <p class="text-sm font-bold text-blue-900">📖 Report structure — edit in this order</p>
         <p class="text-xs text-blue-700 mt-1">
-          Each section below follows the COHY canonical order. Fields load in this sequence automatically.
+          Each section below follows the COHY canonical order.
+          <span class="font-semibold">First-person (green)</span> ·
+          <span class="font-semibold">Third-person (amber)</span> ·
+          <span class="font-semibold">Professional (blue)</span>.
         </p>
       </div>
       <span class="text-xs bg-white text-blue-800 px-2 py-1 rounded-md font-semibold whitespace-nowrap border border-blue-200">
@@ -163,18 +240,28 @@
       </span>
     </div>
     <ol class="mp-section-map grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm text-blue-900">
-      <li>Introduction</li>
-      <li>Facility Profile</li>
-      <li>Activities Performed</li>
-      <li>Skills Acquired</li>
-      <li>Workshops</li>
-      <li>Lessons Learnt</li>
-      <li>Observations</li>
-      <li>Challenges</li>
-      <li>Recommendations</li>
-      <li>Conclusion</li>
-      <li>Signature and Date</li>
+      <li>Introduction <span class="mp-section-voice mp-section-voice--first">first person</span></li>
+      <li class="mp-voice-third">Facility Profile <span class="mp-section-voice mp-section-voice--third">third person</span></li>
+      <li>Activities Performed <span class="mp-section-voice mp-section-voice--first">first person</span></li>
+      <li>Skills Acquired <span class="mp-section-voice mp-section-voice--first">first person</span></li>
+      <li>Workshops <span class="mp-section-voice mp-section-voice--first">first person</span></li>
+      <li>Lessons Learnt <span class="mp-section-voice mp-section-voice--first">first person</span></li>
+      <li>Observations <span class="mp-section-voice mp-section-voice--first">first person</span></li>
+      <li>Challenges <span class="mp-section-voice mp-section-voice--first">first person</span></li>
+      <li class="mp-voice-prof">Recommendations <span class="mp-section-voice mp-section-voice--prof">professional</span></li>
+      <li>Conclusion <span class="mp-section-voice mp-section-voice--first">first person</span></li>
+      <li>Signature and Date <span class="mp-section-voice" style="background:#f3f4f6;color:#374151;">not narrative</span></li>
     </ol>
+  </div>
+
+  <!-- Warning banner — appears via JS if any section is under 15 words -->
+  <div id="edit-warning-banner" class="hidden bg-red-50 border-2 border-red-300 rounded-2xl p-4 mb-4">
+    <p class="text-sm text-red-900">
+      <strong>⚠️ Some sections look under-written or blank.</strong>
+      Fields below 15 words are flagged with an amber badge.
+      Click <strong>Regenerate with AI</strong> at the bottom to draft them automatically,
+      or edit them manually before saving.
+    </p>
   </div>
 
   <!-- Main Edit Form -->
@@ -187,17 +274,21 @@
     <div class="pt-4 border-t border-gray-100 mt-6 flex flex-col md:flex-row gap-2">
       <button type="submit" name="action" value="regenerate" id="edit-regenerate-btn"
               class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg py-2.5 transition-colors shadow-sm disabled:opacity-70 disabled:cursor-wait">
-        Regenerate Report
+        🔄 Regenerate with AI
       </button>
       <button type="submit" name="action" value="save" id="edit-save-btn"
               class="flex-1 bg-white border border-emerald-600 text-emerald-700 font-semibold rounded-lg py-2.5 hover:bg-emerald-50 transition-colors disabled:opacity-70 disabled:cursor-wait">
-        Save without regenerating
+        💾 Save &amp; rebuild PDF
       </button>
       <a href="{% url 'report_options' %}?attachment_id={{ session.id }}"
          class="flex-1 text-center bg-gray-100 text-gray-700 font-semibold rounded-lg py-2.5 hover:bg-gray-200 transition-colors">
         Cancel
       </a>
     </div>
+    <p class="text-xs text-gray-500 mt-3 text-center">
+      <strong>Regenerate</strong> calls the AI (slow, 1–3 min).
+      <strong>Save</strong> is instant (~5 sec, no AI cost).
+    </p>
   </form>
 
   <!-- Reset to fresh AI draft -->
@@ -223,14 +314,85 @@
     <p class="edit-status" id="edit-status-text">
       Applying your edits and rebuilding the PDF.
     </p>
-    <p class="edit-hint">This can take 1&ndash;3 minutes. Keep this page open.</p>
+    <p class="edit-hint" id="edit-overlay-hint">This can take 1&ndash;3 minutes. Keep this page open.</p>
   </div>
 </div>
 
 <script>
   // ============================================================
-  // A) Reorder form fields to match COHY canonical section order
-  //    (runs automatically; safely no-ops if field names don't match)
+  // VOICE MAP — the ONE source of truth for section-voice guidance.
+  // Used for:
+  //   1) Injecting a voice badge above each textarea
+  //   2) The warning badge for under-written fields
+  // ============================================================
+  var VOICE_MAP = {
+    'introduction':         { key: 'first', badge: '✍️ FIRST PERSON — write as "I"', warn: 'Write this in first person ("I…").' },
+    'facility_profile':     { key: 'third', badge: '🏥 THIRD PERSON — describe the hospital (never "I")', warn: 'Always third person. Built from the facility record.' },
+    'activities_performed': { key: 'first', badge: '✍️ FIRST PERSON — "In the Records Unit, I processed…"', warn: 'Write what YOU did — first person.' },
+    'skills_acquired':      { key: 'first', badge: '✍️ FIRST PERSON — "I developed the skill of…"', warn: 'One skill per line, first person.' },
+    'workshops':            { key: 'first', badge: '✍️ FIRST PERSON — "I attended…", "I learned…"', warn: 'First person, 2 short paragraphs.' },
+    'lessons_learnt':       { key: 'first', badge: '✍️ FIRST PERSON — "I learnt…", "I realised…"', warn: 'One lesson per line, first person.' },
+    'observations':         { key: 'first', badge: '✍️ FIRST PERSON — "I observed that…"', warn: 'First person, describes what YOU noticed.' },
+    'observation':          { key: 'first', badge: '✍️ FIRST PERSON — "I observed that…"', warn: 'First person, describes what YOU noticed.' },
+    'challenges':           { key: 'first', badge: '✍️ FIRST PERSON — "I faced…", "I overcame…"', warn: 'First person, actual challenges you faced.' },
+    'recommendations':      { key: 'prof',  badge: '🎯 PROFESSIONAL — "The facility should…" or "We recommend…"', warn: 'Not "I" — professional tone.' },
+    'conclusion':           { key: 'first', badge: '✍️ FIRST PERSON — "I completed…", "I am grateful…"', warn: 'First person, wrapping up.' },
+  };
+
+  function detectVoice(fieldName) {
+    var name = String(fieldName || '').toLowerCase();
+    for (var key in VOICE_MAP) {
+      if (name.indexOf(key) !== -1) return VOICE_MAP[key];
+    }
+    return null;
+  }
+
+  // ============================================================
+  // A) Inject voice badges above each textarea + count words
+  // ============================================================
+  (function () {
+    var form = document.getElementById('edit-form');
+    if (!form) return;
+
+    var hasUnderwritten = false;
+
+    form.querySelectorAll('textarea').forEach(function (ta) {
+      var voice = detectVoice(ta.name || ta.id || '');
+      if (!voice) return;
+
+      // Skip if badge already present (protects against double-execution)
+      if (ta.parentElement && ta.parentElement.querySelector('.mp-voice-note')) return;
+
+      var badge = document.createElement('div');
+      badge.className = 'mp-voice-note mp-voice-note--' + voice.key;
+      badge.textContent = voice.badge;
+      ta.parentElement.insertBefore(badge, ta);
+
+      // Word-count check for the warning banner
+      var wordCount = (ta.value || '').trim().split(/\s+/).filter(Boolean).length;
+      if (wordCount > 0 && wordCount < 15) {
+        hasUnderwritten = true;
+        // Add a small amber note below the textarea
+        var warn = document.createElement('p');
+        warn.style.cssText =
+          'font-size: 11px; color: #92400e; background: #fef3c7; border: 1px solid #fcd34d;' +
+          'border-radius: 6px; padding: 4px 8px; margin-top: 6px; display: inline-block;';
+        warn.textContent = '⚠️ Only ' + wordCount + ' word' + (wordCount === 1 ? '' : 's') +
+                          ' — ' + voice.warn + ' Click Regenerate below to expand.';
+        ta.parentElement.insertBefore(warn, ta.nextSibling);
+      } else if (wordCount === 0) {
+        hasUnderwritten = true;
+      }
+    });
+
+    if (hasUnderwritten) {
+      var banner = document.getElementById('edit-warning-banner');
+      if (banner) banner.classList.remove('hidden');
+    }
+  })();
+
+  // ============================================================
+  // B) Reorder form fields to match COHY canonical section order
   // ============================================================
   (function () {
     var form = document.getElementById('edit-form');
@@ -268,7 +430,6 @@
       return -1;
     }
 
-    // Find each textarea and try to detect its section
     var textareas = form.querySelectorAll('textarea');
     if (!textareas.length) return;
 
@@ -284,7 +445,6 @@
       if (idx === -1) idx = detectSection(ta.name || ta.id || '');
       if (idx === -1) return;
 
-      // Find the wrapper (div that contains both the label and the textarea)
       var wrapper = labelEl ? labelEl.closest('div') : ta.parentElement;
       if (!wrapper || !wrapper.contains(ta)) {
         wrapper = ta.parentElement;
@@ -297,12 +457,10 @@
 
     if (items.length < 3) return;
 
-    // If already sorted, no-op
     var sorted = items.slice().sort(function (a, b) { return a.order - b.order; });
     var alreadySorted = items.every(function (it, i) { return it === sorted[i]; });
     if (alreadySorted) return;
 
-    // Only reorder if all wrappers share the same parent
     var parent = items[0].wrapper.parentElement;
     if (!parent) return;
     var allSameParent = items.every(function (it) { return it.wrapper.parentElement === parent; });
@@ -317,32 +475,34 @@
   })();
 
   // ============================================================
-  // B) Saving / regenerating overlay logic
+  // C) Saving / regenerating overlay logic
   // ============================================================
   (function () {
-    var overlay = document.getElementById('edit-overlay');
-    var heading = document.getElementById('edit-overlay-heading');
+    var overlay   = document.getElementById('edit-overlay');
+    var heading   = document.getElementById('edit-overlay-heading');
     var statusText = document.getElementById('edit-status-text');
+    var hintEl    = document.getElementById('edit-overlay-hint');
     if (!overlay) return;
 
     var MODES = {
       regenerate: {
-        heading: 'Regenerating your report',
+        heading: 'Regenerating with AI',
         steps: [
-          'Applying your edits',
+          'Drafting blank sections with AI',
           'Rebuilding chapters and formatting',
           'Rendering the PDF',
           'Preparing the Word document',
         ],
-        hint: 'This can take 1\u20133 minutes. Keep this page open.',
+        hint: 'This can take 1–3 minutes. Keep this page open.',
       },
       save: {
-        heading: 'Saving your edits',
+        heading: 'Saving your edits & rebuilding PDF',
         steps: [
           'Saving your text',
-          'Returning to the edit page',
+          'Re-rendering the PDF from your edits',
+          'Refreshing the page',
         ],
-        hint: 'This will be quick.',
+        hint: 'This will be quick (~5 seconds). No AI cost.',
       },
       reset_ai: {
         heading: 'Resetting to fresh AI draft',
@@ -351,7 +511,7 @@
           'Re-drafting all sections with AI',
           'Rebuilding the report',
         ],
-        hint: 'This can take 1\u20133 minutes. Keep this page open.',
+        hint: 'This can take 1–3 minutes. Keep this page open.',
       },
     };
 
@@ -363,19 +523,21 @@
       if (!currentMode) return;
       var steps = MODES[currentMode].steps;
       stepIndex = (stepIndex + 1) % steps.length;
-      if (statusText) statusText.textContent = steps[stepIndex] + '\u2026';
+      if (statusText) statusText.textContent = steps[stepIndex] + '…';
     }
 
     function showOverlay(mode) {
       currentMode = mode;
       var cfg = MODES[mode] || MODES.regenerate;
       if (heading) heading.innerHTML = cfg.heading + '<span class="edit-dots"></span>';
-      if (statusText) statusText.textContent = cfg.steps[0] + '\u2026';
+      if (statusText) statusText.textContent = cfg.steps[0] + '…';
+      if (hintEl) hintEl.textContent = cfg.hint;
       stepIndex = 0;
       overlay.classList.add('show');
       overlay.setAttribute('aria-hidden', 'false');
       if (stepTimer) clearInterval(stepTimer);
-      stepTimer = setInterval(advanceStatus, 6000);
+      // Longer interval for longer modes so text doesn't spin too fast
+      stepTimer = setInterval(advanceStatus, mode === 'save' ? 1500 : 6000);
     }
 
     function hideOverlay() {
@@ -386,7 +548,7 @@
 
     var editForm = document.getElementById('edit-form');
     var regenBtn = document.getElementById('edit-regenerate-btn');
-    var saveBtn = document.getElementById('edit-save-btn');
+    var saveBtn  = document.getElementById('edit-save-btn');
 
     if (editForm) {
       editForm.addEventListener('submit', function (e) {
@@ -406,7 +568,7 @@
     }
 
     var resetForm = document.getElementById('edit-reset-form');
-    var resetBtn = document.getElementById('edit-reset-btn');
+    var resetBtn  = document.getElementById('edit-reset-btn');
     if (resetForm) {
       resetForm.addEventListener('submit', function (e) {
         if (overlay.classList.contains('show')) {

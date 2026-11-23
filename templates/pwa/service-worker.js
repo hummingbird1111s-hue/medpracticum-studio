@@ -1,5 +1,5 @@
 // {% load static %}
-const VERSION = 'v5'; // ✅ bumped from 'v3' — this deploy removes skipWaiting() so the update prompt can actually appear.
+const VERSION = 'v6'; // ✅ bumped from 'v5' — this deploy removes skipWaiting() so the update prompt can actually appear.
                      // ⚠️ BUMP THIS ON EVERY DEPLOY. The browser uses the file content to detect updates;
                      //    if only Django code changes and this file is byte-identical, no update prompt fires.
 const STATIC_CACHE = 'mp-static-' + VERSION;
