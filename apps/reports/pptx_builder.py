@@ -21,16 +21,59 @@ def _rgb(hex_str):
     return RGBColor.from_string(hex_str or '000000')
 
 
-def _strip_markup(text):
-    text = re.sub(r'<[^>]+>', '', text or '')
-    text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
+# ============================================================
+# Bullet / text sanitisation (v8)
+# ============================================================
+# All bullet text flows through _sanitize_bullet() before hitting a
+# shape. This is the LAST line of defence: even if the AI sneaks in
+# **bold**, __italic__, *emphasis*, em dashes, en dashes, hyphen
+# separators, or a leading "- " bullet, we strip them here.
+#
+# The final bullet character (•) is added by _add_para, NOT by this
+# function — so the text handed to _add_para must be plain prose.
+
+_BULLET_LEADING_RE = re.compile(r'^[\-\*\u2022\u00B7\d\.\)]+\s*')
+_BOLD_RE = re.compile(r'\*\*(.+?)\*\*')
+_UNDERSCORE_RE = re.compile(r'__(.+?)__')
+_ITALIC_RE = re.compile(r'(?<!\w)\*(?!\s)([^*\n]+?)\*(?!\w)')
+_DASH_SEP_RE = re.compile(r'\s+[\u2013\u2014\u2012\u2015]\s+')
+_HYPHEN_SEP_RE = re.compile(r'\s+-\s+')
+_HTML_TAG_RE = re.compile(r'<[^>]+>')
+
+
+def _sanitize_bullet(text):
+    """
+    Clean a single bullet line for a PowerPoint slide.
+
+    Order matters:
+      1. Strip HTML tags.
+      2. Strip markdown bold / italic.
+      3. Convert em/en dashes + spaced hyphens to colons.
+      4. Strip leading bullet markers (only ONE, at the very start).
+      5. Collapse whitespace.
+    """
+    if not text:
+        return ''
+    text = _HTML_TAG_RE.sub('', text)
+    text = _BOLD_RE.sub(r'\1', text)
+    text = _UNDERSCORE_RE.sub(r'\1', text)
+    text = _ITALIC_RE.sub(r'\1', text)
+    text = _DASH_SEP_RE.sub(': ', text)
+    text = _HYPHEN_SEP_RE.sub(': ', text)
+    text = _BULLET_LEADING_RE.sub('', text.strip())
+    text = re.sub(r'\s{2,}', ' ', text)
     return text.strip()
+
+
+def _strip_markup(text):
+    """Kept for backwards-compat — now delegates to _sanitize_bullet."""
+    return _sanitize_bullet(text)
 
 
 def _trim_to_slide(items, max_items=6, max_chars=220):
     out = []
     for item in items:
-        item = _strip_markup(item)
+        item = _sanitize_bullet(item)
         if not item:
             continue
         if len(item) > max_chars:
@@ -75,7 +118,7 @@ class PracticumPptxBuilder:
         self.show_logo = bool(self.template.get('has_logo') or self.template.get('is_him'))
         self.slides_built_count = 0
         self.ai_fallback_count = 0
-        # ✅ PHASE 7: warnings populated during _render_content, surfaced post-build.
+        # Warnings populated during _render_content, surfaced post-build.
         self.overflow_warnings = []
         self._apply_font_overrides()
 
@@ -120,9 +163,15 @@ class PracticumPptxBuilder:
 
     # ---------------- content helpers ----------------
     def _clean_list(self, text):
+        """
+        Turn a multi-line block of text (e.g. skills_acquired from the
+        report) into a clean list of bullet strings. Every line goes
+        through _sanitize_bullet, so bold, asterisks, dashes, and
+        leading markers are stripped before they reach the slide.
+        """
         out = []
         for line in (text or '').splitlines():
-            line = re.sub(r'^[\-\*\u2022\d\.\)]+\s*', '', line.strip())
+            line = _sanitize_bullet(line)
             if line:
                 out.append(line)
         return out
@@ -133,22 +182,38 @@ class PracticumPptxBuilder:
                 else {}) or {}
 
     def _bullets(self, key, fallback_items, max_items=None):
+        """
+        Return the list of bullet strings for a given slide.
+
+        Priority:
+          1. AI-drafted bullets in report.pptx_content[key], sanitised.
+          2. Fallback items derived from the report text, sanitised.
+
+        In both paths:
+          - each line is run through _sanitize_bullet,
+          - long lines are trimmed to max_chars,
+          - the final list is capped at max_items.
+        """
         max_items = max_items or self._max_bullets()
         max_items = min(max_items, self._max_bullets())
         max_chars = self._max_chars()
         raw = (self._pptx_content().get(key) or '').strip()
+
         if raw:
             out = []
             for line in raw.splitlines():
-                line = re.sub(r'^[\-\*\u2022\d\.\)]+\s*', '', line.strip())
+                line = _sanitize_bullet(line)
+                if not line:
+                    continue
                 if len(line) > max_chars:
                     line = line[:max_chars].rstrip() + '…'
-                if line:
-                    out.append(line)
+                out.append(line)
                 if len(out) >= max_items:
                     break
             if out:
                 return out
+
+        # Fallback path — count it and sanitise on the way through.
         self.ai_fallback_count += 1
         return _trim_to_slide(fallback_items, max_items=max_items, max_chars=max_chars)
 
@@ -162,7 +227,7 @@ class PracticumPptxBuilder:
                 continue
             head, _, body = line.partition(':')
             head = head.strip().upper()
-            body = body.strip()
+            body = _sanitize_bullet(body.strip())
             if head and body:
                 notes[head] = body
         return notes
@@ -198,19 +263,25 @@ class PracticumPptxBuilder:
 
         content_blocks = [
             ('slide_intro', 'INTRODUCTION',
-                self._bullets('pptx_intro_bullets', content.get('introduction', '').split('\n\n')),
+                self._bullets('pptx_intro_bullets',
+                              content.get('introduction', '').split('\n\n')),
                 True),
             ('slide_facility', 'FACILITY PROFILE',
-                self._bullets('pptx_facility_bullets', content.get('facility_profile', '').split('\n\n')),
+                self._bullets('pptx_facility_bullets',
+                              content.get('facility_profile', '').split('\n\n')),
                 True),
             ('slide_activities', 'ACTIVITIES PERFORMED',
-                self._bullets('pptx_activities_bullets', [g['narrative'] for g in d['unit_activities']]),
+                self._bullets('pptx_activities_bullets',
+                              [g['narrative'] for g in d['unit_activities']]),
                 True),
             ('slide_skills', 'SKILLS ACQUIRED',
-                self._bullets('pptx_skills_bullets', self._clean_list(content.get('skills_acquired', ''))),
+                self._bullets('pptx_skills_bullets',
+                              self._clean_list(content.get('skills_acquired', ''))),
                 True),
             ('slide_challenges', 'CHALLENGES FACED',
-                self._bullets('pptx_challenges_bullets', content.get('challenges', '').split('\n\n'), max_items=2),
+                self._bullets('pptx_challenges_bullets',
+                              content.get('challenges', '').split('\n\n'),
+                              max_items=2),
                 True),
             ('slide_observation', 'OBSERVATION AND RECOMMENDATION',
                 self._bullets('pptx_observation_recommendation_bullets',
@@ -220,7 +291,8 @@ class PracticumPptxBuilder:
                               max_items=4),
                 True),
             ('slide_conclusion', 'CONCLUSION',
-                self._bullets('pptx_conclusion_bullets', content.get('conclusion', '').split('\n\n')),
+                self._bullets('pptx_conclusion_bullets',
+                              content.get('conclusion', '').split('\n\n')),
                 True),
         ]
 
@@ -475,8 +547,10 @@ class PracticumPptxBuilder:
             _fill_rect(slide, Inches(0.9), Inches(1.15), W - Inches(1.8),
                        Inches(0.06), t['primary_color'])
 
+        # Defensive: even if a caller bypasses _bullets(), sanitise here too.
         raw_items = data.get('items') or []
-        items = [str(i).strip() for i in raw_items if str(i or '').strip()]
+        items = [_sanitize_bullet(str(i)) for i in raw_items]
+        items = [i for i in items if i]
         if not items:
             items = ['(No content available for this slide)']
 
@@ -495,7 +569,7 @@ class PracticumPptxBuilder:
         body_size = self._font_size()
         space_after = 16 if center_vertically else 14
 
-        # ✅ PHASE 7: overflow detection — estimate rendered height vs. box height
+        # Overflow detection — estimate rendered height vs. box height.
         try:
             box_width_pt = float(W - Inches(1.8)) / 12700     # EMU → points
             box_height_pt = float(body_h) / 12700

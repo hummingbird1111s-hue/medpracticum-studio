@@ -240,7 +240,7 @@
     #mp-banner { display: none; background: #fef3c7; color: #92400e; text-align: center; padding: 8px 16px; font-size: 14px; flex-shrink: 0; }
     #mp-banner.show { display: block; }
 
-    /* ================= MESSAGES ================= */
+    /* ================= MESSAGE CLASSES (still available for pages) ================= */
     .mp-messages { max-width: 1200px; width: 100%; margin: 0 auto; padding: 16px 16px 0; flex-shrink: 0; }
     .mp-message { padding: 8px 16px; border-radius: 8px; font-size: 14px; margin-bottom: 8px; }
     .mp-message--error   { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
@@ -252,6 +252,69 @@
     /* ================= MAIN CONTENT ================= */
     .mp-main { flex: 1 1 0; min-height: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
     .mp-main__inner { max-width: 1200px; width: 100%; margin: 0 auto; padding: 24px 16px; }
+
+    /* ================= WELCOME BANNER (first-visit onboarding) ================= */
+    #mp-welcome-banner {
+      display: none;
+      margin: 0 0 20px;
+      background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%);
+      border: 1px solid #a7f3d0;
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 4px 16px rgba(5, 150, 105, 0.08);
+      animation: mpWelcomeSlideIn 0.5s ease-out;
+    }
+    @keyframes mpWelcomeSlideIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    #mp-welcome-banner .mp-welcome-row {
+      display: flex; gap: 16px; align-items: flex-start; margin-bottom: 16px;
+    }
+    #mp-welcome-banner .mp-welcome-icon {
+      font-size: 36px; line-height: 1; flex-shrink: 0;
+    }
+    #mp-welcome-banner .mp-welcome-body { flex: 1; min-width: 0; }
+    #mp-welcome-banner .mp-welcome-title {
+      margin: 0 0 4px; font-size: 17px; font-weight: 800; color: #065f46;
+    }
+    #mp-welcome-banner .mp-welcome-sub {
+      margin: 0 0 12px; font-size: 13px; color: #047857;
+    }
+    #mp-welcome-banner .mp-welcome-tips {
+      display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;
+    }
+    #mp-welcome-banner .mp-welcome-tip {
+      display: flex; align-items: center; gap: 8px;
+      background: #ffffff; padding: 10px 12px; border-radius: 10px;
+      font-size: 12.5px; color: #374151; font-weight: 500;
+      border: 1px solid #d1fae5;
+    }
+    #mp-welcome-banner .mp-welcome-tip-emoji { font-size: 16px; line-height: 1; }
+    #mp-welcome-banner .mp-welcome-actions {
+      display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end;
+    }
+    #mp-welcome-banner .mp-welcome-skip {
+      background: transparent; border: 1px solid #a7f3d0; color: #047857;
+      padding: 9px 16px; border-radius: 10px; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: background 0.15s ease;
+    }
+    #mp-welcome-banner .mp-welcome-skip:hover { background: #d1fae5; }
+    #mp-welcome-banner .mp-welcome-cta {
+      background: #059669; color: #ffffff; border: 1px solid #047857;
+      padding: 9px 18px; border-radius: 10px; font-size: 13px; font-weight: 700;
+      text-decoration: none; transition: background 0.15s ease, transform 0.1s ease;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    #mp-welcome-banner .mp-welcome-cta:hover { background: #047857; }
+    #mp-welcome-banner .mp-welcome-cta:active { transform: scale(0.98); }
+    @media (max-width: 640px) {
+      #mp-welcome-banner { padding: 16px; }
+      #mp-welcome-banner .mp-welcome-tips { grid-template-columns: 1fr; }
+      #mp-welcome-banner .mp-welcome-actions { justify-content: stretch; }
+      #mp-welcome-banner .mp-welcome-skip,
+      #mp-welcome-banner .mp-welcome-cta { flex: 1; justify-content: center; text-align: center; }
+    }
 
     /* ================= FOOTER ================= */
     .mp-footer {
@@ -272,17 +335,6 @@
       .mp-sidebar { position: fixed; top: 0; left: 0; bottom: 0; width: 280px; max-width: 85%; z-index: 60; transform: translateX(-100%); transition: transform 0.25s ease; box-shadow: 4px 0 24px rgba(0,0,0,0.25); }
       .mp-sidebar.open { transform: translateX(0); }
       .mp-main-column { width: 100%; }
-    }
-
-    /* ================= WELCOME OVERLAY ================= */
-    #mp-welcome-overlay {
-      display: none; position: fixed; inset: 0; z-index: 9999999;
-      background: rgba(17, 24, 39, 0.85); backdrop-filter: blur(4px);
-      align-items: center; justify-content: center; padding: 16px;
-    }
-    @keyframes welcomePop {
-      0% { opacity: 0; transform: scale(0.95) translateY(10px); }
-      100% { opacity: 1; transform: scale(1) translateY(0); }
     }
 
     /* ================= PWA UPDATE BANNER ================= */
@@ -670,23 +722,37 @@
 
       <div id="mp-banner"></div>
 
-      {% if messages %}
-      <div class="mp-messages">
-        {% for message in messages %}
-          <div class="mp-message
-            {% if message.tags == 'error' %}mp-message--error
-            {% elif message.tags == 'success' %}mp-message--success
-            {% elif message.tags == 'warning' %}mp-message--warning
-            {% elif message.tags == 'info' %}mp-message--info
-            {% else %}mp-message--default{% endif %}">
-            {{ message }}
-          </div>
-        {% endfor %}
-      </div>
-      {% endif %}
+      <!-- ✅ GLOBAL MESSAGES BLOCK REMOVED — pages handle their own
+           message display so nothing appears above the content on
+           generation pages (options, content, pptx_options, pptx_content). -->
 
       <main class="mp-main">
         <div class="mp-main__inner">
+
+          {% if user.is_authenticated %}
+          <div id="mp-welcome-banner" role="region" aria-label="Welcome tour">
+            <div class="mp-welcome-row">
+              <div class="mp-welcome-icon">👋</div>
+              <div class="mp-welcome-body">
+                <h3 class="mp-welcome-title">Welcome to MedPracticum Studio!</h3>
+                <p class="mp-welcome-sub">Here's what you can do with the app:</p>
+                <div class="mp-welcome-tips">
+                  <div class="mp-welcome-tip"><span class="mp-welcome-tip-emoji">📝</span> Log daily activities &amp; skills</div>
+                  <div class="mp-welcome-tip"><span class="mp-welcome-tip-emoji">📊</span> Auto-generate reports</div>
+                  <div class="mp-welcome-tip"><span class="mp-welcome-tip-emoji">🖥️</span> Build PowerPoint slides</div>
+                  <div class="mp-welcome-tip"><span class="mp-welcome-tip-emoji">🩺</span> Chat with the AI assistant</div>
+                </div>
+              </div>
+            </div>
+            <div class="mp-welcome-actions">
+              <button type="button" class="mp-welcome-skip" onclick="mpDismissWelcome()">Skip</button>
+              <a href="{% url 'how_to_use' %}" class="mp-welcome-cta" onclick="mpDismissWelcome()">
+                Take me through the tour →
+              </a>
+            </div>
+          </div>
+          {% endif %}
+
           {% block content %}{% endblock %}
         </div>
       </main>
@@ -723,6 +789,31 @@
     });
     window.addEventListener('resize', function () {
       if (window.innerWidth >= 768) mpCloseSidebar();
+    });
+
+    /* ============================================================
+       Welcome banner — show once on the dashboard, then never again.
+       ============================================================ */
+    function mpDismissWelcome() {
+      var banner = document.getElementById('mp-welcome-banner');
+      if (banner) banner.style.display = 'none';
+      try { localStorage.setItem('mp_welcome_seen', 'true'); } catch (e) {}
+    }
+    document.addEventListener('DOMContentLoaded', function () {
+      var banner = document.getElementById('mp-welcome-banner');
+      if (!banner) return;
+
+      var path = window.location.pathname;
+      var isDashboard = (path === '/' || path === '/dashboard/' || path === '/dashboard');
+      if (!isDashboard) return;
+
+      var seen = false;
+      try { seen = localStorage.getItem('mp_welcome_seen') === 'true'; } catch (e) {}
+      if (seen) return;
+
+      setTimeout(function () {
+        banner.style.display = 'block';
+      }, 600);
     });
   </script>
 
@@ -803,7 +894,7 @@
 
     var showing = false;
     var showTimer = null;
-    var coldStartTimer = null;
+    var hardTimeout = null;
 
     function showLoading(text) {
       if (showing) return;
@@ -815,18 +906,17 @@
         overlay.classList.add('show');
         overlay.setAttribute('aria-hidden', 'false');
 
-        coldStartTimer = setTimeout(function() {
-          if (showing && loaderText) {
-             loaderText.innerHTML = 'Waking up server (Please wait)<span class="mp-loader-dots"></span>';
-          }
-        }, 4000);
-
+        // ✅ Safety: hide after 60s so a stuck request never traps the user.
+        // No more "Waking up server" text change — the loader stays calm.
+        hardTimeout = setTimeout(function () {
+          if (showing) hideLoading();
+        }, 60000);
       }, 150);
     }
 
     function hideLoading() {
       clearTimeout(showTimer);
-      clearTimeout(coldStartTimer);
+      clearTimeout(hardTimeout);
       if (!showing) return;
       showing = false;
       overlay.classList.remove('show');
@@ -834,8 +924,6 @@
     }
 
     document.addEventListener('click', function (e) {
-      // ✅ v8.1: skip overlay for clicks already handled by another handler
-      // (e.g. mpApplyUpdate on the update banner — it calls preventDefault).
       if (e.defaultPrevented) return;
       var link = e.target.closest && e.target.closest('a');
       if (!link) return;
@@ -1292,8 +1380,6 @@
             else {
                 win.style.display = 'flex';
                 input.focus();
-                // First-open only: warm the TCP/TLS connection to the AI endpoint
-                // so the user's first real message doesn't pay connection cost.
                 if (!_aiWarmed) {
                     _aiWarmed = true;
                     fetch('/api/ai/chat/', {
@@ -1479,8 +1565,6 @@
             var typingTextEl = document.querySelector('#' + typingId + ' .mp-typing-text');
             if (typingTextEl) typingTextEl.textContent = statuses[0];
 
-            // Text: first status change at 2.5s (was 4s) so it feels responsive even for a 5s reply.
-            // Files: unchanged timings since vision genuinely takes longer.
             var delays = hasImage ? [3000, 6000, 10000, 15000] : [2500, 5000, 9000, 14000];
             var statusTimer = null;
 
@@ -1527,9 +1611,6 @@
 
             var controller = null;
             var abortTimer = null;
-            // Text-only requests are fast in the happy path — if they take longer
-            // than 30s, something is wrong (rate-limit, model fallback chain).
-            // File uploads get a longer leash because vision can legitimately run 45s.
             var _timeoutMs = hasImage ? 60000 : 30000;
             if (typeof AbortController !== 'undefined') {
                 controller = new AbortController();
@@ -1609,81 +1690,6 @@
         };
     })();
   }, 100);
-  </script>
-  {% endif %}
-
-  {% if user.is_authenticated %}
-  <div id="mp-welcome-overlay">
-    <div style="background: #fff; border-radius: 20px; max-width: 600px; width: 100%; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); animation: welcomePop 0.4s ease-out; position: relative;">
-
-      <div style="background: linear-gradient(135deg, #047857, #10b981); padding: 24px; text-align: center; color: white;">
-        <div style="font-size: 40px; margin-bottom: 8px;">👋</div>
-        <h2 style="margin: 0; font-size: 24px; font-weight: 800;">Welcome to MedPracticum Studio!</h2>
-        <p style="margin: 8px 0 0; opacity: 0.9; font-size: 14px;">Your all-in-one platform for COHY practicum management.</p>
-      </div>
-
-      <div style="padding: 24px;">
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
-
-          <div style="background: #f9fafb; padding: 16px; border-radius: 12px; border: 1px solid #e5e7eb;">
-            <div style="font-size: 24px; margin-bottom: 8px;">📝</div>
-            <h3 style="margin: 0 0 4px; font-size: 15px; font-weight: 700; color: #1f2937;">Log Activities</h3>
-            <p style="margin: 0; font-size: 12px; color: #6b7280;">Record units, skills, and challenges in seconds.</p>
-          </div>
-
-          <div style="background: #f9fafb; padding: 16px; border-radius: 12px; border: 1px solid #e5e7eb;">
-            <div style="font-size: 24px; margin-bottom: 8px;">📊</div>
-            <h3 style="margin: 0 0 4px; font-size: 15px; font-weight: 700; color: #1f2937;">Auto-Generate Reports</h3>
-            <p style="margin: 0; font-size: 12px; color: #6b7280;">Let AI draft your PDF and Word reports instantly.</p>
-          </div>
-
-          <div style="background: #f9fafb; padding: 16px; border-radius: 12px; border: 1px solid #e5e7eb;">
-            <div style="font-size: 24px; margin-bottom: 8px;">🖥️</div>
-            <h3 style="margin: 0 0 4px; font-size: 15px; font-weight: 700; color: #1f2937;">Build Presentations</h3>
-            <p style="margin: 0; font-size: 12px; color: #6b7280;">Create stunning slides with speaker notes.</p>
-          </div>
-
-          <div style="background: #f9fafb; padding: 16px; border-radius: 12px; border: 1px solid #e5e7eb;">
-            <div style="font-size: 24px; margin-bottom: 8px;">🩺</div>
-            <h3 style="margin: 0 0 4px; font-size: 15px; font-weight: 700; color: #1f2937;">24/7 AI Assistant</h3>
-            <p style="margin: 0; font-size: 12px; color: #6b7280;">Ask questions, transcribe images, get writing help.</p>
-          </div>
-
-        </div>
-
-        <div style="display: flex; gap: 12px;">
-          <button id="welcome-skip" type="button" style="flex: 1; padding: 12px; border-radius: 10px; border: 1px solid #d1d5db; background: white; color: #4b5563; font-weight: 600; font-size: 14px; cursor: pointer; transition: background 0.15s;">
-            Skip Tour
-          </button>
-          <a id="welcome-continue" href="{% url 'how_to_use' %}" style="flex: 1; padding: 12px; border-radius: 10px; border: none; background: #059669; color: white; font-weight: 600; font-size: 14px; text-align: center; text-decoration: none; cursor: pointer; transition: background 0.15s; display: flex; align-items: center; justify-content: center;">
-            Show Me How →
-          </a>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      var welcomeOverlay = document.getElementById('mp-welcome-overlay');
-      var skipBtn = document.getElementById('welcome-skip');
-      var continueBtn = document.getElementById('welcome-continue');
-
-      if (!localStorage.getItem('mp_welcome_seen')) {
-        setTimeout(function() {
-          welcomeOverlay.style.display = 'flex';
-        }, 1000);
-      }
-
-      function closeWelcome() {
-        welcomeOverlay.style.display = 'none';
-        localStorage.setItem('mp_welcome_seen', 'true');
-        window.dispatchEvent(new Event('mp:welcome-closed'));
-      }
-
-      skipBtn.addEventListener('click', closeWelcome);
-      continueBtn.addEventListener('click', closeWelcome);
-    });
   </script>
   {% endif %}
 
@@ -1816,6 +1822,54 @@
     }
   }
 
+  /* ============================================================
+     PWA back-button handling
+     ------------------------------------------------------------
+     Ensures the Android hardware/gesture back button navigates
+     back within the app instead of closing it when the user is
+     on a sub-page that was reached via an in-app link.
+     Falls through to normal close behaviour on the dashboard so
+     users can still exit the app with the standard gesture.
+     ============================================================ */
+  (function () {
+    var isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
+                       window.navigator.standalone === true;
+    if (!isStandalone) return;
+
+    var ROOT_PATHS = ['/', '/dashboard', '/dashboard/'];
+
+    // Mark this history entry as an app entry so we can distinguish
+    // an in-app "back" from a "close-the-app" back.
+    if (!history.state || !history.state.mp_app) {
+      try {
+        history.replaceState(
+          { mp_app: true, path: window.location.pathname },
+          '',
+          window.location.href
+        );
+      } catch (e) {}
+    }
+
+    window.addEventListener('popstate', function (e) {
+      var path = window.location.pathname;
+      var isRoot = ROOT_PATHS.indexOf(path) !== -1;
+      var hasAppState = e.state && e.state.mp_app;
+
+      // About to leave the app from a sub-page (no app state in
+      // history = we've gone past every in-app entry). Send the
+      // user back to the dashboard instead of letting the PWA
+      // close. Non-intrusive: only fires when there is genuinely
+      // nowhere to go.
+      if (!hasAppState && !isRoot) {
+        try {
+          window.location.replace('/dashboard/');
+        } catch (err) {}
+      }
+      // On the dashboard or when a valid in-app state exists,
+      // let the browser handle back normally.
+    });
+  })();
+
   (function () {
     if (!('serviceWorker' in navigator)) return;
     if (window.location.pathname.indexOf('/update') === 0) return;
@@ -1843,17 +1897,12 @@
       navigator.serviceWorker.getRegistration().then(function (reg) {
         if (reg && reg.waiting) {
           reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-          // controllerchange listener below will reload the page once
         } else {
           location.reload();
         }
       }).catch(function () { location.reload(); });
     };
 
-    // ✅ v8.1: reload once when new SW takes over, but prefetch first so the
-    // reload is instant (warms a cold Render server + repopulates the new
-    // SW's page cache). Also gives visible feedback in the banner so the
-    // user doesn't stare at a frozen purple bar during a cold start.
     navigator.serviceWorker.addEventListener('controllerchange', function () {
       var b = document.getElementById('mp-update-banner');
       if (b) {

@@ -92,6 +92,26 @@ def _first_sentence(text, limit=140):
     return cut if len(cut) <= limit else cut[:limit].rstrip() + '...'
 
 
+def _has_real_sections(content):
+    """True if `content` has at least one non-`_`-prefixed section key."""
+    if not content:
+        return False
+    return any(not str(k).startswith('_') for k in content.keys())
+
+
+def _is_real_pptx_bytes(data):
+    """
+    True if `data` starts with a ZIP magic header.
+
+    python-pptx writes OOXML .pptx as a ZIP archive. A file starting with
+    b'%PDF' is a PDF — a real .pptx can never start that way. This catches
+    the "PDF saved as .pptx → uneditable in PowerPoint" bug at the source.
+    """
+    if not data:
+        return False
+    return data.startswith(b'PK\x03\x04') or data.startswith(b'PK\x05\x06')
+
+
 # Markers that identify a paragraph as a *student narrative* (i.e. what a
 # Facility Profile must NOT contain). Used to reject stale AI drafts.
 _STUDENT_NARRATIVE_RE = re.compile(
@@ -569,12 +589,8 @@ class PracticumReportBuilder:
 
         facility_profile_text = self._build_facility_profile()
 
-        # ✅ NEW: build defaults for activities_performed and recommendations
-        # so they're always available as fallback. Previously these two keys
-        # were completely missing from defaults, so when the AI timed out
-        # (which happens often — they're deep in the DRAFT_SECTIONS list),
-        # effective_content() returned a dict without them → edit page blank
-        # fields + build_context KeyError.
+        # ✅ Build defaults for activities_performed and recommendations
+        # so they're always available as fallback.
         default_activities = _build_activities_narrative(unit_activities)
         default_recommendations = _build_recommendations_text(dynamic_facility_recs, recs)
 
@@ -594,7 +610,6 @@ class PracticumReportBuilder:
             'challenges': default_challenges,
             'skills_acquired': default_skills,
             'facility_profile': facility_profile_text,
-            # ✅ NEW keys — previously missing entirely
             'activities_performed': default_activities,
             'recommendations': default_recommendations,
         }
@@ -621,14 +636,13 @@ class PracticumReportBuilder:
         """
         Merge template defaults with AI-drafted saved content.
 
-        ✅ Always returns a dict containing EVERY key in _CONTENT_SECTION_KEYS.
+        Always returns a dict containing EVERY key in _CONTENT_SECTION_KEYS.
         Missing data becomes an empty string — never absent — so callers can
         safely do content['references'] without KeyError.
 
-        This fixes the 23 Nov crash:
-            KeyError: 'references' at build_context() line 777
-        which happened because the previous implementation skipped empty values
-        (references is '' by default → filtered out → later hard access crashed).
+        `_`-prefixed keys (e.g. `_source_hash`, `_ai_note`) are EXCLUDED
+        from the returned dict. Callers who need to preserve them across
+        a save must do so explicitly — see save() below.
         """
         defaults = self.content_defaults()
         saved = self.saved_content or {}
@@ -651,8 +665,6 @@ class PracticumReportBuilder:
 
         result = {}
 
-        # Iterate over the canonical key list FIRST — guarantees every key
-        # ends up in the result dict even when both defaults and saved lack it.
         for k in _CONTENT_SECTION_KEYS:
             default = defaults.get(k, '')
 
@@ -668,10 +680,8 @@ class PracticumReportBuilder:
             saved_val = str(saved.get(k, '')).strip()
             val = saved_val or default
 
-            # Strip markdown heading markers if present.
             if val:
                 val = re.sub(r'^[ \t]*#+[ \t]*', '', val, flags=re.MULTILINE).strip()
-                # Strip a leading section title line (e.g. "INTRODUCTION\n\n").
                 for variant in title_variants.get(k, []):
                     pattern = r'^' + re.escape(variant) + r'[ \t]*\n+'
                     new_val = re.sub(pattern, '', val, count=1, flags=re.IGNORECASE)
@@ -679,10 +689,9 @@ class PracticumReportBuilder:
                         val = new_val.strip()
                         break
 
-            # ✅ ALWAYS include the key — even when empty. This is the fix.
             result[k] = val
 
-        # Include any extra saved keys not in the canonical list (future-proofing).
+        # Include extra non-private saved keys (future-proofing).
         for k, v in saved.items():
             if str(k).startswith('_') or k in result:
                 continue
@@ -831,8 +840,6 @@ class PracticumReportBuilder:
                 counter += 1
                 nums[key] = f'3.{counter}'
 
-        # ✅ Use .get() for every content access. Belt + suspenders alongside
-        # the effective_content() guarantee that all keys are present.
         references = _lines(content.get('references', ''))
         report = self.report_obj
 
@@ -1145,8 +1152,6 @@ class PracticumReportBuilder:
             for line in _clean_list_lines(content['recommendations']):
                 self._add_rich_paragraph(doc, line, style='List Bullet')
         else:
-            # ✅ .get() instead of hard access — fixes KeyError when
-            # facility_recs / academic_recs are missing.
             for r in _lines(content.get('facility_recs', '')):
                 self._add_rich_paragraph(doc, r, style='List Bullet')
             for r in _lines(content.get('academic_recs', '')):
@@ -1205,10 +1210,37 @@ class PracticumReportBuilder:
 
     # ---------- PowerPoint ----------
     def build_pptx(self, template_key='cohy_classic'):
+        """
+        Build a real .pptx in memory and return its bytes.
+
+        The bytes come from `PracticumPptxBuilder.build()` → `prs.save(buf)`,
+        which is guaranteed to be a valid OOXML/ZIP. Callers that need to
+        persist the file should use save_pptx() instead, which also writes
+        the PDF preview and updates the report record.
+        """
         from .pptx_builder import PracticumPptxBuilder
         return PracticumPptxBuilder(self, template_key).build()
 
     def save_pptx(self, template_key='cohy_classic', force_ai=False):
+        """
+        Build the .pptx + PDF preview, save both to the report record,
+        and record the build summary.
+
+        v8 fingerprint logic (defence-in-depth):
+
+          If the caller already ran _ensure_pptx_content() (which views.py
+          does), report.pptx_content will be fresh and this method does
+          not re-draft. If called directly without that pre-step, this
+          method ALSO checks the fingerprint and _has_real_sections()
+          before deciding to draft — so it behaves correctly in both
+          call paths.
+
+        Magic-byte guard:
+          Before saving, we assert the PPTX bytes really are ZIP/OOXML.
+          If they're not (e.g. someone swapped build() to return PDF
+          bytes), we fail loudly instead of shipping a file that
+          Microsoft PowerPoint will open as read-only.
+        """
         from .pptx_builder import PracticumPptxBuilder
 
         report, _ = GeneratedReport.objects.get_or_create(attachment=self.attachment)
@@ -1217,25 +1249,71 @@ class PracticumReportBuilder:
             report.pptx_content = {}
             report.save(update_fields=['pptx_content'])
 
-        if not report.pptx_content:
-            try:
-                from .ai_drafting import draft_presentation_with_ai
-                drafts = draft_presentation_with_ai(self.attachment)
-                if drafts:
-                    report.pptx_content = drafts
-                    report.save(update_fields=['pptx_content'])
-                    logger.info(
-                        'PPTX AI drafted %d section(s) for report %s',
-                        len(drafts), report.pk,
-                    )
-            except Exception:
-                logger.exception(
-                    'PPTX AI drafting failed — builder will fall back to trimmed report text'
-                )
+        # ---- Fingerprint-aware AI drafting (defence-in-depth) ----
+        needs_pptx_draft = False
+        try:
+            from .ai_drafting import draft_presentation_with_ai, source_fingerprint
 
+            current_fp = source_fingerprint(self.attachment)
+            saved_fp = (report.pptx_content or {}).get('_source_hash')
+
+            needs_pptx_draft = (
+                force_ai
+                or not _has_real_sections(report.pptx_content)
+                or (saved_fp != current_fp)
+            )
+
+            if needs_pptx_draft:
+                try:
+                    drafts = draft_presentation_with_ai(self.attachment)
+                    if drafts:
+                        report.pptx_content = drafts   # includes '_source_hash'
+                        report.save(update_fields=['pptx_content'])
+                        logger.info(
+                            'PPTX AI drafted %d section(s) for report %s (fingerprint=%s)',
+                            len([k for k in drafts if not str(k).startswith('_')]),
+                            report.pk, current_fp[:8],
+                        )
+                except Exception:
+                    logger.exception(
+                        'PPTX AI drafting failed — builder will fall back to '
+                        'trimmed report text'
+                    )
+        except Exception:
+            # If fingerprinting is unavailable for any reason, fall back to
+            # the pre-v8 behaviour: draft only when content is empty.
+            logger.exception(
+                'PPTX fingerprint check failed — falling back to empty-content check'
+            )
+            if not report.pptx_content:
+                try:
+                    from .ai_drafting import draft_presentation_with_ai
+                    drafts = draft_presentation_with_ai(self.attachment)
+                    if drafts:
+                        report.pptx_content = drafts
+                        report.save(update_fields=['pptx_content'])
+                except Exception:
+                    logger.exception('PPTX AI drafting fallback also failed')
+
+        # ---- Build ----
         builder = PracticumPptxBuilder(self, template_key)
         pptx_bytes = builder.build()
         pdf_bytes = builder.build_pdf()
+
+        # ---- Magic-byte guard (do not ship corrupt PPTX) ----
+        if not _is_real_pptx_bytes(pptx_bytes):
+            preview = (pptx_bytes or b'')[:20]
+            logger.error(
+                'PPTX build produced non-ZIP bytes for report %s '
+                '(first 20 bytes: %r). PracticumPptxBuilder.build() '
+                'must return bytes from prs.save(buf).',
+                report.pk, preview,
+            )
+            raise ValueError(
+                'The presentation builder produced invalid bytes — the '
+                '.pptx would open as read-only or be rejected by Microsoft '
+                'PowerPoint. Check pptx_builder.PracticumPptxBuilder.build().'
+            )
 
         opts = dict(report.pptx_options or {})
         if getattr(builder, 'overflow_warnings', None):
@@ -1254,6 +1332,18 @@ class PracticumReportBuilder:
         report.pptx_file.save(f"{filename}.pptx", ContentFile(pptx_bytes), save=False)
         report.pptx_pdf_file.save(f"{filename}.pdf", ContentFile(pdf_bytes), save=True)
 
+        # ---- Sanity log — catch accidental field swaps early ----
+        if report.pptx_file and not report.pptx_file.name.endswith('.pptx'):
+            logger.error(
+                "pptx_file.name does not end with .pptx: %r (report=%s)",
+                report.pptx_file.name, report.pk,
+            )
+        if report.pptx_pdf_file and not report.pptx_pdf_file.name.endswith('.pdf'):
+            logger.error(
+                "pptx_pdf_file.name does not end with .pdf: %r (report=%s)",
+                report.pptx_pdf_file.name, report.pk,
+            )
+
         sections = (report.pptx_options or {}).get('sections') or {}
         selected_count = sum(1 for v in sections.values() if v) if sections else None
         self._last_pptx_summary = {
@@ -1262,6 +1352,7 @@ class PracticumReportBuilder:
             'ai_fallback_count': getattr(builder, 'ai_fallback_count', 0),
             'template': template_key,
             'overflow_warnings': getattr(builder, 'overflow_warnings', []),
+            'ai_drafted': needs_pptx_draft,
         }
         return report
 
@@ -1275,12 +1366,18 @@ class PracticumReportBuilder:
         if report.docx_file:
             report.docx_file.delete(save=False)
 
-        # ✅ Persist the merged content (AI + defaults) so the edit page shows
-        # exactly what went into this PDF. This survives even if a later
-        # regeneration attempt crashes partway through, and it means the edit
-        # page always reflects the current PDF — even when AI only drafted
-        # a subset of sections.
-        report.content = self.effective_content()
+        # ✅ v8: persist the merged content (AI + defaults) so the edit page
+        # shows exactly what went into this PDF — BUT preserve private
+        # `_`-prefixed keys (notably `_source_hash`) so the fingerprint
+        # check in views._build() can still detect staleness on the next
+        # regeneration. Without this, every save() would wipe
+        # `_source_hash` and force a needless AI re-draft next time.
+        old_content = dict(report.content or {})
+        new_content = self.effective_content()
+        for k, v in old_content.items():
+            if str(k).startswith('_'):
+                new_content[k] = v
+        report.content = new_content
 
         report.options = {
             **self.options,

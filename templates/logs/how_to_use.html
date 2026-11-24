@@ -1,221 +1,1111 @@
 {% extends 'base.html' %}
-{% block title %}How to Use the System · MedPracticum Studio{% endblock %}
+{% block title %}How to Use · MedPracticum Studio{% endblock %}
 
 {% block content %}
-<div class="max-w-4xl mx-auto pb-16">
-  
-  <!-- Header -->
-  <div class="mb-10 text-center mt-4">
-    <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 mb-4 shadow-sm">
-      <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+<style>
+  /* ============================================================
+     HOW-TO-USE GUIDE — matches the emerald/green app UI
+     ============================================================ */
+  .mp-guide {
+    --g-emerald-50:  #ecfdf5;
+    --g-emerald-100: #d1fae5;
+    --g-emerald-200: #a7f3d0;
+    --g-emerald-500: #10b981;
+    --g-emerald-600: #059669;
+    --g-emerald-700: #047857;
+    --g-emerald-900: #064e3b;
+    --g-ink:         #111827;
+    --g-ink-soft:    #4b5563;
+    --g-ink-muted:   #6b7280;
+    --g-line:        #e5e7eb;
+    --g-card:        #ffffff;
+    --g-card-alt:    #f9fafb;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--g-ink);
+    max-width: 980px;
+    margin: 0 auto;
+    padding-bottom: 80px;
+  }
+
+  /* ==================== HERO ==================== */
+  .mp-guide-hero {
+    background: linear-gradient(135deg, #047857 0%, #10b981 100%);
+    border-radius: 20px;
+    padding: 36px 28px 32px;
+    color: #ffffff;
+    text-align: center;
+    margin-bottom: 24px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 12px 32px rgba(5, 150, 105, 0.22);
+  }
+  .mp-guide-hero::before {
+    content: '';
+    position: absolute;
+    top: -60px; right: -60px;
+    width: 220px; height: 220px;
+    background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+  .mp-guide-hero::after {
+    content: '';
+    position: absolute;
+    bottom: -80px; left: -80px;
+    width: 200px; height: 200px;
+    background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+  .mp-guide-hero-icon {
+    font-size: 48px;
+    line-height: 1;
+    margin-bottom: 10px;
+    display: inline-block;
+    filter: drop-shadow(0 4px 12px rgba(0,0,0,0.2));
+  }
+  .mp-guide-hero h1 {
+    margin: 0 0 10px;
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    line-height: 1.2;
+  }
+  .mp-guide-hero p {
+    margin: 0 auto 18px;
+    font-size: 14px;
+    opacity: 0.92;
+    max-width: 580px;
+    line-height: 1.5;
+  }
+  .mp-guide-hero-meta {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    position: relative;
+    z-index: 1;
+  }
+  .mp-guide-hero-meta span {
+    background: rgba(255,255,255,0.18);
+    border: 1px solid rgba(255,255,255,0.28);
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    backdrop-filter: blur(4px);
+  }
+  @media (max-width: 640px) {
+    .mp-guide-hero { padding: 28px 20px; }
+    .mp-guide-hero h1 { font-size: 22px; }
+    .mp-guide-hero p { font-size: 13px; }
+  }
+
+  /* ==================== QUICK-START CHECKLIST ==================== */
+  .mp-guide-checklist {
+    background: var(--g-card);
+    border: 1px solid var(--g-line);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 24px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+  }
+  .mp-guide-checklist-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--g-ink);
+    margin: 0 0 16px;
+  }
+  .mp-guide-checklist-title .badge {
+    background: var(--g-emerald-100);
+    color: var(--g-emerald-700);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 6px;
+    letter-spacing: 0.03em;
+  }
+  .mp-guide-checklist-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+  }
+  .mp-guide-check {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--g-card-alt);
+    border: 1px solid var(--g-line);
+    border-radius: 10px;
+    font-size: 13px;
+    color: var(--g-ink-soft);
+    line-height: 1.35;
+  }
+  .mp-guide-check-num {
+    flex-shrink: 0;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--g-emerald-600);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .mp-guide-check strong { color: var(--g-ink); display: block; font-size: 12.5px; }
+
+  /* ==================== STICKY NAV ==================== */
+  .mp-guide-nav {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid var(--g-line);
+    border-radius: 14px;
+    padding: 8px;
+    margin-bottom: 14px;
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+  }
+  .mp-guide-nav::-webkit-scrollbar { height: 0; }
+  .mp-guide-nav-item {
+    flex: 1 0 auto;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--g-ink-muted);
+    text-decoration: none;
+    text-align: center;
+    white-space: nowrap;
+    transition: background 0.15s ease, color 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .mp-guide-nav-item::before {
+    content: attr(data-step);
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--g-card-alt);
+    color: var(--g-ink-muted);
+    font-size: 10px;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .mp-guide-nav-item:hover {
+    background: var(--g-emerald-50);
+    color: var(--g-emerald-700);
+  }
+  .mp-guide-nav-item.is-active {
+    background: var(--g-emerald-600);
+    color: #fff;
+  }
+  .mp-guide-nav-item.is-active::before {
+    background: rgba(255,255,255,0.25);
+    color: #fff;
+  }
+  .mp-guide-nav-toggle {
+    margin-left: auto;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--g-line);
+    background: var(--g-card-alt);
+    color: var(--g-ink-soft);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s;
+  }
+  .mp-guide-nav-toggle:hover { background: var(--g-emerald-50); color: var(--g-emerald-700); }
+
+  /* ==================== PROGRESS BAR ==================== */
+  .mp-guide-progress {
+    height: 3px;
+    background: var(--g-line);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+  .mp-guide-progress-fill {
+    height: 100%;
+    width: 0;
+    background: linear-gradient(90deg, #10b981 0%, #047857 100%);
+    transition: width 0.1s linear;
+    border-radius: 3px;
+  }
+
+  /* ==================== STEP CARDS ==================== */
+  .mp-guide-steps { display: flex; flex-direction: column; gap: 16px; }
+
+  .mp-guide-step {
+    background: var(--g-card);
+    border: 1px solid var(--g-line);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+    transition: box-shadow 0.2s ease;
+  }
+  .mp-guide-step:hover { box-shadow: 0 4px 12px rgba(5, 150, 105, 0.08); }
+
+  .mp-guide-step-header {
+    width: 100%;
+    background: transparent;
+    border: 0;
+    padding: 18px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+    transition: background 0.15s ease;
+  }
+  .mp-guide-step-header:hover { background: var(--g-card-alt); }
+  .mp-guide-step-num {
+    flex-shrink: 0;
+    width: 40px; height: 40px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--g-emerald-600), var(--g-emerald-500));
+    color: #fff;
+    font-size: 16px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(5, 150, 105, 0.25);
+  }
+  .mp-guide-step-title { flex: 1; min-width: 0; }
+  .mp-guide-step-title h2 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--g-ink);
+    line-height: 1.3;
+  }
+  .mp-guide-step-title p {
+    margin: 3px 0 0;
+    font-size: 12.5px;
+    color: var(--g-ink-muted);
+    line-height: 1.3;
+  }
+  .mp-guide-step-chevron {
+    flex-shrink: 0;
+    font-size: 18px;
+    color: var(--g-ink-muted);
+    transition: transform 0.25s ease;
+    line-height: 1;
+    width: 24px;
+    text-align: center;
+  }
+  .mp-guide-step.is-open .mp-guide-step-chevron { transform: rotate(180deg); }
+
+  /* Grid trick gives clean open/close animation */
+  .mp-guide-step-body {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows 0.3s ease;
+  }
+  .mp-guide-step:not(.is-open) .mp-guide-step-body {
+    grid-template-rows: 0fr;
+  }
+  .mp-guide-step-body-inner {
+    overflow: hidden;
+    min-height: 0;
+    padding: 0 20px 22px;
+  }
+
+  /* ==================== CONTENT PIECES ==================== */
+  .mp-guide-subhead {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--g-ink);
+    margin: 20px 0 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mp-guide-subhead svg {
+    width: 16px; height: 16px;
+    stroke: var(--g-emerald-600);
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .mp-guide-subhead:first-child { margin-top: 4px; }
+
+  .mp-guide-text {
+    font-size: 13.5px;
+    color: var(--g-ink-soft);
+    line-height: 1.6;
+    margin: 0 0 10px;
+  }
+
+  .mp-guide-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .mp-guide-list li {
+    font-size: 13px;
+    color: var(--g-ink-soft);
+    line-height: 1.55;
+    padding-left: 24px;
+    position: relative;
+  }
+  .mp-guide-list li::before {
+    content: '';
+    position: absolute;
+    left: 6px; top: 8px;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--g-emerald-500);
+    box-shadow: 0 0 0 3px var(--g-emerald-50);
+  }
+  .mp-guide-list li strong { color: var(--g-ink); }
+
+  /* Tip box */
+  .mp-guide-tip {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    background: var(--g-emerald-50);
+    border: 1px solid var(--g-emerald-200);
+    border-left: 3px solid var(--g-emerald-600);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin: 12px 0;
+    font-size: 13px;
+    color: var(--g-emerald-900);
+    line-height: 1.5;
+  }
+  .mp-guide-tip-icon { flex-shrink: 0; font-size: 16px; line-height: 1.2; }
+  .mp-guide-tip strong { color: var(--g-emerald-900); }
+
+  /* Prompt blocks (copy + try) */
+  .mp-guide-prompt {
+    background: var(--g-card-alt);
+    border: 1px solid var(--g-line);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin: 8px 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+  .mp-guide-prompt code {
+    flex: 1 1 220px;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12.5px;
+    color: var(--g-ink);
+    background: transparent;
+    word-break: break-word;
+    line-height: 1.5;
+  }
+  .mp-guide-prompt code::before { content: '💬 '; font-size: 13px; }
+  .mp-guide-prompt-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .mp-guide-btn-copy,
+  .mp-guide-btn-try {
+    border: 1px solid var(--g-line);
+    background: #ffffff;
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--g-ink-soft);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-family: inherit;
+    white-space: nowrap;
+  }
+  .mp-guide-btn-copy:hover {
+    border-color: var(--g-emerald-200);
+    color: var(--g-emerald-700);
+    background: var(--g-emerald-50);
+  }
+  .mp-guide-btn-copy.copied {
+    background: var(--g-emerald-100);
+    border-color: var(--g-emerald-200);
+    color: var(--g-emerald-700);
+  }
+  .mp-guide-btn-try {
+    background: var(--g-emerald-600);
+    border-color: var(--g-emerald-700);
+    color: #ffffff;
+  }
+  .mp-guide-btn-try:hover { background: var(--g-emerald-700); }
+
+  /* Try-it-now CTA */
+  .mp-guide-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--g-emerald-600);
+    color: #ffffff;
+    text-decoration: none;
+    padding: 10px 16px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    margin-top: 10px;
+    transition: background 0.15s ease, transform 0.1s ease;
+    box-shadow: 0 2px 8px rgba(5, 150, 105, 0.25);
+  }
+  .mp-guide-cta:hover { background: var(--g-emerald-700); transform: translateY(-1px); }
+  .mp-guide-cta:active { transform: translateY(0); }
+
+  /* Feature grid (other tools) */
+  .mp-guide-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+    margin-top: 14px;
+  }
+  .mp-guide-grid-card {
+    background: var(--g-card-alt);
+    border: 1px solid var(--g-line);
+    border-radius: 12px;
+    padding: 14px;
+    transition: border-color 0.15s ease, transform 0.15s ease;
+  }
+  .mp-guide-grid-card:hover {
+    border-color: var(--g-emerald-200);
+    transform: translateY(-2px);
+  }
+  .mp-guide-grid-card h4 {
+    margin: 0 0 6px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--g-ink);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .mp-guide-grid-card h4 svg {
+    width: 15px; height: 15px;
+    stroke: var(--g-emerald-600);
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    flex-shrink: 0;
+  }
+  .mp-guide-grid-card p {
+    margin: 0;
+    font-size: 12px;
+    color: var(--g-ink-muted);
+    line-height: 1.5;
+  }
+
+  /* Two-column sub-cards */
+  .mp-guide-two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-top: 8px;
+  }
+  @media (max-width: 640px) {
+    .mp-guide-two-col { grid-template-columns: 1fr; }
+  }
+  .mp-guide-subcard {
+    background: var(--g-card-alt);
+    border: 1px solid var(--g-line);
+    border-radius: 12px;
+    padding: 14px;
+  }
+  .mp-guide-subcard h4 {
+    margin: 0 0 8px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--g-ink);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .mp-guide-subcard h4 svg {
+    width: 16px; height: 16px;
+    stroke: var(--g-emerald-600);
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .mp-guide-subcard .mp-guide-list li { font-size: 12.5px; }
+
+  /* Support footer */
+  .mp-guide-support {
+    margin-top: 28px;
+    background: linear-gradient(135deg, var(--g-emerald-50) 0%, #f0fdf4 100%);
+    border: 1px solid var(--g-emerald-200);
+    border-radius: 16px;
+    padding: 24px;
+    text-align: center;
+  }
+  .mp-guide-support h3 {
+    margin: 0 0 8px;
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--g-emerald-900);
+  }
+  .mp-guide-support p {
+    margin: 0 0 16px;
+    font-size: 13px;
+    color: var(--g-emerald-900);
+    opacity: 0.85;
+  }
+
+  /* Mobile adjustments */
+  @media (max-width: 640px) {
+    .mp-guide { padding-bottom: 60px; }
+    .mp-guide-step-header { padding: 14px 16px; gap: 12px; }
+    .mp-guide-step-num { width: 34px; height: 34px; font-size: 14px; border-radius: 10px; }
+    .mp-guide-step-body-inner { padding: 0 16px 18px; }
+    .mp-guide-prompt { padding: 10px 12px; }
+    .mp-guide-nav-item { font-size: 11.5px; padding: 7px 10px; }
+  }
+
+  /* Hide the chevron rotation if JS is disabled — but show all sections */
+  .mp-guide.no-js .mp-guide-step-body { grid-template-rows: 1fr !important; }
+</style>
+
+<div class="mp-guide" id="mp-guide">
+
+  <!-- ═══════════════════ HERO ═══════════════════ -->
+  <div class="mp-guide-hero">
+    <div class="mp-guide-hero-icon">🩺</div>
+    <h1>Master MedPracticum Studio</h1>
+    <p>From your first daily log to your final presentation — here's everything you need to know in one short, interactive guide.</p>
+    <div class="mp-guide-hero-meta">
+      <span>⏱ 5 min read</span>
+      <span>🎯 5 steps</span>
+      <span>💡 Copy-paste examples</span>
     </div>
-    <h1 class="text-3xl font-bold text-gray-900 mb-2">Welcome to Your User Guide</h1>
-    <p class="text-sm text-gray-500 font-medium max-w-2xl mx-auto">
-      Everything you need to know about navigating MedPracticum Studio, from logging your first day to downloading your final report and presentation.
-    </p>
   </div>
 
-  <!-- Quick Navigation -->
-  <div class="flex flex-wrap justify-center gap-2 mb-10">
-    <a href="#step-1" class="px-4 py-2 bg-white border border-gray-200 rounded-full text-sm font-semibold text-emerald-700 hover:bg-emerald-50 hover:border-emerald-200 transition-colors shadow-sm">1. Setup</a>
-    <a href="#step-2" class="px-4 py-2 bg-white border border-gray-200 rounded-full text-sm font-semibold text-emerald-700 hover:bg-emerald-50 hover:border-emerald-200 transition-colors shadow-sm">2. Daily Logs</a>
-    <a href="#step-3" class="px-4 py-2 bg-white border border-gray-200 rounded-full text-sm font-semibold text-emerald-700 hover:bg-emerald-50 hover:border-emerald-200 transition-colors shadow-sm">3. Reports & PPT</a>
-    <a href="#step-4" class="px-4 py-2 bg-white border border-gray-200 rounded-full text-sm font-semibold text-emerald-700 hover:bg-emerald-50 hover:border-emerald-200 transition-colors shadow-sm">4. AI Assistant</a>
-  </div>
-
-  <!-- Guide Content -->
-  <div class="space-y-12">
-
-    <!-- STEP 1: Setup -->
-    <section id="step-1" class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-      <div class="bg-emerald-600 px-6 py-4 border-b border-emerald-700">
-        <h2 class="text-xl font-bold text-white flex items-center gap-3">
-          <span class="bg-white text-emerald-800 w-8 h-8 rounded-full flex items-center justify-center text-sm flex-shrink-0">1</span>
-          Setting Up Your Attachment
-        </h2>
-      </div>
-      <div class="p-6 md:p-8 space-y-6">
-        <div class="flex flex-col md:flex-row gap-6">
-          <div class="flex-1">
-            <h3 class="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2">
-              <svg class="text-emerald-500" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-              Start / Edit Attachment
-            </h3>
-            <p class="text-sm text-gray-600 mb-3">
-              Before you can add logs, you must create an attachment session. This tells the system where you are working and when.
-            </p>
-            <ul class="list-disc pl-5 space-y-1 text-sm text-gray-600">
-              <li>Enter the facility name, district, and type (e.g., District Hospital).</li>
-              <li>Set your exact start and end dates.</li>
-              <li>Add your clinical supervisor's name.</li>
-              <li><em>Optional:</em> You can add specific "Competency Areas" so the AI knows exactly what skills you want to focus on.</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- STEP 2: Daily Logs -->
-    <section id="step-2" class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-      <div class="bg-emerald-600 px-6 py-4 border-b border-emerald-700">
-        <h2 class="text-xl font-bold text-white flex items-center gap-3">
-          <span class="bg-white text-emerald-800 w-8 h-8 rounded-full flex items-center justify-center text-sm flex-shrink-0">2</span>
-          Recording Your Daily Logs
-        </h2>
-      </div>
-      <div class="p-6 md:p-8 space-y-6">
-        <div class="flex flex-col md:flex-row gap-6">
-          <div class="flex-1">
-            <h3 class="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2">
-              <svg class="text-emerald-500" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-              New Daily Log
-            </h3>
-            <p class="text-sm text-gray-600 mb-3">
-              This is where you record what you did each day. The more detail you provide here, the better your final report will be.
-            </p>
-            <ul class="list-disc pl-5 space-y-1 text-sm text-gray-600">
-              <li>Select the date and the specific hospital unit (e.g., OPD, RCH).</li>
-              <li><strong>Activity Summary:</strong> Briefly describe what you did (e.g., "Registered 15 new patients into the LHIMS system").</li>
-              <li><strong>Skills & Challenges:</strong> Note any new skills learned or problems encountered (and how you solved them).</li>
-              <li>Use the <strong>Tags</strong> and <strong>Tallies</strong> to quickly count things like "NHIS Claims Processed".</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- STEP 3: Reports & Presentations -->
-    <section id="step-3" class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-      <div class="bg-emerald-600 px-6 py-4 border-b border-emerald-700">
-        <h2 class="text-xl font-bold text-white flex items-center gap-3">
-          <span class="bg-white text-emerald-800 w-8 h-8 rounded-full flex items-center justify-center text-sm flex-shrink-0">3</span>
-          Generating Your Outputs
-        </h2>
-      </div>
-      <div class="p-6 md:p-8 space-y-8">
-        
-        <!-- Reports -->
-        <div>
-          <h3 class="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2">
-            <svg class="text-emerald-500" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-            Reports Page
-          </h3>
-          <p class="text-sm text-gray-600 mb-3">
-            This page compiles all your logs into a full academic report (PDF & Word).
-          </p>
-          <ul class="list-disc pl-5 space-y-1 text-sm text-gray-600">
-            <li>Click <strong>Generate Official Report</strong> to let the AI read all your logs and draft the chapters.</li>
-            <li>You can edit the generated text manually, change the cover logo, and even adjust the font size and spacing.</li>
-            <li>Download the final result as a PDF or a Word Document.</li>
-          </ul>
-        </div>
-
-        <hr class="border-gray-100">
-
-        <!-- Presentations -->
-        <div>
-          <h3 class="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2">
-            <svg class="text-emerald-500" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-            Presentations Page
-          </h3>
-          <p class="text-sm text-gray-600 mb-3">
-            Creates a PowerPoint presentation from your logs, perfect for your final defense.
-          </p>
-          <ul class="list-disc pl-5 space-y-1 text-sm text-gray-600">
-            <li>Choose from <strong>16 different templates</strong> (including the official HIM template).</li>
-            <li>Preview your cover slide live before building.</li>
-            <li>The AI writes short bullet points and even adds <strong>Speaker Notes</strong> to help you present.</li>
-            <li>Download the `.pptx` file or a PDF version of the slides.</li>
-          </ul>
-        </div>
-
-      </div>
-    </section>
-
-    <!-- STEP 4: AI Assistant -->
-    <section id="step-4" class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-      <div class="bg-emerald-600 px-6 py-4 border-b border-emerald-700">
-        <h2 class="text-xl font-bold text-white flex items-center gap-3">
-          <span class="bg-white text-emerald-800 w-8 h-8 rounded-full flex items-center justify-center text-sm flex-shrink-0">4</span>
-          Your AI Assistant (🩺)
-        </h2>
-      </div>
-      <div class="p-6 md:p-8 space-y-6">
-        <div class="flex flex-col md:flex-row gap-6">
-          <div class="flex-1">
-            <h3 class="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2">
-              <svg class="text-emerald-500" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-              The Floating Doctor Icon
-            </h3>
-            <p class="text-sm text-gray-600 mb-3">
-              Look for the floating 🩺 icon at the bottom right of your screen. You can drag it anywhere. Click it to open a conversation with the AI.
-            </p>
-            <ul class="list-disc pl-5 space-y-1 text-sm text-gray-600">
-              <li><strong>Ask for help:</strong> "Write an introduction paragraph for my report."</li>
-              <li><strong>Analyze data:</strong> "How many logs have I recorded so far?"</li>
-              <li><strong>Vision (Images):</strong> Click the 📎 paperclip to upload a photo of a document or whiteboard, and ask the AI to "Transcribe this" or "Explain this".</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- STEP 5: Other Tools -->
-    <section id="step-5" class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-      <div class="bg-gray-800 px-6 py-4 border-b border-gray-900">
-        <h2 class="text-xl font-bold text-white flex items-center gap-3">
-          <span class="bg-white text-gray-800 w-8 h-8 rounded-full flex items-center justify-center text-sm flex-shrink-0">5</span>
-          Other Important Tools
-        </h2>
-      </div>
-      <div class="p-6 md:p-8">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          
-          <div class="bg-gray-50 rounded-xl p-5 border border-gray-100">
-            <h4 class="font-bold text-gray-900 mb-2 flex items-center gap-2">
-              <svg class="text-gray-500" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
-              All Attachments
-            </h4>
-            <p class="text-xs text-gray-600">If you do multiple rotations (e.g., one at a District Hospital, another at a Teaching Hospital), you can manage them all here.</p>
-          </div>
-
-          <div class="bg-gray-50 rounded-xl p-5 border border-gray-100">
-            <h4 class="font-bold text-gray-900 mb-2 flex items-center gap-2">
-              <svg class="text-gray-500" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
-              View Logs
-            </h4>
-            <p class="text-xs text-gray-600">A full timeline of every daily log you've submitted. You can edit or delete specific entries here.</p>
-          </div>
-
-          <div class="bg-gray-50 rounded-xl p-5 border border-gray-100">
-            <h4 class="font-bold text-gray-900 mb-2 flex items-center gap-2">
-              <svg class="text-gray-500" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
-              Workshops
-            </h4>
-            <p class="text-xs text-gray-600">Record any official training, orientations, or continuing education sessions you attended.</p>
-          </div>
-
-          <div class="bg-gray-50 rounded-xl p-5 border border-gray-100">
-            <h4 class="font-bold text-gray-900 mb-2 flex items-center gap-2">
-              <svg class="text-gray-500" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
-              Archive
-            </h4>
-            <p class="text-xs text-gray-600">Accidentally deleted a log or an attachment? Don't worry. Deleted items go here, and you can restore them with one click.</p>
-          </div>
-
-        </div>
-      </div>
-    </section>
-
-    <!-- Support Footer -->
-    <div class="text-center bg-emerald-50 rounded-2xl p-8 border border-emerald-100">
-      <h3 class="text-lg font-bold text-emerald-900 mb-2">Need more help?</h3>
-      <p class="text-sm text-emerald-800 mb-4">If you get stuck or find a bug, don't hesitate to reach out to the ICT support team.</p>
-      <a href="{% url 'contact' %}" class="inline-flex items-center justify-center bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-6 py-2.5 transition-colors shadow-sm">
-        Contact Support
-      </a>
+  <!-- ═══════════════════ QUICK-START CHECKLIST ═══════════════════ -->
+  <div class="mp-guide-checklist">
+    <h2 class="mp-guide-checklist-title">
+      <span class="badge">QUICK START</span>
+      Your 7-step path to a finished report
+    </h2>
+    <div class="mp-guide-checklist-grid">
+      <div class="mp-guide-check"><span class="mp-guide-check-num">1</span><div><strong>Create attachment</strong>Facility, dates &amp; supervisor</div></div>
+      <div class="mp-guide-check"><span class="mp-guide-check-num">2</span><div><strong>Log activities</strong>One per day worked</div></div>
+      <div class="mp-guide-check"><span class="mp-guide-check-num">3</span><div><strong>Set competencies</strong>Skills you want to develop</div></div>
+      <div class="mp-guide-check"><span class="mp-guide-check-num">4</span><div><strong>Add workshops</strong>Optional, but enriches the report</div></div>
+      <div class="mp-guide-check"><span class="mp-guide-check-num">5</span><div><strong>Generate report</strong>AI drafts every chapter</div></div>
+      <div class="mp-guide-check"><span class="mp-guide-check-num">6</span><div><strong>Build presentation</strong>Slides + speaker notes</div></div>
+      <div class="mp-guide-check"><span class="mp-guide-check-num">7</span><div><strong>Download &amp; share</strong>PDF, DOCX, PPTX</div></div>
     </div>
+  </div>
+
+  <!-- ═══════════════════ STICKY NAV ═══════════════════ -->
+  <nav class="mp-guide-nav" id="mp-guide-nav" aria-label="Guide sections">
+    <a href="#step-1" class="mp-guide-nav-item" data-step="1">Setup</a>
+    <a href="#step-2" class="mp-guide-nav-item" data-step="2">Logs</a>
+    <a href="#step-3" class="mp-guide-nav-item" data-step="3">Reports</a>
+    <a href="#step-4" class="mp-guide-nav-item" data-step="4">AI Assistant</a>
+    <a href="#step-5" class="mp-guide-nav-item" data-step="5">Tools</a>
+    <button type="button" class="mp-guide-nav-toggle" id="mp-guide-toggle-btn" onclick="mpGuideToggleAll()">Collapse all</button>
+  </nav>
+
+  <!-- ═══════════════════ PROGRESS BAR ═══════════════════ -->
+  <div class="mp-guide-progress"><div class="mp-guide-progress-fill" id="mp-guide-progress-fill"></div></div>
+
+  <!-- ═══════════════════ STEPS ═══════════════════ -->
+  <div class="mp-guide-steps">
+
+    <!-- ─────────── STEP 1: SETUP ─────────── -->
+    <section id="step-1" class="mp-guide-step is-open" data-step="1">
+      <button type="button" class="mp-guide-step-header" onclick="mpGuideToggle(this)">
+        <div class="mp-guide-step-num">1</div>
+        <div class="mp-guide-step-title">
+          <h2>Set up your attachment</h2>
+          <p>Tell the system where you're working and when</p>
+        </div>
+        <div class="mp-guide-step-chevron">▾</div>
+      </button>
+      <div class="mp-guide-step-body">
+        <div class="mp-guide-step-body-inner">
+          <p class="mp-guide-text">
+            Everything in MedPracticum Studio builds on top of an <strong>attachment</strong> — the
+            record of where you are doing your practicum. You need one before you can add any logs
+            or generate a report.
+          </p>
+
+          <div class="mp-guide-subhead">
+            <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            What to fill in
+          </div>
+          <ul class="mp-guide-list">
+            <li><strong>Facility name</strong> — e.g. "Bolgatanga Regional Hospital"</li>
+            <li><strong>District &amp; region</strong> — where the facility is located</li>
+            <li><strong>Start &amp; end dates</strong> — the exact period of your attachment</li>
+            <li><strong>Clinical supervisor</strong> — the staff member who signs off your logbook</li>
+            <li><strong>Competency areas</strong> — <em>optional, but strongly recommended</em>. The AI uses these to shape the whole report.</li>
+          </ul>
+
+          <div class="mp-guide-tip">
+            <span class="mp-guide-tip-icon">💡</span>
+            <div><strong>Pro tip:</strong> List 3–6 competency areas (e.g. "patient registration", "medical coding", "data quality control"). The AI will weave them into the Introduction, Skills, Lessons, and Recommendations sections.</div>
+          </div>
+
+          <a href="{% url 'start_attachment' %}" class="mp-guide-cta">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            Try it now
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────── STEP 2: DAILY LOGS ─────────── -->
+    <section id="step-2" class="mp-guide-step is-open" data-step="2">
+      <button type="button" class="mp-guide-step-header" onclick="mpGuideToggle(this)">
+        <div class="mp-guide-step-num">2</div>
+        <div class="mp-guide-step-title">
+          <h2>Record your daily logs</h2>
+          <p>The better your logs, the better your report</p>
+        </div>
+        <div class="mp-guide-step-chevron">▾</div>
+      </button>
+      <div class="mp-guide-step-body">
+        <div class="mp-guide-step-body-inner">
+          <p class="mp-guide-text">
+            Daily logs are the raw material for everything the AI writes. Each log should cover one
+            day you actually worked — what you did, what you learned, and any problems you hit.
+          </p>
+
+          <div class="mp-guide-subhead">
+            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            What makes a strong log
+          </div>
+          <ul class="mp-guide-list">
+            <li><strong>Unit / department</strong> — OPD, RCH, Records, Laboratory, etc.</li>
+            <li><strong>Activity summary</strong> — 1–3 sentences describing what you did</li>
+            <li><strong>Skills acquired</strong> — new things you learned that day</li>
+            <li><strong>Challenges faced</strong> — problems you encountered (and how you solved them)</li>
+            <li><strong>Tags &amp; tallies</strong> — quick counters like "NHIS claims processed: 12"</li>
+          </ul>
+
+          <div class="mp-guide-subhead">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+            Good vs weak example
+          </div>
+          <div class="mp-guide-prompt">
+            <code>✅ "Registered 15 new outpatients into LHIMS, verified NHIS cards, and booked 4 follow-up appointments."</code>
+          </div>
+          <div class="mp-guide-prompt" style="border-left: 3px solid #fca5a5;">
+            <code>❌ "Worked at OPD."</code>
+          </div>
+
+          <div class="mp-guide-tip">
+            <span class="mp-guide-tip-icon">💡</span>
+            <div><strong>Rule of thumb:</strong> If a stranger couldn't picture your day from the log, it's too short. Aim for <strong>40+ words per log</strong> — the AI will expand it into professional prose.</div>
+          </div>
+
+          <a href="{% url 'new_log' %}" class="mp-guide-cta">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16m8-8H4"/></svg>
+            Add your first log
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────── STEP 3: REPORTS & PRESENTATIONS ─────────── -->
+    <section id="step-3" class="mp-guide-step is-open" data-step="3">
+      <button type="button" class="mp-guide-step-header" onclick="mpGuideToggle(this)">
+        <div class="mp-guide-step-num">3</div>
+        <div class="mp-guide-step-title">
+          <h2>Generate your report &amp; presentation</h2>
+          <p>AI drafts every chapter, you refine</p>
+        </div>
+        <div class="mp-guide-step-chevron">▾</div>
+      </button>
+      <div class="mp-guide-step-body">
+        <div class="mp-guide-step-body-inner">
+          <p class="mp-guide-text">
+            Once you have logs and competencies in place, both the report and the presentation are
+            generated in one click. The AI reads <strong>only your logs, competencies, and workshops</strong> —
+            it does not invent activities, units, or dates.
+          </p>
+
+          <div class="mp-guide-two-col">
+
+            <!-- Reports sub-card -->
+            <div class="mp-guide-subcard">
+              <h4>
+                <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                Official report
+              </h4>
+              <ul class="mp-guide-list">
+                <li><strong>Generate</strong> — AI writes all chapters</li>
+                <li><strong>Edit</strong> — refine text in the browser</li>
+                <li><strong>Download</strong> — PDF or Word (.docx)</li>
+                <li><strong>Page target</strong> — set a target so the AI knows how long to aim for</li>
+              </ul>
+              <a href="{% url 'report_options' %}" class="mp-guide-cta" style="margin-top: 10px; padding: 8px 14px; font-size: 12px;">
+                Open reports →
+              </a>
+            </div>
+
+            <!-- Presentations sub-card -->
+            <div class="mp-guide-subcard">
+              <h4>
+                <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                Presentation
+              </h4>
+              <ul class="mp-guide-list">
+                <li><strong>16 templates</strong> — pick your style</li>
+                <li><strong>Live preview</strong> — see cover before building</li>
+                <li><strong>Speaker notes</strong> — AI writes what to say</li>
+                <li><strong>Editable .pptx</strong> — opens fully in PowerPoint</li>
+              </ul>
+              <a href="{% url 'pptx_options' %}" class="mp-guide-cta" style="margin-top: 10px; padding: 8px 14px; font-size: 12px;">
+                Open presentations →
+              </a>
+            </div>
+
+          </div>
+
+          <div class="mp-guide-tip">
+            <span class="mp-guide-tip-icon">💡</span>
+            <div><strong>Did you add new logs after generating?</strong> Just click <strong>Generate</strong> again — the app detects that your logs changed and re-drafts everything automatically, so the report always reflects your latest data.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────── STEP 4: AI ASSISTANT ─────────── -->
+    <section id="step-4" class="mp-guide-step is-open" data-step="4">
+      <button type="button" class="mp-guide-step-header" onclick="mpGuideToggle(this)">
+        <div class="mp-guide-step-num">4</div>
+        <div class="mp-guide-step-title">
+          <h2>Chat with your AI assistant</h2>
+          <p>The floating 🩺 button, always on your right</p>
+        </div>
+        <div class="mp-guide-step-chevron">▾</div>
+      </button>
+      <div class="mp-guide-step-body">
+        <div class="mp-guide-step-body-inner">
+          <p class="mp-guide-text">
+            Look for the floating 🩺 icon at the bottom-right of every page. You can drag it anywhere.
+            Click it to open a chat with an AI that has read access to your logs, competencies, and
+            workshops. It can also <strong>see images</strong> — attach a photo of a whiteboard, a
+            signed form, or a handwritten record and ask it to transcribe.
+          </p>
+
+          <div class="mp-guide-subhead">
+            <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            Example prompts — click <strong>Try it</strong> to send one right now
+          </div>
+
+          <div class="mp-guide-prompt">
+            <code>Write a first-draft introduction for my practicum report.</code>
+            <div class="mp-guide-prompt-actions">
+              <button type="button" class="mp-guide-btn-copy" onclick="mpGuideCopy(this, 'Write a first-draft introduction for my practicum report.')">📋 Copy</button>
+              <button type="button" class="mp-guide-btn-try" onclick="mpGuideTryPrompt('Write a first-draft introduction for my practicum report.')">✦ Try it</button>
+            </div>
+          </div>
+
+          <div class="mp-guide-prompt">
+            <code>How many daily logs have I recorded so far, and which units did I visit most?</code>
+            <div class="mp-guide-prompt-actions">
+              <button type="button" class="mp-guide-btn-copy" onclick="mpGuideCopy(this, 'How many daily logs have I recorded so far, and which units did I visit most?')">📋 Copy</button>
+              <button type="button" class="mp-guide-btn-try" onclick="mpGuideTryPrompt('How many daily logs have I recorded so far, and which units did I visit most?')">✦ Try it</button>
+            </div>
+          </div>
+
+          <div class="mp-guide-prompt">
+            <code>Suggest 5 realistic lessons I could have learned from my OPD rotation.</code>
+            <div class="mp-guide-prompt-actions">
+              <button type="button" class="mp-guide-btn-copy" onclick="mpGuideCopy(this, 'Suggest 5 realistic lessons I could have learned from my OPD rotation.')">📋 Copy</button>
+              <button type="button" class="mp-guide-btn-try" onclick="mpGuideTryPrompt('Suggest 5 realistic lessons I could have learned from my OPD rotation.')">✦ Try it</button>
+            </div>
+          </div>
+
+          <div class="mp-guide-tip">
+            <span class="mp-guide-tip-icon">📎</span>
+            <div><strong>Vision mode:</strong> Click the 📎 paperclip in the AI chat to attach an image, PDF, .docx, or .txt file (max 5 MB). Then ask <em>"Transcribe this"</em> or <em>"Summarise this document"</em>. Perfect for turning a photo of your handwritten logbook into typed text.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────── STEP 5: OTHER TOOLS ─────────── -->
+    <section id="step-5" class="mp-guide-step is-open" data-step="5">
+      <button type="button" class="mp-guide-step-header" onclick="mpGuideToggle(this)">
+        <div class="mp-guide-step-num">5</div>
+        <div class="mp-guide-step-title">
+          <h2>Other important tools</h2>
+          <p>Attachments, logs, workshops, and archive</p>
+        </div>
+        <div class="mp-guide-step-chevron">▾</div>
+      </button>
+      <div class="mp-guide-step-body">
+        <div class="mp-guide-step-body-inner">
+          <p class="mp-guide-text">
+            These are the pages you'll use less often, but they matter for keeping your records clean
+            and your final report strong.
+          </p>
+
+          <div class="mp-guide-grid">
+            <div class="mp-guide-grid-card">
+              <h4>
+                <svg viewBox="0 0 24 24"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+                All Attachments
+              </h4>
+              <p>Running multiple rotations (District → Teaching Hospital)? Manage them all here. Each attachment keeps its own logs, reports, and presentations.</p>
+            </div>
+
+            <div class="mp-guide-grid-card">
+              <h4>
+                <svg viewBox="0 0 24 24"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+                View Logs
+              </h4>
+              <p>A full timeline of every daily log you've submitted. Edit or delete individual entries — the AI will pick up the change on your next generation.</p>
+            </div>
+
+            <div class="mp-guide-grid-card">
+              <h4>
+                <svg viewBox="0 0 24 24"><path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                Workshops
+              </h4>
+              <p>Record any official training, orientation, or CPD session. The AI will mention them in the Workshops section of your report and the corresponding presentation slide.</p>
+            </div>
+
+            <div class="mp-guide-grid-card">
+              <h4>
+                <svg viewBox="0 0 24 24"><path d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
+                Archive
+              </h4>
+              <p>Accidentally deleted something? Everything that gets removed goes here first. One click restores it — nothing is gone forever.</p>
+            </div>
+          </div>
+
+          <div class="mp-guide-tip">
+            <span class="mp-guide-tip-icon">⚠️</span>
+            <div><strong>Deleting a log</strong> is soft — it moves to Archive. <strong>Deleting an attachment</strong> also moves to Archive but archives its reports too. Restore from Archive if you change your mind.</div>
+          </div>
+        </div>
+      </div>
+    </section>
 
   </div>
+
+  <!-- ═══════════════════ SUPPORT FOOTER ═══════════════════ -->
+  <div class="mp-guide-support">
+    <h3>Still stuck?</h3>
+    <p>If something doesn't work, report a bug directly to the ICT support team — we usually reply within a day.</p>
+    <a href="{% url 'contact' %}" class="mp-guide-cta" style="margin: 0 auto; display: inline-flex;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>
+      Contact support
+    </a>
+  </div>
+
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  'use strict';
+
+  var guide = document.getElementById('mp-guide');
+  if (!guide) return;
+
+  // Remove no-js class if it was added (we don't add it, but be safe)
+  guide.classList.remove('no-js');
+
+  /* ============================================================
+     1. Copy a prompt to clipboard
+     ============================================================ */
+  function fallbackCopy(text, done) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+    if (done) done();
+  }
+
+  window.mpGuideCopy = function (btn, text) {
+    var done = function () {
+      var original = btn.textContent;
+      btn.textContent = '✓ Copied';
+      btn.classList.add('copied');
+      setTimeout(function () {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1500);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function () {
+        fallbackCopy(text, done);
+      });
+    } else {
+      fallbackCopy(text, done);
+    }
+  };
+
+  /* ============================================================
+     2. Try a prompt in the AI assistant
+     ============================================================ */
+  window.mpGuideTryPrompt = function (prompt) {
+    var win = document.getElementById('mp-ai-window');
+    var input = document.getElementById('mp-ai-input');
+
+    if (!win || !input) {
+      // AI assistant not available on this page (shouldn't happen for auth users)
+      return;
+    }
+
+    // Open the AI window if it's closed
+    if (win.style.display !== 'flex' && typeof window.toggleAIWindow === 'function') {
+      window.toggleAIWindow();
+    }
+
+    // Prefill the message
+    setTimeout(function () {
+      input.value = prompt;
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    }, 120);
+  };
+
+  /* ============================================================
+     3. Toggle individual step
+     ============================================================ */
+  window.mpGuideToggle = function (headerBtn) {
+    var step = headerBtn.closest('.mp-guide-step');
+    if (step) step.classList.toggle('is-open');
+    mpGuideUpdateToggleLabel();
+  };
+
+  /* ============================================================
+     4. Toggle all steps
+     ============================================================ */
+  window.mpGuideToggleAll = function () {
+    var steps = guide.querySelectorAll('.mp-guide-step');
+    var anyClosed = false;
+    steps.forEach(function (s) {
+      if (!s.classList.contains('is-open')) anyClosed = true;
+    });
+
+    if (anyClosed) {
+      steps.forEach(function (s) { s.classList.add('is-open'); });
+    } else {
+      steps.forEach(function (s) { s.classList.remove('is-open'); });
+    }
+    mpGuideUpdateToggleLabel();
+  };
+
+  function mpGuideUpdateToggleLabel() {
+    var btn = document.getElementById('mp-guide-toggle-btn');
+    if (!btn) return;
+    var steps = guide.querySelectorAll('.mp-guide-step');
+    var allOpen = true;
+    steps.forEach(function (s) {
+      if (!s.classList.contains('is-open')) allOpen = false;
+    });
+    btn.textContent = allOpen ? 'Collapse all' : 'Expand all';
+  }
+
+  /* ============================================================
+     5. Sticky-nav active highlighting
+     ============================================================ */
+  if ('IntersectionObserver' in window) {
+    var navItems = guide.querySelectorAll('.mp-guide-nav-item');
+    var navObserver = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        var id = entry.target.id;
+        navItems.forEach(function (item) {
+          item.classList.toggle('is-active', item.getAttribute('href') === '#' + id);
+        });
+      });
+    }, { rootMargin: '-100px 0px -55% 0px', threshold: 0 });
+
+    guide.querySelectorAll('.mp-guide-step').forEach(function (s) {
+      navObserver.observe(s);
+    });
+  }
+
+  /* ============================================================
+     6. Reading progress bar — listens on .mp-main (the actual scroll container)
+     ============================================================ */
+  var scrollContainer = document.querySelector('.mp-main');
+  var progressFill = document.getElementById('mp-guide-progress-fill');
+
+  if (scrollContainer && progressFill) {
+    var rafPending = false;
+    var updateProgress = function () {
+      rafPending = false;
+      var max = scrollContainer.scrollHeight - scrollContainer.clientHeight;
+      var pct = max > 0 ? Math.min(100, (scrollContainer.scrollTop / max) * 100) : 0;
+      progressFill.style.width = pct + '%';
+    };
+    scrollContainer.addEventListener('scroll', function () {
+      if (!rafPending) {
+        rafPending = true;
+        requestAnimationFrame(updateProgress);
+      }
+    }, { passive: true });
+    // Initial
+    requestAnimationFrame(updateProgress);
+  }
+
+  /* ============================================================
+     7. Smooth scroll for nav items
+     ============================================================ */
+  guide.querySelectorAll('.mp-guide-nav-item').forEach(function (item) {
+    item.addEventListener('click', function (e) {
+      var href = item.getAttribute('href');
+      if (!href || href.charAt(0) !== '#') return;
+      var target = document.getElementById(href.slice(1));
+      if (!target) return;
+      e.preventDefault();
+
+      // Expand the target step if collapsed
+      if (!target.classList.contains('is-open')) {
+        target.classList.add('is-open');
+        mpGuideUpdateToggleLabel();
+      }
+
+      // Scroll within .mp-main
+      if (scrollContainer) {
+        var offset = 80; // account for sticky nav
+        var targetTop = target.offsetTop - offset;
+        scrollContainer.scrollTo({ top: targetTop, behavior: 'smooth' });
+      } else {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  });
+
+  // Initialise toggle label on load
+  mpGuideUpdateToggleLabel();
+
+})();
+</script>
 {% endblock %}
