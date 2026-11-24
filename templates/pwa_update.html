@@ -72,14 +72,14 @@
     color: #ffffff;
   }
   .mp-update-step-title { font-weight: 600; font-size: 14px; color: #111827; margin: 0; }
-  .mp-update-step-sub   { font-size: 12px; color: #6b7280; margin: 2px 0 0; }
+  .mp-update-step-sub   { font-size: 12px; color: #374151; margin: 2px 0 0; }
 </style>
 
 <div style="max-width: 640px; margin: 0 auto; padding-bottom: 32px;">
 
   <!-- Hero -->
   <div style="text-align: center; margin-top: 24px;">
-    <div class="mp-update-hero-icon"
+    <div id="update-hero-icon" class="mp-update-hero-icon"
          style="display: inline-flex; align-items: center; justify-content: center;
                 width: 88px; height: 88px; border-radius: 50%;
                 background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
@@ -87,12 +87,11 @@
                 box-shadow: 0 12px 32px rgba(16, 185, 129, 0.25);">
       🔄
     </div>
-    <h1 style="font-size: 28px; font-weight: 800; color: #111827; margin: 0 0 8px; letter-spacing: -0.5px;">
-      Update available
+    <h1 id="update-title" style="font-size: 28px; font-weight: 800; color: #111827; margin: 0 0 8px; letter-spacing: -0.5px;">
+      Checking for updates…
     </h1>
-    <p style="font-size: 15px; color: #6b7280; max-width: 440px; margin: 0 auto; line-height: 1.55;">
-      A newer version of MedPracticum Studio is ready to install.
-      Your data is safe — this only updates the app.
+    <p id="update-desc" style="font-size: 15px; color: #374151; max-width: 440px; margin: 0 auto; line-height: 1.55;">
+      Please wait while we check if a newer version is available.
     </p>
   </div>
 
@@ -104,64 +103,66 @@
               border: 1px solid #e5e7eb;
               padding: 28px;">
 
-    <h2 style="font-size: 11px; font-weight: 800; color: #9ca3af;
-               text-transform: uppercase; letter-spacing: 1px; margin: 0 0 16px;">
-      What this update does
-    </h2>
+    <div id="update-features-wrapper">
+      <h2 style="font-size: 11px; font-weight: 800; color: #374151;
+                 text-transform: uppercase; letter-spacing: 1px; margin: 0 0 16px;">
+        What this update does
+      </h2>
 
-    <div style="display: flex; flex-direction: column; gap: 14px; margin-bottom: 24px;">
+      <div style="display: flex; flex-direction: column; gap: 14px; margin-bottom: 24px;">
 
-      <div style="display: flex; align-items: flex-start; gap: 12px;">
-        <div style="width: 28px; height: 28px; border-radius: 50%;
-                    background: #ecfdf5; color: #059669;
-                    display: flex; align-items: center; justify-content: center;
-                    font-size: 14px; font-weight: 700; flex-shrink: 0; margin-top: 2px;">
-          ✓
+        <div style="display: flex; align-items: flex-start; gap: 12px;">
+          <div style="width: 28px; height: 28px; border-radius: 50%;
+                      background: #ecfdf5; color: #059669;
+                      display: flex; align-items: center; justify-content: center;
+                      font-size: 14px; font-weight: 700; flex-shrink: 0; margin-top: 2px;">
+            ✓
+          </div>
+          <div style="flex: 1; min-width: 0;">
+            <p style="font-size: 14px; font-weight: 600; color: #111827; margin: 0;">
+              Clears the app cache
+            </p>
+            <p style="font-size: 13px; color: #374151; margin: 2px 0 0;">
+              Old cached files are removed so the new version loads cleanly.
+            </p>
+          </div>
         </div>
-        <div style="flex: 1; min-width: 0;">
-          <p style="font-size: 14px; font-weight: 600; color: #111827; margin: 0;">
-            Clears the app cache
-          </p>
-          <p style="font-size: 13px; color: #6b7280; margin: 2px 0 0;">
-            Old cached files are removed so the new version loads cleanly.
-          </p>
+
+        <div style="display: flex; align-items: flex-start; gap: 12px;">
+          <div style="width: 28px; height: 28px; border-radius: 50%;
+                      background: #ecfdf5; color: #059669;
+                      display: flex; align-items: center; justify-content: center;
+                      font-size: 14px; font-weight: 700; flex-shrink: 0; margin-top: 2px;">
+            ✓
+          </div>
+          <div style="flex: 1; min-width: 0;">
+            <p style="font-size: 14px; font-weight: 600; color: #111827; margin: 0;">
+              Refreshes the service worker
+            </p>
+            <p style="font-size: 13px; color: #374151; margin: 2px 0 0;">
+              The background worker is replaced with the latest version.
+            </p>
+          </div>
         </div>
+
+        <div style="display: flex; align-items: flex-start; gap: 12px;">
+          <div style="width: 28px; height: 28px; border-radius: 50%;
+                      background: #ecfdf5; color: #059669;
+                      display: flex; align-items: center; justify-content: center;
+                      font-size: 14px; font-weight: 700; flex-shrink: 0; margin-top: 2px;">
+            ✓
+          </div>
+          <div style="flex: 1; min-width: 0;">
+            <p style="font-size: 14px; font-weight: 600; color: #111827; margin: 0;">
+              Keeps your data intact
+            </p>
+            <p style="font-size: 13px; color: #374151; margin: 2px 0 0;">
+              Logs, attachments and reports stay on the server. Nothing is deleted.
+            </p>
+          </div>
+        </div>
+
       </div>
-
-      <div style="display: flex; align-items: flex-start; gap: 12px;">
-        <div style="width: 28px; height: 28px; border-radius: 50%;
-                    background: #ecfdf5; color: #059669;
-                    display: flex; align-items: center; justify-content: center;
-                    font-size: 14px; font-weight: 700; flex-shrink: 0; margin-top: 2px;">
-          ✓
-        </div>
-        <div style="flex: 1; min-width: 0;">
-          <p style="font-size: 14px; font-weight: 600; color: #111827; margin: 0;">
-            Refreshes the service worker
-          </p>
-          <p style="font-size: 13px; color: #6b7280; margin: 2px 0 0;">
-            The background worker is replaced with the latest version.
-          </p>
-        </div>
-      </div>
-
-      <div style="display: flex; align-items: flex-start; gap: 12px;">
-        <div style="width: 28px; height: 28px; border-radius: 50%;
-                    background: #ecfdf5; color: #059669;
-                    display: flex; align-items: center; justify-content: center;
-                    font-size: 14px; font-weight: 700; flex-shrink: 0; margin-top: 2px;">
-          ✓
-        </div>
-        <div style="flex: 1; min-width: 0;">
-          <p style="font-size: 14px; font-weight: 600; color: #111827; margin: 0;">
-            Keeps your data intact
-          </p>
-          <p style="font-size: 13px; color: #6b7280; margin: 2px 0 0;">
-            Logs, attachments and reports stay on the server. Nothing is deleted.
-          </p>
-        </div>
-      </div>
-
     </div>
 
     <!-- Progress steps (hidden until update starts) -->
@@ -207,14 +208,14 @@
       </p>
     </div>
 
-    <!-- CTA button — INLINE STYLES to guarantee visibility regardless of Tailwind build -->
+    <!-- CTA button -->
     <button type="button"
             id="update-now-btn"
-            onclick="mpPerformUpdate()"
+            disabled
             style="
               width: 100%;
-              background: linear-gradient(135deg, #059669 0%, #10b981 100%);
-              color: #ffffff;
+              background: #e5e7eb;
+              color: #9ca3af;
               font-family: inherit;
               font-weight: 800;
               font-size: 16px;
@@ -222,18 +223,14 @@
               border: 0;
               border-radius: 12px;
               padding: 16px 24px;
-              cursor: pointer;
-              box-shadow: 0 4px 14px rgba(5, 150, 105, 0.4);
-              transition: transform 0.15s ease, box-shadow 0.2s ease, opacity 0.2s;
-            "
-            onmouseover="if(!this.disabled) { this.style.transform='translateY(-1px)'; this.style.boxShadow='0 6px 20px rgba(5, 150, 105, 0.5)'; }"
-            onmouseout="if(!this.disabled) { this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 14px rgba(5, 150, 105, 0.4)'; }"
-            onmousedown="if(!this.disabled) { this.style.transform='translateY(1px)'; }"
-            onmouseup="if(!this.disabled) { this.style.transform='translateY(-1px)'; }">
-      ⚡ Update to latest version
+              cursor: not-allowed;
+              box-shadow: none;
+              transition: all 0.2s ease;
+            ">
+      Checking…
     </button>
 
-    <p style="text-align: center; font-size: 12px; color: #9ca3af; margin: 12px 0 0;">
+    <p id="update-hint" style="text-align: center; font-size: 12px; color: #374151; margin: 12px 0 0;">
       The page will reload automatically when the update finishes.
     </p>
   </div>
@@ -246,66 +243,186 @@
 </div>
 
 <script>
-async function mpPerformUpdate() {
-  var btn      = document.getElementById('update-now-btn');
-  var progress = document.getElementById('update-progress');
-  var success  = document.getElementById('update-success');
+  // ============================================================
+  // 1. CHECK FOR UPDATES
+  // ============================================================
+  async function checkForUpdates() {
+    var title = document.getElementById('update-title');
+    var desc = document.getElementById('update-desc');
+    var btn = document.getElementById('update-now-btn');
+    var hint = document.getElementById('update-hint');
+    var featuresWrapper = document.getElementById('update-features-wrapper');
+    var heroIcon = document.getElementById('update-hero-icon');
 
-  var stepCaches = document.getElementById('step-caches');
-  var stepSw     = document.getElementById('step-sw');
-  var stepReload = document.getElementById('step-reload');
+    // Default "checking" state
+    title.textContent = "Checking for updates…";
+    desc.textContent = "Please wait while we check if a newer version is available.";
+    
+    if (!('serviceWorker' in navigator)) {
+      title.textContent = "Updates not supported";
+      desc.textContent = "Your browser does not support service workers, which are required for the update system.";
+      btn.textContent = "Unavailable";
+      return;
+    }
 
-  // Disable button, show progress
-  btn.disabled = true;
-  btn.style.opacity = '0.5';
-  btn.style.cursor = 'not-allowed';
-  btn.textContent = 'Updating…';
-  progress.style.display = 'block';
+    try {
+      var reg = await navigator.serviceWorker.getRegistration();
 
-  function markStep(el, state) {
-    el.classList.remove('active', 'done');
-    if (state) el.classList.add(state);
-    var icon = el.querySelector('.mp-update-step-icon');
-    if (state === 'active') {
-      icon.innerHTML = '<span class="mp-update-spin">⟳</span>';
-    } else if (state === 'done') {
-      icon.textContent = '✓';
+      if (!reg) {
+        title.textContent = "App not installed";
+        desc.textContent = "MedPracticum Studio does not appear to be installed as an app on this device.";
+        btn.textContent = "No service worker found";
+        featuresWrapper.style.display = 'none';
+        hint.style.display = 'none';
+        return;
+      }
+
+      // Check if there's an update waiting
+      if (reg.waiting) {
+        showUpdateAvailable();
+        return;
+      }
+
+      // Check if an update is currently downloading
+      if (reg.installing) {
+        title.textContent = "Downloading update…";
+        desc.textContent = "A new version is being downloaded. Please wait.";
+        btn.textContent = "Downloading…";
+        
+        reg.installing.addEventListener('statechange', function() {
+          if (reg.installing.state === 'installed') {
+            showUpdateAvailable();
+          }
+        });
+        return;
+      }
+
+      // No update waiting
+      showUpToDate();
+
+    } catch (err) {
+      console.error('Update check failed:', err);
+      title.textContent = "Could not check for updates";
+      desc.textContent = "An error occurred. Please try again later.";
+      btn.textContent = "Retry";
+      btn.disabled = false;
+      btn.style.background = '#059669';
+      btn.style.color = '#ffffff';
+      btn.style.cursor = 'pointer';
+      btn.onclick = checkForUpdates;
     }
   }
 
-  try {
-    // Step 1 — clear caches
-    markStep(stepCaches, 'active');
-    await new Promise(function (r) { setTimeout(r, 300); });
-    if ('caches' in window) {
-      var names = await caches.keys();
-      await Promise.all(names.map(function (n) { return caches.delete(n); }));
-    }
-    markStep(stepCaches, 'done');
+  // ============================================================
+  // 2. STATE UI HANDLERS
+  // ============================================================
+  function showUpdateAvailable() {
+    document.getElementById('update-title').textContent = "Update available";
+    document.getElementById('update-desc').textContent = "A newer version of MedPracticum Studio is ready to install. Your data is safe.";
+    
+    var btn = document.getElementById('update-now-btn');
+    btn.textContent = "⚡ Update to latest version";
+    btn.disabled = false;
+    btn.style.background = 'linear-gradient(135deg, #059669 0%, #10b981 100%)';
+    btn.style.color = '#ffffff';
+    btn.style.cursor = 'pointer';
+    btn.style.boxShadow = '0 4px 14px rgba(5, 150, 105, 0.4)';
+    btn.onclick = mpPerformUpdate;
 
-    // Step 2 — unregister service workers
-    await new Promise(function (r) { setTimeout(r, 200); });
-    markStep(stepSw, 'active');
-    if ('serviceWorker' in navigator) {
-      var regs = await navigator.serviceWorker.getRegistrations();
-      await Promise.all(regs.map(function (r) { return r.unregister(); }));
-    }
-    markStep(stepSw, 'done');
-
-    // Step 3 — reload fresh
-    await new Promise(function (r) { setTimeout(r, 200); });
-    markStep(stepReload, 'active');
-
-    success.style.display = 'block';
-    progress.style.display = 'none';
-    await new Promise(function (r) { setTimeout(r, 800); });
-    window.location.replace('/?updated=' + Date.now());
-  } catch (err) {
-    console.error('Update failed:', err);
-    // Fallback: hard reload so browser fetches fresh
-    await new Promise(function (r) { setTimeout(r, 800); });
-    window.location.reload();
+    document.getElementById('update-features-wrapper').style.display = 'block';
+    document.getElementById('update-hint').style.display = 'block';
+    document.getElementById('update-hero-icon').style.background = 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)';
   }
-}
+
+  function showUpToDate() {
+    document.getElementById('update-title').textContent = "You're up to date";
+    document.getElementById('update-desc').textContent = "MedPracticum Studio is running the latest version available on this device. You will be notified when a new update is available.";
+    
+    var btn = document.getElementById('update-now-btn');
+    btn.textContent = "No updates available";
+    btn.disabled = true;
+    btn.style.background = '#e5e7eb';
+    btn.style.color = '#9ca3af';
+    btn.style.cursor = 'not-allowed';
+    btn.style.boxShadow = 'none';
+
+    document.getElementById('update-features-wrapper').style.display = 'none';
+    document.getElementById('update-hint').style.display = 'none';
+    
+    // Change hero icon to a checkmark to indicate it's up to date
+    document.getElementById('update-hero-icon').innerHTML = '✅';
+    document.getElementById('update-hero-icon').style.background = 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)';
+  }
+
+  // ============================================================
+  // 3. EXECUTE UPDATE
+  // ============================================================
+  async function mpPerformUpdate() {
+    var btn      = document.getElementById('update-now-btn');
+    var progress = document.getElementById('update-progress');
+    var success  = document.getElementById('update-success');
+    var hint     = document.getElementById('update-hint');
+
+    var stepCaches = document.getElementById('step-caches');
+    var stepSw     = document.getElementById('step-sw');
+    var stepReload = document.getElementById('step-reload');
+
+    // Disable button, show progress
+    btn.disabled = true;
+    btn.style.opacity = '0.6';
+    btn.style.cursor = 'not-allowed';
+    btn.textContent = 'Updating…';
+    hint.style.display = 'none';
+    document.getElementById('update-features-wrapper').style.display = 'none';
+    progress.style.display = 'block';
+
+    function markStep(el, state) {
+      el.classList.remove('active', 'done');
+      if (state) el.classList.add(state);
+      var icon = el.querySelector('.mp-update-step-icon');
+      if (state === 'active') {
+        icon.innerHTML = '<span class="mp-update-spin">⟳</span>';
+      } else if (state === 'done') {
+        icon.textContent = '✓';
+      }
+    }
+
+    try {
+      // Step 1 — clear caches
+      markStep(stepCaches, 'active');
+      await new Promise(function (r) { setTimeout(r, 300); });
+      if ('caches' in window) {
+        var names = await caches.keys();
+        await Promise.all(names.map(function (n) { return caches.delete(n); }));
+      }
+      markStep(stepCaches, 'done');
+
+      // Step 2 — unregister service workers
+      await new Promise(function (r) { setTimeout(r, 200); });
+      markStep(stepSw, 'active');
+      if ('serviceWorker' in navigator) {
+        var regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(function (r) { return r.unregister(); }));
+      }
+      markStep(stepSw, 'done');
+
+      // Step 3 — reload fresh
+      await new Promise(function (r) { setTimeout(r, 200); });
+      markStep(stepReload, 'active');
+
+      success.style.display = 'block';
+      progress.style.display = 'none';
+      await new Promise(function (r) { setTimeout(r, 800); });
+      window.location.replace('/?updated=' + Date.now());
+    } catch (err) {
+      console.error('Update failed:', err);
+      // Fallback: hard reload so browser fetches fresh
+      await new Promise(function (r) { setTimeout(r, 800); });
+      window.location.reload();
+    }
+  }
+
+  // Run check on page load
+  document.addEventListener('DOMContentLoaded', checkForUpdates);
 </script>
 {% endblock %}

@@ -1,11 +1,8 @@
 // {% load static %}
-const VERSION = 'v6'; // ✅ bumped from 'v5' — this deploy removes skipWaiting() so the update prompt can actually appear.
-                     // ⚠️ BUMP THIS ON EVERY DEPLOY. The browser uses the file content to detect updates;
-                     //    if only Django code changes and this file is byte-identical, no update prompt fires.
+const VERSION = 'v8'; // ⚠️ BUMP ON EVERY DEPLOY — browser detects updates via file bytes
 const STATIC_CACHE = 'mp-static-' + VERSION;
-const PAGES_CACHE = 'mp-pages-' + VERSION;
-const OFFLINE_URL = '/offline/';
-const CACHED_PAGES = ['/', '/logs/new/']; // pages students need with no signal
+const PAGES_CACHE  = 'mp-pages-'  + VERSION;
+const OFFLINE_URL  = '/offline/';
 
 const PRECACHE = [
   OFFLINE_URL,
@@ -19,20 +16,17 @@ const PRECACHE = [
 ];
 
 // ─────────────────────────────────────────────────────────────
-// INSTALL — cache the shell. Do NOT skipWaiting(), or the update
-// banner in base.html can never detect a waiting SW.
+// INSTALL — cache the static shell. No skipWaiting() so the
+// update banner can detect a waiting SW.
 // ─────────────────────────────────────────────────────────────
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(STATIC_CACHE)
-      .then((cache) => cache.addAll(PRECACHE))
-    // NOTE: no self.skipWaiting() here on purpose.
+    caches.open(STATIC_CACHE).then((cache) => cache.addAll(PRECACHE))
   );
 });
 
 // ─────────────────────────────────────────────────────────────
-// ACTIVATE — clean up any old "mp-*" caches from previous versions
-// and claim clients (harmless once we're actually activated).
+// ACTIVATE — wipe old mp-* caches, claim clients.
 // ─────────────────────────────────────────────────────────────
 self.addEventListener('activate', (event) => {
   event.waitUntil(
@@ -46,12 +40,6 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// ─────────────────────────────────────────────────────────────
-// MESSAGE — support an explicit SKIP_WAITING trigger.
-// The /update/ page in this build purges caches + unregisters,
-// so this handler is defensive (not strictly required), but it
-// lets a future "quick update" path activate immediately.
-// ─────────────────────────────────────────────────────────────
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
@@ -59,8 +47,10 @@ self.addEventListener('message', (event) => {
 });
 
 // ─────────────────────────────────────────────────────────────
-// FETCH — same routing as before. Never touch /api/, /admin/,
-// or the /update/ page (which must always come from network).
+// FETCH — the only change that matters for speed:
+//   * static   → stale-while-revalidate (already was)
+//   * navigate → stale-while-revalidate (was network-first)
+// Everything else is excluded exactly like v6.
 // ─────────────────────────────────────────────────────────────
 self.addEventListener('fetch', (event) => {
   const req = event.request;
@@ -68,47 +58,36 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
-  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/admin/')) return;
-  if (url.pathname.startsWith('/update')) return;          // always fresh
-  if (url.pathname === '/service-worker.js') return;       // never cache the SW itself
+  if (url.pathname.startsWith('/api/')) return;
+  if (url.pathname.startsWith('/admin/')) return;
+  if (url.pathname.startsWith('/update')) return;
+  if (url.pathname === '/service-worker.js') return;
 
   if (url.pathname.startsWith('/static/')) {
-    event.respondWith(staleWhileRevalidate(req));
+    event.respondWith(staleWhileRevalidate(req, STATIC_CACHE));
     return;
   }
 
   if (req.mode === 'navigate') {
-    event.respondWith(networkFirstPage(req, url));
+    event.respondWith(staleWhileRevalidate(req, PAGES_CACHE));
   }
 });
 
-// Static files: answer instantly from cache, refresh the cache in the background.
-async function staleWhileRevalidate(req) {
-  const cache = await caches.open(STATIC_CACHE);
+// Answer from cache instantly, refresh in the background.
+// Falls back to network when not cached, then to /offline/.
+async function staleWhileRevalidate(req, cacheName) {
+  const cache = await caches.open(cacheName);
   const cached = await cache.match(req);
+
   const network = fetch(req)
     .then((res) => {
-      if (res.ok) cache.put(req, res.clone());
+      // Skip redirects (e.g. bounced to login) and failures
+      if (res && res.ok && !res.redirected) {
+        cache.put(req, res.clone());
+      }
       return res;
     })
     .catch(() => null);
-  return cached || (await network) || Response.error();
-}
 
-// Pages: try the server first; if it fails, fall back to the last saved copy.
-async function networkFirstPage(req, url) {
-  const cache = await caches.open(PAGES_CACHE);
-  try {
-    const res = await fetch(req);
-    // Never store redirects (e.g. bounced to the login page)
-    if (res.ok && !res.redirected && CACHED_PAGES.includes(url.pathname)) {
-      cache.put(url.pathname, res.clone());
-    }
-    return res;
-  } catch (err) {
-    const cached = await cache.match(url.pathname);
-    if (cached) return cached;
-    const offline = await caches.match(OFFLINE_URL);
-    return offline || Response.error();
-  }
+  return cached || (await network) || caches.match(OFFLINE_URL);
 }

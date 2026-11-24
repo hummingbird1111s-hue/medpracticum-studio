@@ -46,7 +46,7 @@ try:
         try:
             ai_client = genai.Client(
                 api_key=_gemini_key,
-                http_options={'timeout': 20000},
+                http_options={'timeout': 10000},
             )
         except (TypeError, ValueError, AttributeError):
             ai_client = genai.Client(api_key=_gemini_key)

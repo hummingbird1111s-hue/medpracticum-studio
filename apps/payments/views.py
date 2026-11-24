@@ -14,7 +14,8 @@ logger = logging.getLogger(__name__)
 
 
 def _price():
-    return getattr(settings, 'SUBSCRIPTION_PRICE', 50)
+    # Default fallback is now 45 instead of 50
+    return getattr(settings, 'SUBSCRIPTION_PRICE', 45)
 
 
 def _get_active_session(request):
@@ -28,18 +29,25 @@ def _get_active_session(request):
 def _compute_expected_expiry(session):
     """
     Predicted expiry if the user pays now, tied to their practicum period
-    with a 30-day grace so they can finalize the report after the end date.
+    with a 5-day grace so they can finalize the report after the end date.
 
     Returns a `date` object (not `datetime`) because `session.end_date` is
     a DateField. Comparing a `date` to a `datetime` raises TypeError in Python.
     """
     if session and getattr(session, 'end_date', None):
-        grace_end = (timezone.now() + timedelta(days=30)).date()
         end = session.end_date
+        
         # Defensive: if the model is ever migrated to DateTimeField, still return date
         if isinstance(end, datetime):
             end = end.date()
-        return max(end, grace_end)
+            
+        # Base date is the later of (attachment end date, today).
+        # This ensures that if someone pays *after* their attachment ended,
+        # they still get a full 5 days of access from today.
+        base_date = max(end, timezone.now().date())
+        
+        # Add the 5-day grace period
+        return base_date + timedelta(days=5)
 
     # No attachment → 90-day fallback (rare; UI blocks payment for this case)
     return (timezone.now() + timedelta(days=90)).date()

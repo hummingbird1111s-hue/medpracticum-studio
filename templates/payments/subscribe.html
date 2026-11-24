@@ -10,7 +10,7 @@
       💳
     </div>
     <h1 class="text-3xl font-bold text-gray-900 mb-2">Unlock Report &amp; Presentation Builder</h1>
-    <p class="text-sm text-gray-500 max-w-2xl mx-auto">
+    <p class="text-sm text-gray-700 max-w-2xl mx-auto">
       One payment covers your entire practicum period. Unlimited daily logs,
       AI-drafted reports, and slide decks — from day one to your final defence.
     </p>
@@ -68,7 +68,7 @@
         <h2 class="text-lg font-bold text-amber-900 mb-2">Start your attachment first</h2>
         <p class="text-sm text-amber-800 mb-4">
           Your subscription is tied to your practicum period — that way you pay once
-          and stay active from your attachment's start date through 30 days after it ends.
+          and stay active from your attachment's start date through 5 days after it ends.
           We need to know which facility and which dates so your access matches.
         </p>
         <a href="{% url 'start_attachment' %}"
@@ -88,9 +88,9 @@
       🏥
     </div>
     <div class="min-w-0 flex-1">
-      <p class="text-xs font-bold text-gray-400 uppercase tracking-wide mb-0.5">Current attachment</p>
+      <p class="text-xs font-bold text-gray-600 uppercase tracking-wide mb-0.5">Current attachment</p>
       <p class="text-sm font-semibold text-gray-900 truncate">{{ session.facility.name }}</p>
-      <p class="text-xs text-gray-500">
+      <p class="text-xs text-gray-700">
         {{ session.start_date|date:"j M Y" }} → {{ session.end_date|date:"j M Y" }}
       </p>
     </div>
@@ -120,54 +120,54 @@
         {% if session_end_date %}
         <p class="text-xs mt-1 text-emerald-800">
           Aligned with your attachment end date ({{ session_end_date|date:"j M Y" }})
-          plus a 30-day grace period to finalize your report.
+          plus a <strong>5-day grace period</strong> to finalize your report.
         </p>
         {% endif %}
       </div>
 
-      <h3 class="text-sm font-bold uppercase tracking-wide text-gray-500 mb-4">
+      <h3 class="text-sm font-bold uppercase tracking-wide text-gray-700 mb-4">
         What's included
       </h3>
       <ul class="space-y-3 mb-6">
         <li class="flex items-start gap-3">
-          <span class="text-emerald-500 mt-0.5 flex-shrink-0">
+          <span class="text-emerald-600 mt-0.5 flex-shrink-0 font-bold">
             <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;"><path d="M5 13l4 4L19 7"/></svg>
           </span>
           <div>
             <p class="text-sm font-semibold text-gray-900">Unlimited daily logs</p>
-            <p class="text-xs text-gray-600">Record as many activities as you need — no cap.</p>
+            <p class="text-xs text-gray-700">Record as many activities as you need — no cap.</p>
           </div>
         </li>
         <li class="flex items-start gap-3">
-          <span class="text-emerald-500 mt-0.5 flex-shrink-0">
+          <span class="text-emerald-600 mt-0.5 flex-shrink-0 font-bold">
             <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;"><path d="M5 13l4 4L19 7"/></svg>
           </span>
           <div>
             <p class="text-sm font-semibold text-gray-900">AI-drafted reports (PDF + Word)</p>
-            <p class="text-xs text-gray-600">Full COHY-standard report from your own logs.</p>
+            <p class="text-xs text-gray-700">Full COHY-standard report from your own logs.</p>
           </div>
         </li>
         <li class="flex items-start gap-3">
-          <span class="text-emerald-500 mt-0.5 flex-shrink-0">
+          <span class="text-emerald-600 mt-0.5 flex-shrink-0 font-bold">
             <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;"><path d="M5 13l4 4L19 7"/></svg>
           </span>
           <div>
             <p class="text-sm font-semibold text-gray-900">PowerPoint presentations</p>
-            <p class="text-xs text-gray-600">Any template, AI speaker notes, PDF preview.</p>
+            <p class="text-xs text-gray-700">Any template, AI speaker notes, PDF preview.</p>
           </div>
         </li>
         <li class="flex items-start gap-3">
-          <span class="text-emerald-500 mt-0.5 flex-shrink-0">
+          <span class="text-emerald-600 mt-0.5 flex-shrink-0 font-bold">
             <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;"><path d="M5 13l4 4L19 7"/></svg>
           </span>
           <div>
             <p class="text-sm font-semibold text-gray-900">All AI assistant features</p>
-            <p class="text-xs text-gray-600">Chat, image transcription, report coaching.</p>
+            <p class="text-xs text-gray-700">Chat, image transcription, report coaching.</p>
           </div>
         </li>
       </ul>
 
-      <!-- Payment CTA — Paystack placeholder (wire real checkout later) -->
+      <!-- Payment CTA -->
       <div class="border-t border-gray-100 pt-6">
         <button type="button" id="paystack-btn"
                 data-callback-url="{% url 'paystack_callback' %}"
@@ -177,33 +177,34 @@
                 class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg py-3 text-base shadow-md transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
           Pay ₵{{ price }} with Paystack
         </button>
-        <p class="text-xs text-gray-500 text-center mt-3">
+        <p class="text-xs text-gray-700 text-center mt-3">
           Secure checkout · Powered by Paystack · MTN MoMo, Visa, Mastercard accepted
         </p>
-        <p class="text-xs text-gray-400 text-center mt-1">
+        <p class="text-xs text-gray-600 text-center mt-1">
           You'll enter your payment details on Paystack's secure page.
         </p>
       </div>
 
-      {# ═══════════════ STAFF TEST MODE — high-contrast card ═══════════════ #}
+      {# ═══════════════ STAFF TEST MODE — forced inline styles for visibility ═══════════════ #}
       {% if user.is_staff %}
-      <div class="mt-6 bg-gray-900 rounded-xl p-5 shadow-lg">
+      <div class="mt-6 rounded-xl p-5 shadow-lg" style="background-color: #111827;">
         <div class="flex items-start gap-3 mb-4">
           <div class="text-2xl flex-shrink-0">🧪</div>
           <div class="flex-1 min-w-0">
-            <p class="text-sm font-bold text-white mb-1">Staff Test Mode</p>
-            <p class="text-xs text-gray-300 leading-relaxed">
-              Simulates a successful payment for <strong class="text-white">{{ session.facility.name }}</strong>'s
+            <p class="text-sm font-bold mb-1" style="color: #ffffff;">Staff Test Mode</p>
+            <p class="text-xs leading-relaxed" style="color: #d1d5db;">
+              Simulates a successful payment for <strong style="color: #ffffff;">{{ session.facility.name }}</strong>'s
               period (until {{ expected_expires_at|date:"j M Y" }}). Use this to verify the
               report/presentation flow before Paystack is wired.
-              <strong class="text-amber-300">Remove before launch.</strong>
+              <strong style="color: #fbbf24;">Remove before launch.</strong>
             </p>
           </div>
         </div>
         <form method="post" action="{% url 'subscribe_activate_test' %}">
           {% csrf_token %}
           <button type="submit"
-                  class="w-full bg-amber-400 hover:bg-amber-300 text-gray-900 font-bold rounded-lg py-3 text-sm shadow-md transition-colors">
+                  class="w-full font-bold rounded-lg py-3 text-sm shadow-md transition-colors"
+                  style="background-color: #fbbf24; color: #111827;">
             Activate for testing (staff only)
           </button>
         </form>
@@ -242,23 +243,11 @@
         return;
       }
 
-      // ─────────────────────────────────────────────────────────────
       // Paystack Inline JS wiring — placeholder for now.
       // When you're ready to go live:
-      //   1. Add this to base.html <head>:
-      //        <script src="https://js.paystack.co/v1/inline.js"></script>
-      //   2. Replace the alert below with:
-      //        PaystackPop.setup({
-      //          key: publicKey,
-      //          email: userEmail,
-      //          amount: Math.round(price * 100),   // pesewas
-      //          currency: 'GHS',
-      //          callback: function (response) {
-      //            window.location.href = callbackUrl + '?reference=' + response.reference;
-      //          },
-      //          onClose: function () { /* no-op */ }
-      //        }).openIframe();
-      // ─────────────────────────────────────────────────────────────
+      //   1. Add the Paystack inline script to base.html <head>.
+      //   2. Replace the alert below with the proper setup object.
+      //      (Refer to Paystack docs for the exact syntax).
       alert('Paystack checkout not wired yet — public key is set, but the JS snippet still needs to be enabled.');
     });
   });
