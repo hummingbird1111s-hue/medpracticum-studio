@@ -1,255 +1,566 @@
+
 {% extends 'base.html' %}
+
 {% block title %}Subscribe · MedPracticum Studio{% endblock %}
 
 {% block content %}
-<div class="max-w-3xl mx-auto space-y-6">
+<style>
+  /* Subscription page: explicit, high-contrast colors.
+     Scoped to this page so the shared base.html remains untouched. */
+  #subscribe-page {
+    color: #1f2937;
+    color-scheme: light;
+  }
+
+  #subscribe-page,
+  #subscribe-page * {
+    box-sizing: border-box;
+  }
+
+  #subscribe-page .subscribe-heading,
+  #subscribe-page .subscribe-card-title,
+  #subscribe-page .subscribe-body-text {
+    color: #111827 !important;
+  }
+
+  #subscribe-page .subscribe-muted {
+    color: #4b5563 !important;
+  }
+
+  #subscribe-page .subscribe-soft-muted {
+    color: #525f70 !important;
+  }
+
+  #subscribe-page .subscribe-green-text {
+    color: #065f46 !important;
+  }
+
+  #subscribe-page .subscribe-amber-text {
+    color: #78350f !important;
+  }
+
+  #subscribe-page .subscribe-light-surface {
+    background-color: #ffffff !important;
+  }
+
+  #subscribe-page .subscribe-emerald-surface {
+    background-color: #ecfdf5 !important;
+  }
+
+  #subscribe-page .subscribe-amber-surface {
+    background-color: #fffbeb !important;
+  }
+
+  #subscribe-page .subscribe-primary-button {
+    background-color: #047857 !important;
+    color: #ffffff !important;
+  }
+
+  #subscribe-page .subscribe-primary-button:hover {
+    background-color: #065f46 !important;
+  }
+
+  #subscribe-page .subscribe-secondary-button {
+    background-color: #ffffff !important;
+    color: #065f46 !important;
+    border: 1px solid #a7f3d0 !important;
+  }
+
+  #subscribe-page .subscribe-secondary-button:hover {
+    background-color: #ecfdf5 !important;
+  }
+
+  /* White text is intentional only on the dark price header. */
+  #subscribe-page .subscribe-price-header,
+  #subscribe-page .subscribe-price-header * {
+    color: #ffffff !important;
+  }
+
+  #subscribe-page .subscribe-price-header .subscribe-price-kicker,
+  #subscribe-page .subscribe-price-header .subscribe-price-caption {
+    color: #d1fae5 !important;
+  }
+
+  #subscribe-page .subscribe-feature-title {
+    color: #111827 !important;
+  }
+
+  #subscribe-page .subscribe-feature-description {
+    color: #4b5563 !important;
+  }
+
+  #subscribe-page .subscribe-trust-strip {
+    color: #064e3b !important;
+  }
+
+  #subscribe-page #paystack-btn {
+    background-color: #047857 !important;
+    color: #ffffff !important;
+  }
+
+  #subscribe-page #paystack-btn:hover {
+    background-color: #065f46 !important;
+  }
+
+  #subscribe-page .subscribe-staff-panel {
+    background: #111827 !important;
+    color: #f9fafb !important;
+  }
+
+  #subscribe-page .subscribe-staff-panel p {
+    color: #d1d5db !important;
+  }
+
+  #subscribe-page .subscribe-staff-panel .staff-panel-title {
+    color: #ffffff !important;
+  }
+
+  #subscribe-page .subscribe-staff-panel .staff-panel-warning {
+    color: #fbbf24 !important;
+  }
+
+  #subscribe-page .subscribe-staff-panel button {
+    background: #fbbf24 !important;
+    color: #111827 !important;
+  }
+
+  #subscribe-page a:focus-visible,
+  #subscribe-page button:focus-visible {
+    outline: 3px solid #0f766e;
+    outline-offset: 3px;
+  }
+
+  @media (max-width: 480px) {
+    #subscribe-page .subscribe-page-title {
+      font-size: 1.65rem;
+      line-height: 1.2;
+    }
+
+    #subscribe-page .subscribe-price-amount {
+      font-size: 3.25rem;
+    }
+  }
+</style>
+
+<div id="subscribe-page" class="max-w-3xl mx-auto space-y-6">
 
   <!-- Header -->
   <div class="text-center mt-4">
+
     <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 mb-4 shadow-sm text-3xl">
       💳
     </div>
-    <h1 class="text-3xl font-bold text-gray-900 mb-2">Unlock Report &amp; Presentation Builder</h1>
-    <p class="text-sm text-gray-700 max-w-2xl mx-auto">
+
+    <h1 class="subscribe-heading subscribe-page-title text-3xl font-bold text-gray-900 mb-2">
+      Unlock Report &amp; Presentation Builder
+    </h1>
+
+    <p class="subscribe-muted text-sm text-gray-700 max-w-2xl mx-auto">
       One payment covers your entire practicum period. Unlimited daily logs,
       AI-drafted reports, and slide decks — from day one to your final defence.
     </p>
+
   </div>
 
   {% if subscribed %}
+
   {# ═══════════════ STATE A — ALREADY SUBSCRIBED ═══════════════ #}
-  <div class="bg-emerald-50 border-2 border-emerald-300 rounded-2xl p-6 text-center shadow-sm">
+
+  <div class="subscribe-emerald-surface bg-emerald-50 border-2 border-emerald-300 rounded-2xl p-6 text-center shadow-sm">
+
     <div class="text-4xl mb-3">✅</div>
-    <h2 class="text-xl font-bold text-emerald-900 mb-2">You're all set!</h2>
+
+    <h2 class="text-xl font-bold text-emerald-900 mb-2">
+      You're all set!
+    </h2>
+
     <p class="text-sm text-emerald-800 mb-1">
       Your subscription is active
+
       {% if subscription.expires_at %}
         until <strong>{{ subscription.expires_at|date:"j F Y" }}</strong>
       {% endif %}.
     </p>
 
     {% if days_remaining == 0 %}
+
     <div class="bg-amber-100 border border-amber-300 rounded-lg px-3 py-2 mb-3 mt-3 text-sm text-amber-900 inline-block">
       ⏰ Your subscription expires <strong>today</strong>. Renew to keep access.
     </div>
+
     {% elif days_remaining <= 7 %}
+
     <div class="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3 mt-3 text-sm text-amber-900 inline-block">
       ⏰ Only <strong>{{ days_remaining }} day{{ days_remaining|pluralize }}</strong> remaining.
     </div>
+
     {% elif days_remaining %}
+
     <p class="text-xs text-emerald-700 mb-3">
       ⏳ {{ days_remaining }} day{{ days_remaining|pluralize }} remaining
     </p>
+
     {% endif %}
 
     {% if subscription.last_reference %}
+
     <p class="text-xs text-emerald-700 mb-4">
-      Last payment ref: <code class="bg-emerald-100 px-1.5 py-0.5 rounded">{{ subscription.last_reference }}</code>
+      Last payment ref:
+      <code class="bg-emerald-100 px-1.5 py-0.5 rounded">{{ subscription.last_reference }}</code>
       · ₵{{ subscription.last_amount_paid }}
     </p>
+
     {% endif %}
 
     <div class="flex flex-wrap justify-center gap-3 mt-4">
-      <a href="{% url 'report_options' %}" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-5 py-2.5 text-sm shadow-sm transition-colors">
+
+      <a href="{% url 'report_options' %}"
+         class="subscribe-primary-button bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-5 py-2.5 text-sm shadow-sm transition-colors">
         Build a Report →
       </a>
-      <a href="{% url 'pptx_options' %}" class="bg-white border border-emerald-300 hover:bg-emerald-50 text-emerald-800 font-semibold rounded-lg px-5 py-2.5 text-sm shadow-sm transition-colors">
+
+      <a href="{% url 'pptx_options' %}"
+         class="subscribe-secondary-button bg-white border border-emerald-300 hover:bg-emerald-50 text-emerald-800 font-semibold rounded-lg px-5 py-2.5 text-sm shadow-sm transition-colors">
         Build a Presentation →
       </a>
+
     </div>
   </div>
 
   {% elif not session %}
+
   {# ═══════════════ STATE B — NO ACTIVE ATTACHMENT ═══════════════ #}
-  <div class="bg-amber-50 border-2 border-amber-300 rounded-2xl p-6 shadow-sm">
+
+  <div class="subscribe-amber-surface bg-amber-50 border-2 border-amber-300 rounded-2xl p-6 shadow-sm">
+
     <div class="flex items-start gap-4">
+
       <div class="text-4xl flex-shrink-0">📍</div>
+
       <div class="flex-1 min-w-0">
-        <h2 class="text-lg font-bold text-amber-900 mb-2">Start your attachment first</h2>
+
+        <h2 class="text-lg font-bold text-amber-900 mb-2">
+          Start your attachment first
+        </h2>
+
         <p class="text-sm text-amber-800 mb-4">
           Your subscription is tied to your practicum period — that way you pay once
           and stay active from your attachment's start date through 5 days after it ends.
           We need to know which facility and which dates so your access matches.
         </p>
+
         <a href="{% url 'start_attachment' %}"
-           class="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg px-5 py-2.5 text-sm shadow-sm transition-colors">
+           class="subscribe-primary-button inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg px-5 py-2.5 text-sm shadow-sm transition-colors">
           Start an attachment →
         </a>
+
       </div>
     </div>
   </div>
 
   {% else %}
+
   {# ═══════════════ STATE C — HAS ATTACHMENT, NOT SUBSCRIBED ═══════════════ #}
 
   <!-- Session context bar -->
-  <div class="bg-white rounded-2xl shadow-sm border border-emerald-100 p-4 flex items-center gap-3">
+
+  <div class="subscribe-light-surface bg-white rounded-2xl shadow-sm border border-emerald-100 p-4 flex items-center gap-3">
+
     <div class="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center flex-shrink-0">
       🏥
     </div>
+
     <div class="min-w-0 flex-1">
-      <p class="text-xs font-bold text-gray-600 uppercase tracking-wide mb-0.5">Current attachment</p>
-      <p class="text-sm font-semibold text-gray-900 truncate">{{ session.facility.name }}</p>
+
+      <p class="text-xs font-bold text-gray-600 uppercase tracking-wide mb-0.5">
+        Current attachment
+      </p>
+
+      <p class="text-sm font-semibold text-gray-900 truncate">
+        {{ session.facility.name }}
+      </p>
+
       <p class="text-xs text-gray-700">
         {{ session.start_date|date:"j M Y" }} → {{ session.end_date|date:"j M Y" }}
       </p>
+
     </div>
   </div>
 
   <!-- Pricing card -->
-  <div class="bg-white rounded-2xl shadow-lg border border-emerald-100 overflow-hidden">
+
+  <div class="subscribe-light-surface bg-white rounded-2xl shadow-lg border border-emerald-100 overflow-hidden">
 
     <!-- Price header -->
-    <div class="bg-gradient-to-br from-emerald-700 to-emerald-500 text-white p-8 text-center">
-      <p class="text-xs uppercase tracking-widest text-emerald-200 font-bold mb-2">Practicum Period Plan</p>
+
+    <div class="subscribe-price-header bg-gradient-to-br from-emerald-700 to-emerald-500 text-white p-8 text-center">
+
+      <p class="subscribe-price-kicker text-xs uppercase tracking-widest text-emerald-200 font-bold mb-2">
+        Practicum Period Plan
+      </p>
+
       <div class="flex items-baseline justify-center gap-2">
+
         <span class="text-2xl font-bold text-emerald-100">₵</span>
-        <span class="text-6xl font-black">{{ price }}</span>
+
+        <span class="subscribe-price-amount text-6xl font-black">
+          {{ price }}
+        </span>
+
       </div>
-      <p class="text-sm text-emerald-100 mt-2">
+
+      <p class="subscribe-price-caption text-sm text-emerald-100 mt-2">
         One payment · Full practicum period access
       </p>
+
     </div>
 
     <!-- Features -->
+
     <div class="p-6 md:p-8">
-      <!-- ⏰ Validity banner -->
-      <div class="bg-emerald-100 text-emerald-900 px-4 py-3 rounded-lg text-center mb-6">
-        <p class="text-xs font-bold uppercase tracking-wider mb-1">Access valid until</p>
-        <p class="text-2xl font-black">{{ expected_expires_at|date:"j F Y" }}</p>
+
+      <!-- Validity banner -->
+
+      <div class="subscribe-emerald-surface bg-emerald-100 text-emerald-900 px-4 py-3 rounded-lg text-center mb-6">
+
+        <p class="text-xs font-bold uppercase tracking-wider mb-1">
+          Access valid until
+        </p>
+
+        <p class="text-2xl font-black">
+          {{ expected_expires_at|date:"j F Y" }}
+        </p>
+
         {% if session_end_date %}
+
         <p class="text-xs mt-1 text-emerald-800">
-          Aligned with your attachment end date ({{ session_end_date|date:"j M Y" }})
+          Aligned with your attachment end date
+          ({{ session_end_date|date:"j M Y" }})
           plus a <strong>5-day grace period</strong> to finalize your report.
         </p>
+
         {% endif %}
+
       </div>
 
       <h3 class="text-sm font-bold uppercase tracking-wide text-gray-700 mb-4">
         What's included
       </h3>
+
       <ul class="space-y-3 mb-6">
+
         <li class="flex items-start gap-3">
+
           <span class="text-emerald-600 mt-0.5 flex-shrink-0 font-bold">
-            <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;"><path d="M5 13l4 4L19 7"/></svg>
+            <svg viewBox="0 0 24 24"
+                 style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;">
+              <path d="M5 13l4 4L19 7"/>
+            </svg>
           </span>
+
           <div>
-            <p class="text-sm font-semibold text-gray-900">Unlimited daily logs</p>
-            <p class="text-xs text-gray-700">Record as many activities as you need — no cap.</p>
+            <p class="subscribe-feature-title text-sm font-semibold text-gray-900">
+              Unlimited daily logs
+            </p>
+            <p class="subscribe-feature-description text-xs text-gray-700">
+              Record as many activities as you need — no cap.
+            </p>
           </div>
+
         </li>
+
         <li class="flex items-start gap-3">
+
           <span class="text-emerald-600 mt-0.5 flex-shrink-0 font-bold">
-            <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;"><path d="M5 13l4 4L19 7"/></svg>
+            <svg viewBox="0 0 24 24"
+                 style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;">
+              <path d="M5 13l4 4L19 7"/>
+            </svg>
           </span>
+
           <div>
-            <p class="text-sm font-semibold text-gray-900">AI-drafted reports (PDF + Word)</p>
-            <p class="text-xs text-gray-700">Full COHY-standard report from your own logs.</p>
+            <p class="subscribe-feature-title text-sm font-semibold text-gray-900">
+              AI-drafted reports (PDF + Word)
+            </p>
+            <p class="subscribe-feature-description text-xs text-gray-700">
+              Full COHY-standard report from your own logs.
+            </p>
           </div>
+
         </li>
+
         <li class="flex items-start gap-3">
+
           <span class="text-emerald-600 mt-0.5 flex-shrink-0 font-bold">
-            <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;"><path d="M5 13l4 4L19 7"/></svg>
+            <svg viewBox="0 0 24 24"
+                 style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;">
+              <path d="M5 13l4 4L19 7"/>
+            </svg>
           </span>
+
           <div>
-            <p class="text-sm font-semibold text-gray-900">PowerPoint presentations</p>
-            <p class="text-xs text-gray-700">Any template, AI speaker notes, PDF preview.</p>
+            <p class="subscribe-feature-title text-sm font-semibold text-gray-900">
+              PowerPoint presentations
+            </p>
+            <p class="subscribe-feature-description text-xs text-gray-700">
+              Any template, AI speaker notes, PDF preview.
+            </p>
           </div>
+
         </li>
+
         <li class="flex items-start gap-3">
+
           <span class="text-emerald-600 mt-0.5 flex-shrink-0 font-bold">
-            <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;"><path d="M5 13l4 4L19 7"/></svg>
+            <svg viewBox="0 0 24 24"
+                 style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;">
+              <path d="M5 13l4 4L19 7"/>
+            </svg>
           </span>
+
           <div>
-            <p class="text-sm font-semibold text-gray-900">All AI assistant features</p>
-            <p class="text-xs text-gray-700">Chat, image transcription, report coaching.</p>
+            <p class="subscribe-feature-title text-sm font-semibold text-gray-900">
+              All AI assistant features
+            </p>
+            <p class="subscribe-feature-description text-xs text-gray-700">
+              Chat, image transcription, report coaching.
+            </p>
           </div>
+
         </li>
+
       </ul>
 
       <!-- Payment CTA -->
+
       <div class="border-t border-gray-100 pt-6">
-        <button type="button" id="paystack-btn"
+
+        <button type="button"
+                id="paystack-btn"
                 data-callback-url="{% url 'paystack_callback' %}"
                 data-public-key="{{ paystack_public_key|escapejs }}"
                 data-user-email="{{ user.email|escapejs }}"
                 data-price="{{ price }}"
                 class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg py-3 text-base shadow-md transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
+
           Pay ₵{{ price }} with Paystack
+
         </button>
+
         <p class="text-xs text-gray-700 text-center mt-3">
           Secure checkout · Powered by Paystack · MTN MoMo, Visa, Mastercard accepted
         </p>
+
         <p class="text-xs text-gray-600 text-center mt-1">
           You'll enter your payment details on Paystack's secure page.
         </p>
+
       </div>
 
       {# ═══════════════ STAFF TEST MODE — forced inline styles for visibility ═══════════════ #}
+
       {% if user.is_staff %}
-      <div class="mt-6 rounded-xl p-5 shadow-lg" style="background-color: #111827;">
+
+      <div class="subscribe-staff-panel mt-6 rounded-xl p-5 shadow-lg"
+           style="background-color: #111827;">
+
         <div class="flex items-start gap-3 mb-4">
+
           <div class="text-2xl flex-shrink-0">🧪</div>
+
           <div class="flex-1 min-w-0">
-            <p class="text-sm font-bold mb-1" style="color: #ffffff;">Staff Test Mode</p>
-            <p class="text-xs leading-relaxed" style="color: #d1d5db;">
-              Simulates a successful payment for <strong style="color: #ffffff;">{{ session.facility.name }}</strong>'s
-              period (until {{ expected_expires_at|date:"j M Y" }}). Use this to verify the
-              report/presentation flow before Paystack is wired.
-              <strong style="color: #fbbf24;">Remove before launch.</strong>
+
+            <p class="staff-panel-title text-sm font-bold mb-1"
+               style="color: #ffffff;">
+              Staff Test Mode
             </p>
+
+            <p class="text-xs leading-relaxed" style="color: #d1d5db;">
+
+              Simulates a successful payment for
+              <strong style="color: #ffffff;">{{ session.facility.name }}</strong>'s
+              period (until {{ expected_expires_at|date:"j M Y" }}).
+              Use this to verify the report/presentation flow before Paystack is wired.
+
+              <strong class="staff-panel-warning" style="color: #fbbf24;">
+                Remove before launch.
+              </strong>
+
+            </p>
+
           </div>
         </div>
+
         <form method="post" action="{% url 'subscribe_activate_test' %}">
+
           {% csrf_token %}
+
           <button type="submit"
                   class="w-full font-bold rounded-lg py-3 text-sm shadow-md transition-colors"
                   style="background-color: #fbbf24; color: #111827;">
+
             Activate for testing (staff only)
+
           </button>
+
         </form>
       </div>
+
       {% endif %}
+
     </div>
   </div>
 
   <!-- Trust strip -->
-  <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-center text-sm text-emerald-900">
+
+  <div class="subscribe-emerald-surface subscribe-trust-strip bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-center text-sm text-emerald-900">
+
     🔒 <strong>Your data stays yours.</strong> We never share your logs.
     Payment is processed by Paystack — we never see your card details.
+
   </div>
+
   {% endif %}
 
 </div>
 
 <script>
   document.addEventListener('DOMContentLoaded', function () {
+
     var btn = document.getElementById('paystack-btn');
+
     if (!btn) return;
 
-    var publicKey   = btn.dataset.publicKey   || '';
+    var publicKey = btn.dataset.publicKey || '';
     var callbackUrl = btn.dataset.callbackUrl || '';
-    var userEmail   = btn.dataset.userEmail   || '';
-    var price       = parseFloat(btn.dataset.price || '0');
+    var userEmail = btn.dataset.userEmail || '';
+    var price = parseFloat(btn.dataset.price || '0');
 
     btn.addEventListener('click', function () {
+
       if (!publicKey) {
+
         alert(
           'Paystack checkout is being set up.\n\n' +
           'If you are an admin, add PAYSTACK_PUBLIC_KEY to your environment ' +
           'to enable real payments.\n\n' +
           'For now, staff can use the "Activate for testing" button below.'
         );
+
         return;
       }
 
       // Paystack Inline JS wiring — placeholder for now.
       // When you're ready to go live:
-      //   1. Add the Paystack inline script to base.html <head>.
-      //   2. Replace the alert below with the proper setup object.
-      //      (Refer to Paystack docs for the exact syntax).
+      // 1. Add the Paystack inline script to base.html <head>.
+      // 2. Replace the alert below with the proper setup object.
+      // Refer to Paystack docs for the exact syntax.
+
       alert('Paystack checkout not wired yet — public key is set, but the JS snippet still needs to be enabled.');
+
     });
+
   });
 </script>
+
 {% endblock %}

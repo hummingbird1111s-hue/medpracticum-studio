@@ -834,6 +834,9 @@
     }
 
     document.addEventListener('click', function (e) {
+      // ✅ v8.1: skip overlay for clicks already handled by another handler
+      // (e.g. mpApplyUpdate on the update banner — it calls preventDefault).
+      if (e.defaultPrevented) return;
       var link = e.target.closest && e.target.closest('a');
       if (!link) return;
       if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
@@ -1798,7 +1801,7 @@
       <p class="mp-update-title">Update available</p>
       <p class="mp-update-sub">A newer version of MedPracticum is ready</p>
     </div>
-    <a href="{% url 'pwa_update' %}" class="mp-update-cta" onclick="mpApplyUpdate(event)">Update →</a>
+    <a href="{% url 'pwa_update' %}" class="mp-update-cta" onclick="mpApplyUpdate(event)" data-no-loading>Update →</a>
     <button type="button" class="mp-update-close" onclick="mpDismissUpdateBanner()" aria-label="Dismiss">×</button>
   </div>
   {% endif %}
@@ -1834,7 +1837,7 @@
       sessionStorage.setItem('mp_update_dismissed', '1');
     };
 
-    // ✅ Apply update in place — tell the waiting SW to activate, then reload once
+    // ✅ v8.1: Apply update in place — tell the waiting SW to activate, then reload once
     window.mpApplyUpdate = function (e) {
       if (e) e.preventDefault();
       navigator.serviceWorker.getRegistration().then(function (reg) {
@@ -1847,9 +1850,22 @@
       }).catch(function () { location.reload(); });
     };
 
-    // Reload exactly once when the new SW takes over
+    // ✅ v8.1: reload once when new SW takes over, but prefetch first so the
+    // reload is instant (warms a cold Render server + repopulates the new
+    // SW's page cache). Also gives visible feedback in the banner so the
+    // user doesn't stare at a frozen purple bar during a cold start.
     navigator.serviceWorker.addEventListener('controllerchange', function () {
-      location.reload();
+      var b = document.getElementById('mp-update-banner');
+      if (b) {
+        var sub = b.querySelector('.mp-update-sub');
+        var cta = b.querySelector('.mp-update-cta');
+        if (sub) sub.textContent = 'Applying update… please wait';
+        if (cta) { cta.textContent = 'Updating…'; cta.style.pointerEvents = 'none'; cta.style.opacity = '0.7'; }
+        b.classList.add('show');
+      }
+      fetch(window.location.pathname, { credentials: 'same-origin', cache: 'no-store' })
+        .catch(function () {})
+        .then(function () { location.reload(); });
     });
 
     if (sessionStorage.getItem('mp_update_dismissed') === '1') return;
