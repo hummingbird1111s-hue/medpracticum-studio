@@ -49,6 +49,84 @@
   .live-preview .lp-meta { position: absolute; top: 50%; left: 4%; right: 4%; text-align: center;
                             font-size: 11px; font-weight: 700; line-height: 1.5; color: #808080; }
 
+  /* ============================================================
+     PAGE-LEVEL MESSAGES (v9)
+     Renders success / error / warning / info banners from the
+     Django messages framework. Success & info auto-dismiss after
+     12s with a slow 1.2s fade. Warnings and errors stay until
+     the user dismisses them.
+     ============================================================ */
+  .mp-page-messages {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .mp-page-message {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    border: 1px solid;
+    font-size: 13.5px;
+    line-height: 1.55;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    animation: mpPageMessageIn 0.3s ease-out;
+    position: relative;
+  }
+  @keyframes mpPageMessageIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .mp-page-message.is-leaving {
+    opacity: 0;
+    transform: translateY(-6px);
+    transition: opacity 1.2s ease, transform 1.2s ease;
+  }
+  .mp-page-message--success { background: #ecfdf5; border-color: #a7f3d0; color: #065f46; }
+  .mp-page-message--error   { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+  .mp-page-message--warning { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
+  .mp-page-message--info    { background: #eff6ff; border-color: #bfdbfe; color: #1e40af; }
+  .mp-page-message__icon {
+    flex-shrink: 0;
+    font-size: 18px;
+    line-height: 1;
+    margin-top: 1px;
+  }
+  .mp-page-message__body { flex: 1; min-width: 0; word-break: break-word; }
+  .mp-page-message__body a { color: inherit; text-decoration: underline; font-weight: 600; }
+  .mp-page-message__body strong { font-weight: 700; }
+  .mp-page-message__close {
+    flex-shrink: 0;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    font-size: 20px;
+    line-height: 1;
+    color: currentColor;
+    opacity: 0.45;
+    padding: 0 2px;
+    transition: opacity 0.15s;
+    font-family: inherit;
+  }
+  .mp-page-message__close:hover { opacity: 1; }
+  .mp-page-message__progress {
+    position: absolute;
+    left: 0; bottom: 0;
+    height: 2px;
+    background: currentColor;
+    opacity: 0.25;
+    border-radius: 0 0 0 12px;
+    width: 100%;
+    transform-origin: left;
+    animation: mpPageMessageProgress 12s linear forwards;
+  }
+  @keyframes mpPageMessageProgress {
+    from { transform: scaleX(1); }
+    to   { transform: scaleX(0); }
+  }
+
   #gen-overlay {
     display: none; position: fixed; inset: 0; z-index: 999999;
     background: rgba(17, 24, 39, 0.72); backdrop-filter: blur(2px);
@@ -78,6 +156,43 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
   #switch-overlay p { color: #fff; font-size: 16px; font-weight: 500; text-align: center; }
+
+  /* ============================================================
+     Download feedback overlay
+     Shows for ~2.5s when the user clicks Download PowerPoint, then
+     auto-hides and returns to the page. The browser's download
+     proceeds in the background. If it does not start, the user
+     simply clicks Download PowerPoint again.
+     ============================================================ */
+  #download-overlay {
+    display: none; position: fixed; inset: 0; z-index: 1000001;
+    background: rgba(17, 24, 39, 0.55); backdrop-filter: blur(2px);
+    align-items: center; justify-content: center; padding: 16px;
+  }
+  #download-overlay.show { display: flex; }
+  #download-overlay .download-card {
+    background: #fff; border-radius: 16px; padding: 28px 32px;
+    max-width: 420px; width: 100%;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+    text-align: center; animation: dl-pop 0.25s ease-out;
+  }
+  @keyframes dl-pop {
+    from { opacity: 0; transform: translateY(6px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  #download-overlay .download-spinner {
+    width: 44px; height: 44px; border: 4px solid #d1fae5;
+    border-top-color: #059669; border-radius: 50%;
+    animation: dl-spin 0.9s linear infinite;
+    margin: 0 auto 16px;
+  }
+  @keyframes dl-spin { to { transform: rotate(360deg); } }
+  #download-overlay h3 {
+    margin: 0 0 6px; font-size: 16px; font-weight: 700; color: #065f46;
+  }
+  #download-overlay .download-sub {
+    margin: 0; font-size: 13px; color: #6b7280; line-height: 1.5;
+  }
 
   #pptx-preview-overlay {
     display: none; position: fixed; inset: 0; z-index: 1000000;
@@ -206,6 +321,49 @@
   your report content — nothing is copied verbatim from your logs.
 </p>
 
+{% comment %}
+============================================================
+PAGE-LEVEL MESSAGES (v9)
+Base.html no longer renders messages globally — this page now
+shows them in a dedicated, dismissible banner block right
+beneath the page title. Success and info banners auto-dismiss
+after 12s with a slow 1.2s fade.
+============================================================
+{% endcomment %}
+{% if messages %}
+<div class="mp-page-messages" aria-live="polite" aria-atomic="false">
+  {% for message in messages %}
+    {% if 'success' in message.tags %}
+      <div class="mp-page-message mp-page-message--success" data-mp-message data-mp-auto-dismiss="1">
+        <div class="mp-page-message__icon">✅</div>
+        <div class="mp-page-message__body">{{ message }}</div>
+        <button type="button" class="mp-page-message__close" onclick="mpDismissMessage(this)" aria-label="Dismiss">×</button>
+        <span class="mp-page-message__progress" aria-hidden="true"></span>
+      </div>
+    {% elif 'error' in message.tags or 'danger' in message.tags %}
+      <div class="mp-page-message mp-page-message--error" data-mp-message>
+        <div class="mp-page-message__icon">❌</div>
+        <div class="mp-page-message__body">{{ message }}</div>
+        <button type="button" class="mp-page-message__close" onclick="mpDismissMessage(this)" aria-label="Dismiss">×</button>
+      </div>
+    {% elif 'warning' in message.tags %}
+      <div class="mp-page-message mp-page-message--warning" data-mp-message>
+        <div class="mp-page-message__icon">⚠️</div>
+        <div class="mp-page-message__body">{{ message }}</div>
+        <button type="button" class="mp-page-message__close" onclick="mpDismissMessage(this)" aria-label="Dismiss">×</button>
+      </div>
+    {% else %}
+      <div class="mp-page-message mp-page-message--info" data-mp-message data-mp-auto-dismiss="1">
+        <div class="mp-page-message__icon">ℹ️</div>
+        <div class="mp-page-message__body">{{ message }}</div>
+        <button type="button" class="mp-page-message__close" onclick="mpDismissMessage(this)" aria-label="Dismiss">×</button>
+        <span class="mp-page-message__progress" aria-hidden="true"></span>
+      </div>
+    {% endif %}
+  {% endfor %}
+</div>
+{% endif %}
+
 {% if has_pptx %}
 <div class="bg-emerald-600 text-white rounded-2xl shadow-md p-5 mb-4">
   <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -220,18 +378,8 @@
          class="bg-white text-emerald-800 font-semibold rounded-lg px-4 py-2 text-sm hover:bg-emerald-50 shadow-sm">
         ✏️ Edit slide text
       </a>
-      {% if has_pptx_pdf %}
-        <a href="{% url 'view_pptx_pdf' %}?attachment_id={{ session.id }}" target="_blank"
-           class="bg-white text-emerald-800 font-semibold rounded-lg px-4 py-2 text-sm hover:bg-emerald-50 shadow-sm">
-          View PDF slides
-        </a>
-        <a href="{% url 'download_pptx_pdf' %}?attachment_id={{ session.id }}"
-           class="bg-emerald-800 text-white font-semibold rounded-lg px-4 py-2 text-sm hover:bg-emerald-900 shadow-sm">
-          Download PDF
-        </a>
-      {% endif %}
       <a href="{% url 'download_pptx' %}?attachment_id={{ session.id }}"
-         class="bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-lg px-4 py-2 text-sm shadow-sm">
+         class="pptx-download-btn bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-lg px-4 py-2 text-sm shadow-sm">
         Download PowerPoint
       </a>
     </div>
@@ -514,7 +662,16 @@
   <p>Setting the presentation engine to read all data from this attachment...</p>
 </div>
 
-{% if has_pptx_pdf %}
+{# Download feedback overlay — shown briefly on Download PowerPoint click, then auto-hides #}
+<div id="download-overlay" aria-hidden="true" role="status" aria-live="polite">
+  <div class="download-card">
+    <div class="download-spinner"></div>
+    <h3>Your download is starting…</h3>
+    <p class="download-sub">If it doesn't begin in a moment, click <strong>Download PowerPoint</strong> again.</p>
+  </div>
+</div>
+
+{% if has_pptx %}
 <div id="pptx-preview-overlay"
      data-auto-open="{% if not generated %}1{% else %}0{% endif %}"
      aria-hidden="true" role="dialog">
@@ -692,6 +849,23 @@
 {% endif %}
 
 <script>
+  // 0) Page-level message dismissal + slow auto-hide (12s, 1.2s fade)
+  window.mpDismissMessage = function (btn) {
+    var el = btn.closest('[data-mp-message]');
+    if (!el) return;
+    el.classList.add('is-leaving');
+    setTimeout(function () { if (el.parentNode) el.remove(); }, 1300);
+  };
+  (function () {
+    document.querySelectorAll('[data-mp-message][data-mp-auto-dismiss="1"]').forEach(function (el) {
+      setTimeout(function () {
+        if (!document.body.contains(el)) return;
+        el.classList.add('is-leaving');
+        setTimeout(function () { if (el.parentNode) el.remove(); }, 1300);
+      }, 12000);
+    });
+  })();
+
   document.querySelectorAll('.swatches[data-primary]').forEach(function (sw) {
     var p = sw.querySelector('.swatch-primary');
     var s = sw.querySelector('.swatch-secondary');
@@ -921,6 +1095,23 @@
 
     window.addEventListener('pageshow', function (e) {
       if (e.persisted) overlay.classList.remove('show');
+    });
+  })();
+
+  // Download feedback overlay — brief spinner then auto-hide; browser's
+  // native download proceeds in the background.
+  (function () {
+    var ov = document.getElementById('download-overlay');
+    if (!ov) return;
+    document.querySelectorAll('.pptx-download-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        ov.classList.add('show');
+        ov.setAttribute('aria-hidden', 'false');
+        setTimeout(function () {
+          ov.classList.remove('show');
+          ov.setAttribute('aria-hidden', 'true');
+        }, 2500);
+      });
     });
   })();
 

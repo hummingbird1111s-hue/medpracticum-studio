@@ -152,6 +152,24 @@
   .ai-content p { margin-bottom: 0.8em; }
   .ai-content strong { font-weight: bold; }
 
+  /* ============= ACTIVITIES (v10: unit sub-headings + bullets) ============= */
+  .ai-content .unit-activities {
+    margin-top: 0;
+    margin-bottom: 1.2em;
+    padding-left: 20px;
+  }
+  .ai-content .unit-activities li {
+    margin-bottom: 6px;
+    text-align: justify;
+  }
+
+  /* ============= LESSONS (v10: paragraphs, not bullets) ============= */
+  .ai-content .lesson-para {
+    margin-bottom: 0.8em;
+    text-align: justify;
+    text-indent: 0;
+  }
+
   /* ============= SIGNATURE BLOCKS ============= */
   .sig-block { margin-top: 0.5in; page-break-inside: avoid; }
   .sig-line {
@@ -301,10 +319,30 @@
     {% endif %}
   </div>
 
-  <!-- Activities Performed -->
+  <!-- ============================================================
+       ACTIVITIES PERFORMED
+       v10: renders structured blocks from services._parse_activities_blocks()
+         - 'paragraph' block  → plain <p>
+         - 'unit' block       → <h2 class="sub-title"> heading + <ul> bullets
+       Falls back to raw content string, then to log-derived unit_activities.
+       ============================================================ -->
   <h1 id="ch3" class="chapter-title">Activities Performed</h1>
   <div class="ai-content">
-    {% if content.activities_performed %}
+    {% if activities_blocks %}
+      {% for block in activities_blocks %}
+        {% if block.type == 'paragraph' %}
+          <p>{{ block.text }}</p>
+        {% elif block.type == 'unit' %}
+          <h2 class="sub-title">{{ block.heading }}</h2>
+          <ul class="unit-activities">
+            {% for activity in block.activities %}
+              <li>{{ activity }}</li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      {% endfor %}
+    {% elif content.activities_performed %}
+      {# Safety net: parser returned nothing — render raw AI text as paragraphs #}
       {{ content.activities_performed|linebreaks }}
     {% else %}
       <p>During the practicum period, I was involved in the following activities as recorded in my logbook:</p>
@@ -317,7 +355,7 @@
     {% endif %}
   </div>
 
-  <!-- Skills Acquired -->
+  <!-- Skills Acquired (unchanged — stays as bullets) -->
   <h1 id="ch4" class="chapter-title">Skills Acquired</h1>
   <div class="ai-content">
     {% if content.skills_acquired %}
@@ -354,23 +392,22 @@
     {% endif %}
   </div>
 
-  <!-- Lessons Learnt -->
+  <!-- ============================================================
+       LESSONS LEARNT
+       v10: paragraphs, NOT bullets. Each lesson is its own <p>.
+       ============================================================ -->
   <h1 id="ch6" class="chapter-title">Lessons Learnt</h1>
   <div class="ai-content">
-    {% if content.lessons_learnt %}
-      <ul style="margin-top: 0; padding-left: 20px;">
-        {% for line in content_lessons_learnt %}
-          <li style="margin-bottom: 8px; text-align: justify;">{{ line|safe }}</li>
-        {% endfor %}
-      </ul>
+    {% if content_lessons_learnt %}
+      {% for line in content_lessons_learnt %}
+        <p class="lesson-para">{{ line|safe }}</p>
+      {% endfor %}
     {% else %}
-      <ul style="padding-left: 20px;">
-        {% for para in lessons_learnt %}
-          <li style="margin-bottom: 8px;">{{ para }}</li>
-        {% empty %}
-          <li>Lessons learnt will be updated by the student.</li>
-        {% endfor %}
-      </ul>
+      {% for para in lessons_learnt %}
+        <p class="lesson-para">{{ para }}</p>
+      {% empty %}
+        <p class="lesson-para">Lessons learnt will be updated by the student.</p>
+      {% endfor %}
     {% endif %}
   </div>
 

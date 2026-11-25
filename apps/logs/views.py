@@ -11,14 +11,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_POST
 
-# ─────────────────────────────────────────────────────────────────────────
-# CRITICAL FOR RENDER FREE TIER:
-# Do NOT import `google.genai` at module level. The SDK builds an
-# enormous Pydantic model tree on import (~200 MB) and causes Gunicorn
-# workers to be SIGKILL'd for OOM during startup. Instead, we check
-# `settings.GEMINI_API_KEY` (cheap) and let `.ai_client` load the SDK
-# lazily inside `ai_chat()` only when an actual AI request comes in.
-# ─────────────────────────────────────────────────────────────────────────
+from apps.notifications.models import notify
 
 from .department_config import COMMON_TEXT_FIELDS, get_department_config
 from .forms import AttachmentSessionForm
@@ -32,7 +25,6 @@ MAX_TAGS = 20
 
 
 def _ai_is_configured():
-    """Cheap check — does not touch the heavy google.genai SDK."""
     return bool(getattr(settings, 'GEMINI_API_KEY', None))
 
 
@@ -90,12 +82,10 @@ def dashboard(request):
 
 
 def how_to_use(request):
-    """Renders the detailed user guide. Public — reachable while logged out."""
     return render(request, 'logs/how_to_use.html')
 
 
 def terms_and_conditions(request):
-    """Renders the platform Terms, Conditions & Privacy Policy page. Public."""
     return render(request, 'logs/terms.html')
 
 
@@ -104,8 +94,6 @@ def start_attachment(request):
     if request.method == 'POST':
         form = AttachmentSessionForm(request.POST)
         if form.is_valid():
-            # ── ✅ FIX v2: Parse competencies BEFORE saving the session ─────
-            # This lets us gate attachment creation on "at least one competency".
             raw = request.POST.get('competencies_json') or '[]'
             try:
                 items = json.loads(raw)
@@ -130,7 +118,6 @@ def start_attachment(request):
                         source = AttachmentCompetency.SOURCE_MANUAL
                     cleaned.append((text, source))
 
-            # ✅ GATE: block attachment creation if no competency was provided.
             if not cleaned:
                 form.add_error(
                     None,
@@ -150,6 +137,18 @@ def start_attachment(request):
             ])
 
             request.session['active_attachment_id'] = session.id
+
+            # Bell notification — new attachment started
+            try:
+                facility_label = session.facility.name if session.facility else 'your facility'
+                notify(
+                    request.user,
+                    f'Attachment started at {facility_label}',
+                    kind='default',
+                )
+            except Exception:
+                pass
+
             return redirect('dashboard')
     else:
         form = AttachmentSessionForm()
@@ -285,7 +284,14 @@ def delete_workshop(request, pk):
     workshop = Workshop.objects.filter(pk=pk, attachment__user=request.user).first()
     if workshop:
         attachment_id = workshop.attachment.id
+        activity = workshop.activity or 'a workshop'
         workshop.delete()
+
+        try:
+            notify(request.user, f'Workshop removed: {activity}', kind='deletion')
+        except Exception:
+            pass
+
         messages.success(request, 'Workshop deleted.')
         return redirect(f"{reverse('workshops_list')}?attachment_id={attachment_id}")
     return redirect('workshops_list')
@@ -296,11 +302,18 @@ def delete_workshop(request, pk):
 def delete_attachment(request, pk):
     attachment = AttachmentSession.objects.filter(pk=pk, user=request.user).first()
     if attachment:
+        facility_label = attachment.facility.name if attachment.facility else 'your attachment'
         if request.session.get('active_attachment_id') == attachment.id:
             del request.session['active_attachment_id']
         attachment.is_deleted = True
         attachment.save()
         attachment.daily_logs.update(is_deleted=True)
+
+        try:
+            notify(request.user, f'Attachment archived: {facility_label}', kind='deletion')
+        except Exception:
+            pass
+
         messages.success(request, 'Attachment moved to archive.')
     else:
         messages.error(request, 'Attachment not found.')
@@ -312,9 +325,16 @@ def delete_attachment(request, pk):
 def restore_attachment(request, pk):
     attachment = AttachmentSession.objects.filter(pk=pk, user=request.user, is_deleted=True).first()
     if attachment:
+        facility_label = attachment.facility.name if attachment.facility else 'your attachment'
         attachment.is_deleted = False
         attachment.save()
         attachment.daily_logs.update(is_deleted=False)
+
+        try:
+            notify(request.user, f'Attachment restored: {facility_label}', kind='default')
+        except Exception:
+            pass
+
         messages.success(request, 'Attachment restored successfully.')
     else:
         messages.error(request, 'Archived attachment not found.')
@@ -326,8 +346,15 @@ def restore_attachment(request, pk):
 def delete_log(request, pk):
     log = DailyLog.objects.filter(pk=pk, attachment__user=request.user).first()
     if log:
+        unit = log.unit_sub_department or 'a unit'
         log.is_deleted = True
         log.save()
+
+        try:
+            notify(request.user, f'Daily log removed from {unit}', kind='deletion')
+        except Exception:
+            pass
+
         messages.success(request, 'Log entry moved to archive.')
     else:
         messages.error(request, 'Log not found.')
@@ -337,21 +364,10 @@ def delete_log(request, pk):
 # ============================================================
 # ✅ FIX v3 — Competency area file upload (hybrid OCR)
 # ============================================================
-# Used by both start_attachment.html and attachments_list.html.
-# Routing inside the view:
-#   - .txt / .docx / .pdf-with-text → local extraction (system, no AI)
-#   - scanned .pdf / image/*        → AI vision first → Tesseract fallback
 
 @login_required
 @require_POST
 def upload_competency_image(request):
-    """
-    Competency-area file upload → returns {lines: [...]}.
-
-    No AI needed for txt/docx/text-PDF. For images and scanned PDFs,
-    AI vision (Gemini) is tried first, then local Tesseract as fallback.
-    """
-    # Lazy import — same OOM-safe pattern as ai_chat()
     from .ai_client import (
         _normalize_mime,
         TEXT_EXTRACTABLE_MIMES,
@@ -369,7 +385,6 @@ def upload_competency_image(request):
     mime = _normalize_mime(f.content_type or 'image/jpeg')
     data = f.read()
 
-    # ── Path 1: text-extractable (txt / docx / pdf-with-text) → local only ──
     if mime in TEXT_EXTRACTABLE_MIMES:
         text, err = extract_text_from_attachment(mime, data)
         if err:
@@ -377,9 +392,7 @@ def upload_competency_image(request):
         if text:
             lines = [l.strip() for l in text.splitlines() if l.strip()][:50]
             return JsonResponse({'lines': lines})
-        # pdf with no text layer → fall through to AI → Tesseract
 
-    # ── Path 2: images / scanned PDFs → AI vision → Tesseract ──
     if mime not in SUPPORTED_VISION_MIMES:
         return JsonResponse({'error': f'Unsupported file type: {mime}.'}, status=400)
 
@@ -525,19 +538,10 @@ def sync_logs(request):
 
 
 # ==========================================
-# AI CHAT — tiered context (Phase 5 perf fix)
+# AI CHAT — tiered context
 # ==========================================
-# Simple questions (greetings, counts, lists) do NOT need the 30-log dump.
-# Only drafting/analysis tasks need the full context. This cuts "hi" from
-# ~3-5 s to ~1 s by reducing input tokens from ~2,100 to ~50.
 
 def _detect_query_tier(user_message, has_image):
-    """
-    Classify the message to decide how much context to build.
-      - 'trivial' : greeting / ack, no question  → ~50 tokens
-      - 'simple'  : count / list / status query  → ~350 tokens
-      - 'complex' : drafting / analysis / file   → full context
-    """
     if has_image:
         return 'complex'
 
@@ -545,11 +549,9 @@ def _detect_query_tier(user_message, has_image):
     if not msg:
         return 'trivial'
 
-    # Very short → almost certainly a greeting / ack
     if len(msg) <= 15:
         return 'trivial'
 
-    # Strip punctuation for word-set comparison
     words = set(w.strip('?.,!;:"\'') for w in msg.split() if w.strip('?.,!;:"\''))
 
     trivial_vocab = {
@@ -564,7 +566,6 @@ def _detect_query_tier(user_message, has_image):
     if len(words) <= 6 and words.issubset(trivial_vocab):
         return 'trivial'
 
-    # Drafting / analysis indicators force full context
     complex_indicators = (
         'write', 'draft', 'compose', 'rewrite', 'rephrase', 'paraphrase',
         'analyze', 'analyse', 'summarize', 'summarise',
@@ -577,7 +578,6 @@ def _detect_query_tier(user_message, has_image):
         if indicator in msg:
             return 'complex'
 
-    # Long messages are usually complex requests
     if len(msg) > 200:
         return 'complex'
 
@@ -585,16 +585,12 @@ def _detect_query_tier(user_message, has_image):
 
 
 def _build_context(tier, user, active_session, chat_session):
-    """Build only as much context as the tier actually needs."""
-
-    # ── Tier: trivial ─────────────────────────────────────────────
     if tier == 'trivial':
         ctx = f"Student: {user.get_full_name() or user.username}\n"
         if active_session:
             ctx += f"Facility: {active_session.facility.name}\n"
         return ctx
 
-    # ── Shared: profile ──────────────────────────────────────────
     context = "STUDENT PROFILE:\n"
     context += f"Name: {user.get_full_name() or user.username}\n"
     context += f"Index Number: {user.index_number}\n"
@@ -610,8 +606,6 @@ def _build_context(tier, user, active_session, chat_session):
     context += f"Dates: {active_session.start_date.strftime('%d %B %Y')} to {active_session.end_date.strftime('%d %B %Y')}\n"
     context += f"Supervisor: {active_session.assigned_supervisor_name or 'Not specified'}\n"
 
-    # ── Tier: simple ─────────────────────────────────────────────
-    # Only counts + light metadata. No per-log iteration, no skills/challenges.
     if tier == 'simple':
         context += f"Total Logs Recorded: {active_session.daily_logs.filter(is_deleted=False).count()}\n"
 
@@ -627,7 +621,6 @@ def _build_context(tier, user, active_session, chat_session):
         for c in competencies:
             context += f"- {c.text[:100]}\n"
 
-        # Only 3 prior messages, trimmed to 150 chars
         prior = chat_session.messages.exclude(role='').order_by('-created_at')[:3]
         prior_list = list(prior)
         if prior_list:
@@ -644,7 +637,6 @@ def _build_context(tier, user, active_session, chat_session):
 
         return context
 
-    # ── Tier: complex ────────────────────────────────────────────
     logs_qs = active_session.daily_logs.filter(is_deleted=False).order_by('-date')
     total_logs = logs_qs.count()
     context += f"Total Logs Recorded: {total_logs}\n\n"
@@ -654,8 +646,6 @@ def _build_context(tier, user, active_session, chat_session):
         context += f"RECENT ACTIVITIES (latest {len(recent_logs)}):\n"
         for i, log in enumerate(recent_logs):
             context += f"- {log.date.strftime('%d %b %Y')} | {log.unit_sub_department}: {log.activity_summary[:200]}\n"
-            # Only the 10 most recent get skills + challenges (they're what get
-            # quoted in reports; older ones just need date/unit/summary)
             if i < 10:
                 if log.skills_acquired.strip():
                     context += f"  Skills: {log.skills_acquired[:150]}\n"
@@ -692,13 +682,6 @@ def _build_context(tier, user, active_session, chat_session):
     return context
 
 
-# ==========================================
-# AI CHAT — conversation-based + ATTACHMENT
-# ==========================================
-# The actual SDK is only imported when an AI request comes in
-# (via `.ai_client` inside the function body). This keeps Gunicorn
-# worker startup light and prevents OOM crashes on Render's free tier.
-
 @login_required
 @require_POST
 def ai_chat(request):
@@ -726,13 +709,11 @@ def ai_chat(request):
         else:
             chat_session = AIChatSession.objects.create(user=user)
 
-        # ✅ FIX v2: "File:" not "Image:" since we now accept PDF / DOCX / TXT too
         title_text = user_message if user_message else f"File: {image_name}"
         if not chat_session.title:
             chat_session.title = title_text[:80]
         chat_session.save(update_fields=['title', 'updated_at'])
 
-        # ✅ FIX v2: "[File attached:" label (was "[Image attached:")
         stored_user_content = user_message
         if image_b64:
             stored_user_content = f"[File attached: {image_name}]\n{user_message}".strip()
@@ -741,12 +722,10 @@ def ai_chat(request):
             session=chat_session, user=user, role='user', content=stored_user_content,
         )
 
-        # ── NEW: tiered context — skip the 30-log dump for greetings ─────
         tier = _detect_query_tier(user_message, bool(image_b64))
         active_session = _get_active_session(request)
         context = _build_context(tier, user, active_session, chat_session)
 
-        # Output format rules — omit entirely for trivial greetings
         if tier == 'trivial':
             format_rules = ""
         else:
@@ -772,7 +751,6 @@ def ai_chat(request):
                 f"User Question: {user_message}\n"
             )
         elif tier == 'trivial':
-            # Minimal prompt — no context dump for "hi"
             system_prompt = (
                 "You are the MedPracticum Studio AI Assistant, a warm helper for "
                 "health students. The user sent a short greeting or acknowledgment. "
@@ -800,8 +778,6 @@ def ai_chat(request):
 
         raw_reply = None
         if image_b64:
-            # ✅ FIX v2: unified attachment API — routes images → vision,
-            # PDF/DOCX/TXT → local extraction, scanned PDF → vision fallback.
             from .ai_client import get_ai_reply_with_attachment
             try:
                 file_bytes = base64.b64decode(image_b64)
@@ -811,8 +787,6 @@ def ai_chat(request):
                     mime=image_mime,
                     filename=image_name,
                 )
-                # If extraction or AI failed with a specific error, surface it
-                # to the user as the assistant message (and save it for history).
                 if not raw_reply and attach_err:
                     raw_reply = attach_err
             except Exception as attach_exc:
@@ -841,7 +815,7 @@ def ai_chat(request):
             'success': True,
             'reply': reply,
             'session_id': chat_session.id,
-            'tier': tier,   # NEW: for debugging — frontend can ignore it
+            'tier': tier,
         })
 
     except Exception as e:
@@ -861,7 +835,6 @@ def ai_chat_sessions(request):
     for s in sessions:
         last_msg = s.messages.order_by('-created_at').first()
         msg_count = s.messages.count()
-        # ✅ FIX v2: strip BOTH legacy "[Image attached:" and new "[File attached:"
         if last_msg:
             _raw = last_msg.content or ''
             if _raw.startswith('[File attached:') or _raw.startswith('[Image attached:'):
@@ -887,7 +860,7 @@ def ai_chat_session_detail(request, pk):
     session = AIChatSession.objects.filter(pk=pk, user=request.user).first()
     if not session:
         return JsonResponse({'error': 'Not found'}, status=404)
-    messages = [
+    messages_list = [
         {
             'id': m.id,
             'role': m.role,
@@ -899,7 +872,7 @@ def ai_chat_session_detail(request, pk):
     return JsonResponse({
         'session_id': session.id,
         'title': session.title or 'Untitled chat',
-        'messages': messages,
+        'messages': messages_list,
     })
 
 
@@ -913,6 +886,5 @@ def ai_chat_delete(request, pk):
 @login_required
 @require_POST
 def ai_chat_delete_all(request):
-    """Delete ALL conversations for the current user."""
     AIChatSession.objects.filter(user=request.user).delete()
     return JsonResponse({'ok': True})

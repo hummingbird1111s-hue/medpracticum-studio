@@ -106,7 +106,7 @@
     }
     .mp-logout-btn:hover { background: rgba(0,0,0,0.35); }
 
-    /* ✅ SUBSCRIPTION BADGE */
+    /* ================= SUBSCRIPTION BADGE (4 states) ================= */
     .mp-sidebar__subscription {
       display: flex; align-items: center; justify-content: center; gap: 8px;
       padding: 11px 14px; border-radius: 10px;
@@ -117,6 +117,16 @@
       background: linear-gradient(135deg, rgba(16, 185, 129, 0.32) 0%, rgba(16, 185, 129, 0.18) 100%);
       color: #d1fae5;
       box-shadow: inset 0 0 0 1px rgba(110, 231, 183, 0.35);
+    }
+    .mp-sidebar__subscription--partial {
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.32) 0%, rgba(96, 165, 250, 0.18) 100%);
+      color: #dbeafe;
+      box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.45);
+    }
+    .mp-sidebar__subscription--pending {
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.30) 0%, rgba(167, 139, 250, 0.18) 100%);
+      color: #ede9fe;
+      box-shadow: inset 0 0 0 1px rgba(196, 181, 253, 0.45);
     }
     .mp-sidebar__subscription--inactive {
       background: linear-gradient(135deg, rgba(245, 158, 11, 0.38) 0%, rgba(251, 191, 36, 0.20) 100%);
@@ -129,7 +139,7 @@
     }
     .mp-sidebar__subscription:active { transform: translateY(0); }
 
-    /* ✅ UPDATE INDICATOR */
+    /* ================= UPDATE INDICATOR ================= */
     @keyframes mp-update-pulse {
       0%, 100% { opacity: 1; transform: scale(1); }
       50%      { opacity: 0.5; transform: scale(1.2); }
@@ -180,17 +190,234 @@
     .mp-header__contact:hover { background: #d1fae5; border-color: #6ee7b7; }
     .mp-header__contact svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
+    /* Profile avatar — circle only, no text */
     .mp-profile-pill {
-      display: inline-flex; align-items: center; gap: 6px;
-      padding: 3px 3px 3px 12px; border-radius: 20px;
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 34px; height: 34px; border-radius: 50%;
       background: #f9fafb; border: 1px solid #e5e7eb; text-decoration: none;
       transition: background 0.15s;
     }
     .mp-profile-pill:hover { background: #f3f4f6; }
-    .mp-profile-pill span { font-size: 12px; font-weight: 600; color: #4b5563; }
     .mp-header__avatar {
       display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px;
       border-radius: 50%; background: #047857; color: #ffffff; font-weight: 700; font-size: 12px;
+    }
+
+    /* Notification bell */
+    .mp-header__notif {
+      position: relative;
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 34px; height: 34px; border-radius: 50%;
+      background: #f9fafb; border: 1px solid #e5e7eb; color: #4b5563;
+      cursor: pointer; transition: background 0.15s, border-color 0.15s;
+      font-family: inherit;
+    }
+    .mp-header__notif:hover { background: #f3f4f6; border-color: #d1d5db; }
+    .mp-header__notif svg { width: 18px; height: 18px; }
+    .mp-notif-badge {
+      position: absolute;
+      top: -3px; right: -3px;
+      min-width: 17px; height: 17px; padding: 0 4px;
+      border-radius: 999px;
+      background: #dc2626; color: #ffffff;
+      font-size: 10px; font-weight: 700;
+      display: none; align-items: center; justify-content: center;
+      border: 2px solid #ffffff;
+      font-family: inherit;
+      line-height: 1;
+    }
+    .mp-notif-badge.show { display: flex; }
+
+    /* ================= BELL SHAKE ================= */
+    @keyframes mp-bell-shake {
+      0%   { transform: rotate(0deg); }
+      15%  { transform: rotate(14deg); }
+      30%  { transform: rotate(-12deg); }
+      45%  { transform: rotate(10deg); }
+      60%  { transform: rotate(-8deg); }
+      75%  { transform: rotate(5deg); }
+      90%  { transform: rotate(-3deg); }
+      100% { transform: rotate(0deg); }
+    }
+    .mp-header__notif.shake svg {
+      animation: mp-bell-shake 0.75s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+      transform-origin: 50% 3px;
+    }
+    .mp-header__notif.shake {
+      background: #ecfdf5;
+      border-color: #6ee7b7;
+      color: #047857;
+    }
+
+    /* ================= PHONE-STYLE NOTIFICATION TOASTS ================= */
+    .mp-notif-toast-stack {
+      position: fixed;
+      top: calc(64px + env(safe-area-inset-top, 0px));
+      left: 50%;
+      transform: translateX(-50%);
+      width: calc(100% - 24px);
+      max-width: 420px;
+      z-index: 9997;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+    }
+    .mp-notif-toast {
+      background: #ffffff;
+      border-radius: 14px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.06);
+      padding: 12px 10px 12px 14px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      border-left: 4px solid #059669;
+      pointer-events: auto;
+      opacity: 0;
+      transform: translateY(-20px) scale(0.97);
+      transition: opacity 0.3s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+      cursor: pointer;
+      position: relative;
+    }
+    .mp-notif-toast.show {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    .mp-notif-toast:hover {
+      box-shadow: 0 14px 44px rgba(0,0,0,0.22), 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .mp-notif-toast__icon {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: #ecfdf5;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; flex-shrink: 0;
+    }
+    .mp-notif-toast__body { flex: 1; min-width: 0; }
+    .mp-notif-toast__title {
+      font-size: 10px; font-weight: 700;
+      color: #047857;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin: 0 0 3px;
+      line-height: 1.2;
+    }
+    .mp-notif-toast__msg {
+      font-size: 13px; color: #111827;
+      line-height: 1.4; margin: 0;
+      word-wrap: break-word;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .mp-notif-toast__close {
+      background: transparent; border: 0;
+      color: #9ca3af; font-size: 18px;
+      cursor: pointer; padding: 0 4px;
+      line-height: 1; flex-shrink: 0;
+      transition: color 0.15s;
+      font-family: inherit;
+    }
+    .mp-notif-toast__close:hover { color: #dc2626; }
+    @media (max-width: 480px) {
+      .mp-notif-toast-stack {
+        top: calc(58px + env(safe-area-inset-top, 0px));
+        width: calc(100% - 16px);
+      }
+    }
+
+    /* Notification panel */
+    .mp-notif-panel {
+      position: fixed;
+      top: 56px;
+      right: 12px;
+      width: 350px;
+      max-width: calc(100vw - 24px);
+      max-height: min(500px, calc(100vh - 80px));
+      background: #ffffff;
+      border-radius: 14px;
+      border: 1px solid #e5e7eb;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.18);
+      z-index: 9995;
+      overflow: hidden;
+      display: none;
+      flex-direction: column;
+      animation: mpNotifPop 0.2s ease-out;
+    }
+    .mp-notif-panel.show { display: flex; }
+    @keyframes mpNotifPop {
+      from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .mp-notif-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 14px;
+      background: #f9fafb;
+      border-bottom: 1px solid #e5e7eb;
+      font-weight: 700; font-size: 14px; color: #111827;
+      flex-shrink: 0;
+    }
+    .mp-notif-clear {
+      background: transparent; border: 0;
+      color: #059669; font-size: 12px; font-weight: 600;
+      cursor: pointer; padding: 4px 8px; border-radius: 6px;
+      font-family: inherit;
+      transition: background 0.15s;
+    }
+    .mp-notif-clear:hover { background: #ecfdf5; }
+    .mp-notif-list {
+      overflow-y: auto;
+      flex: 1;
+      padding: 6px;
+      min-height: 60px;
+    }
+    .mp-notif-item {
+      position: relative;
+      display: flex; gap: 10px;
+      padding: 10px 32px 10px 12px;
+      border-radius: 10px;
+      transition: background 0.15s;
+    }
+    .mp-notif-item:hover { background: #f9fafb; }
+    .mp-notif-item.is-unread { background: #f0fdf4; }
+    .mp-notif-item.is-unread:hover { background: #ecfdf5; }
+    .mp-notif-icon {
+      flex-shrink: 0;
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: #ecfdf5; color: #059669;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px;
+    }
+    .mp-notif-body { flex: 1; min-width: 0; }
+    .mp-notif-msg {
+      font-size: 13px; color: #111827;
+      line-height: 1.4; margin: 0 0 2px;
+      word-wrap: break-word;
+    }
+    .mp-notif-time {
+      font-size: 11px; color: #6b7280;
+    }
+    .mp-notif-del {
+      position: absolute;
+      top: 8px; right: 6px;
+      background: transparent; border: 0;
+      font-size: 16px; line-height: 1; color: #9ca3af;
+      cursor: pointer;
+      padding: 2px 4px; border-radius: 4px;
+      opacity: 0;
+      transition: opacity 0.15s, color 0.15s;
+      font-family: inherit;
+    }
+    .mp-notif-item:hover .mp-notif-del { opacity: 1; }
+    .mp-notif-del:hover { color: #dc2626; }
+    .mp-notif-empty {
+      text-align: center;
+      color: #9ca3af;
+      padding: 32px 12px;
+      font-size: 13px;
+      margin: 0;
     }
 
     /* Login pill (anonymous) */
@@ -253,68 +480,114 @@
     .mp-main { flex: 1 1 0; min-height: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
     .mp-main__inner { max-width: 1200px; width: 100%; margin: 0 auto; padding: 24px 16px; }
 
-    /* ================= WELCOME BANNER (first-visit onboarding) ================= */
-    #mp-welcome-banner {
+    /* ================= WELCOME OVERLAY (modal, not embedded) ================= */
+    #mp-welcome-overlay {
       display: none;
-      margin: 0 0 20px;
-      background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%);
-      border: 1px solid #a7f3d0;
-      border-radius: 16px;
-      padding: 20px;
-      box-shadow: 0 4px 16px rgba(5, 150, 105, 0.08);
-      animation: mpWelcomeSlideIn 0.5s ease-out;
+      position: fixed;
+      inset: 0;
+      z-index: 9996;
+      background: rgba(17,24,39,0.55);
+      backdrop-filter: blur(3px);
+      -webkit-backdrop-filter: blur(3px);
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
     }
-    @keyframes mpWelcomeSlideIn {
-      from { opacity: 0; transform: translateY(-8px); }
-      to { opacity: 1; transform: translateY(0); }
+    #mp-welcome-overlay.show { display: flex; }
+    #mp-welcome-card {
+      max-width: 520px;
+      width: 100%;
+      background: #ffffff;
+      border-radius: 20px;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.35);
+      padding: 28px 24px 22px;
+      text-align: center;
+      animation: mpWelcomeIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
-    #mp-welcome-banner .mp-welcome-row {
-      display: flex; gap: 16px; align-items: flex-start; margin-bottom: 16px;
+    @keyframes mpWelcomeIn {
+      from { opacity: 0; transform: translateY(24px) scale(0.95); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
     }
-    #mp-welcome-banner .mp-welcome-icon {
-      font-size: 36px; line-height: 1; flex-shrink: 0;
+    .mp-welcome-icon-big {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 72px; height: 72px;
+      border-radius: 50%;
+      background: #ecfdf5;
+      font-size: 38px;
+      margin-bottom: 14px;
     }
-    #mp-welcome-banner .mp-welcome-body { flex: 1; min-width: 0; }
-    #mp-welcome-banner .mp-welcome-title {
-      margin: 0 0 4px; font-size: 17px; font-weight: 800; color: #065f46;
+    .mp-welcome-card-title {
+      margin: 0 0 6px;
+      font-size: 20px;
+      font-weight: 800;
+      color: #065f46;
+      letter-spacing: -0.3px;
     }
-    #mp-welcome-banner .mp-welcome-sub {
-      margin: 0 0 12px; font-size: 13px; color: #047857;
+    .mp-welcome-card-sub {
+      margin: 0 0 18px;
+      font-size: 14px;
+      color: #047857;
+      line-height: 1.5;
     }
-    #mp-welcome-banner .mp-welcome-tips {
-      display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;
+    .mp-welcome-card-tips {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+      margin-bottom: 20px;
+      text-align: left;
     }
-    #mp-welcome-banner .mp-welcome-tip {
-      display: flex; align-items: center; gap: 8px;
-      background: #ffffff; padding: 10px 12px; border-radius: 10px;
-      font-size: 12.5px; color: #374151; font-weight: 500;
+    @media (min-width: 480px) {
+      .mp-welcome-card-tips { grid-template-columns: 1fr 1fr; }
+    }
+    .mp-welcome-card-tip {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #f0fdf4;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 13px;
+      color: #374151;
+      font-weight: 500;
       border: 1px solid #d1fae5;
     }
-    #mp-welcome-banner .mp-welcome-tip-emoji { font-size: 16px; line-height: 1; }
-    #mp-welcome-banner .mp-welcome-actions {
-      display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end;
+    .mp-welcome-card-tip span:first-child { font-size: 18px; line-height: 1; flex-shrink: 0; }
+    .mp-welcome-card-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
     }
-    #mp-welcome-banner .mp-welcome-skip {
-      background: transparent; border: 1px solid #a7f3d0; color: #047857;
-      padding: 9px 16px; border-radius: 10px; font-size: 13px; font-weight: 600;
-      cursor: pointer; transition: background 0.15s ease;
+    .mp-welcome-card-skip {
+      background: transparent;
+      border: 1px solid #d1d5db;
+      color: #4b5563;
+      padding: 10px 20px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.15s;
     }
-    #mp-welcome-banner .mp-welcome-skip:hover { background: #d1fae5; }
-    #mp-welcome-banner .mp-welcome-cta {
-      background: #059669; color: #ffffff; border: 1px solid #047857;
-      padding: 9px 18px; border-radius: 10px; font-size: 13px; font-weight: 700;
-      text-decoration: none; transition: background 0.15s ease, transform 0.1s ease;
-      display: inline-flex; align-items: center; gap: 6px;
+    .mp-welcome-card-skip:hover { background: #f3f4f6; }
+    .mp-welcome-card-cta {
+      background: #059669;
+      color: #ffffff;
+      border: 1px solid #047857;
+      padding: 10px 22px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s;
     }
-    #mp-welcome-banner .mp-welcome-cta:hover { background: #047857; }
-    #mp-welcome-banner .mp-welcome-cta:active { transform: scale(0.98); }
-    @media (max-width: 640px) {
-      #mp-welcome-banner { padding: 16px; }
-      #mp-welcome-banner .mp-welcome-tips { grid-template-columns: 1fr; }
-      #mp-welcome-banner .mp-welcome-actions { justify-content: stretch; }
-      #mp-welcome-banner .mp-welcome-skip,
-      #mp-welcome-banner .mp-welcome-cta { flex: 1; justify-content: center; text-align: center; }
-    }
+    .mp-welcome-card-cta:hover { background: #047857; }
 
     /* ================= FOOTER ================= */
     .mp-footer {
@@ -335,6 +608,7 @@
       .mp-sidebar { position: fixed; top: 0; left: 0; bottom: 0; width: 280px; max-width: 85%; z-index: 60; transform: translateX(-100%); transition: transform 0.25s ease; box-shadow: 4px 0 24px rgba(0,0,0,0.25); }
       .mp-sidebar.open { transform: translateX(0); }
       .mp-main-column { width: 100%; }
+      .mp-notif-panel { top: 56px; right: 8px; }
     }
 
     /* ================= PWA UPDATE BANNER ================= */
@@ -481,7 +755,7 @@
     .mp-ai-delete-chat { background: none; border: none; color: #9ca3af; font-size: 18px; cursor: pointer; padding: 0 4px; line-height: 1; transition: color 0.15s; }
     .mp-ai-delete-chat:hover { color: #dc2626; }
 
-    /* ===== AI typing shimmer (feels faster than static text) ===== */
+    /* ===== AI typing shimmer ===== */
     .mp-typing-text {
       display: inline-block;
       background: linear-gradient(90deg, #6b7280 0%, #047857 45%, #6b7280 90%);
@@ -536,7 +810,6 @@
     {% if user.is_authenticated %}
     <aside id="mp-sidebar" class="mp-sidebar" aria-label="Main navigation">
 
-      <!-- ✅ BRAND -->
       <div class="mp-sidebar__brand">
         <a href="{% url 'dashboard' %}" style="text-decoration: none;">
           <span style="color: #ffffff; font-weight: 700; font-size: 17px; display: block; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
@@ -548,12 +821,12 @@
         </a>
       </div>
 
-      <!-- ✅ CHECK-FOR-UPDATES (labeled, full-width) -->
       <a href="{% url 'pwa_update' %}"
          id="mp-check-update-btn"
          class="mp-sidebar__update-btn"
          title="Check for updates"
          aria-label="Check for updates"
+         data-no-loading
          style="display: flex; align-items: center; gap: 10px;
                 margin: 12px 12px 0; padding: 10px 12px; border-radius: 10px;
                 background: rgba(255,255,255,0.1); color: #ecfdf5;
@@ -624,15 +897,39 @@
             <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
             Admin Workspace
           </a>
+          <a href="{% url 'admin_user_logs' %}" style="background: rgba(0,0,0,0.2);">
+            <svg viewBox="0 0 24 24"><path d="M4 6h16M4 10h16M4 14h10M4 18h6"/></svg>
+            User Logs
+          </a>
+          <a href="{% url 'admin_all_users' %}" style="background: rgba(0,0,0,0.2);">
+            <svg viewBox="0 0 24 24"><path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+            All Users
+          </a>
+          <a href="{% url 'admin_pending_payments' %}" style="background: rgba(0,0,0,0.2);">
+            <svg viewBox="0 0 24 24">
+              <rect x="2" y="5" width="20" height="14" rx="2"/>
+              <line x1="2" y1="10" x2="22" y2="10"/>
+            </svg>
+            Pending Payments
+          </a>
         {% endif %}
       </nav>
 
       <div class="mp-sidebar__footer" style="display: flex; flex-direction: column; gap: 8px;">
 
+        {# ── Subscription status — 4 states driven by context processor ── #}
         <a href="{% url 'subscribe' %}"
-           class="mp-sidebar__subscription {% if user_has_subscription %}mp-sidebar__subscription--active{% else %}mp-sidebar__subscription--inactive{% endif %}">
-          {% if user_has_subscription %}
+           class="mp-sidebar__subscription
+                  {% if user_subscription_status == 'subscribed' %}mp-sidebar__subscription--active
+                  {% elif user_subscription_status == 'partial' %}mp-sidebar__subscription--partial
+                  {% elif user_subscription_status == 'pending' %}mp-sidebar__subscription--pending
+                  {% else %}mp-sidebar__subscription--inactive{% endif %}">
+          {% if user_subscription_status == 'subscribed' %}
             ⭐ Subscription Active
+          {% elif user_subscription_status == 'partial' %}
+            🌱 Next Period Covered
+          {% elif user_subscription_status == 'pending' %}
+            ⏳ Pending Verification
           {% else %}
             ✨ Unlock Full Potential
           {% endif %}
@@ -690,11 +987,18 @@
 
           {% if user.is_authenticated %}
           <a href="{% url 'profile' %}" class="mp-profile-pill" title="Your profile">
-            <span>Tap to view profile</span>
             <div class="mp-header__avatar">
               {% if user.first_name or user.last_name %}{{ user.first_name|first|upper }}{{ user.last_name|first|upper }}{% else %}{{ user.username|first|upper }}{% endif %}
             </div>
           </a>
+
+          <button type="button" id="mp-notif-btn" class="mp-header__notif" aria-label="Notifications">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+            <span id="mp-notif-badge" class="mp-notif-badge">0</span>
+          </button>
           {% else %}
           <a href="{% url 'login' %}" class="mp-login-pill" title="Log in to your account">
             Log in →
@@ -722,37 +1026,8 @@
 
       <div id="mp-banner"></div>
 
-      <!-- ✅ GLOBAL MESSAGES BLOCK REMOVED — pages handle their own
-           message display so nothing appears above the content on
-           generation pages (options, content, pptx_options, pptx_content). -->
-
       <main class="mp-main">
         <div class="mp-main__inner">
-
-          {% if user.is_authenticated %}
-          <div id="mp-welcome-banner" role="region" aria-label="Welcome tour">
-            <div class="mp-welcome-row">
-              <div class="mp-welcome-icon">👋</div>
-              <div class="mp-welcome-body">
-                <h3 class="mp-welcome-title">Welcome to MedPracticum Studio!</h3>
-                <p class="mp-welcome-sub">Here's what you can do with the app:</p>
-                <div class="mp-welcome-tips">
-                  <div class="mp-welcome-tip"><span class="mp-welcome-tip-emoji">📝</span> Log daily activities &amp; skills</div>
-                  <div class="mp-welcome-tip"><span class="mp-welcome-tip-emoji">📊</span> Auto-generate reports</div>
-                  <div class="mp-welcome-tip"><span class="mp-welcome-tip-emoji">🖥️</span> Build PowerPoint slides</div>
-                  <div class="mp-welcome-tip"><span class="mp-welcome-tip-emoji">🩺</span> Chat with the AI assistant</div>
-                </div>
-              </div>
-            </div>
-            <div class="mp-welcome-actions">
-              <button type="button" class="mp-welcome-skip" onclick="mpDismissWelcome()">Skip</button>
-              <a href="{% url 'how_to_use' %}" class="mp-welcome-cta" onclick="mpDismissWelcome()">
-                Take me through the tour →
-              </a>
-            </div>
-          </div>
-          {% endif %}
-
           {% block content %}{% endblock %}
         </div>
       </main>
@@ -789,31 +1064,6 @@
     });
     window.addEventListener('resize', function () {
       if (window.innerWidth >= 768) mpCloseSidebar();
-    });
-
-    /* ============================================================
-       Welcome banner — show once on the dashboard, then never again.
-       ============================================================ */
-    function mpDismissWelcome() {
-      var banner = document.getElementById('mp-welcome-banner');
-      if (banner) banner.style.display = 'none';
-      try { localStorage.setItem('mp_welcome_seen', 'true'); } catch (e) {}
-    }
-    document.addEventListener('DOMContentLoaded', function () {
-      var banner = document.getElementById('mp-welcome-banner');
-      if (!banner) return;
-
-      var path = window.location.pathname;
-      var isDashboard = (path === '/' || path === '/dashboard/' || path === '/dashboard');
-      if (!isDashboard) return;
-
-      var seen = false;
-      try { seen = localStorage.getItem('mp_welcome_seen') === 'true'; } catch (e) {}
-      if (seen) return;
-
-      setTimeout(function () {
-        banner.style.display = 'block';
-      }, 600);
     });
   </script>
 
@@ -905,9 +1155,6 @@
         }
         overlay.classList.add('show');
         overlay.setAttribute('aria-hidden', 'false');
-
-        // ✅ Safety: hide after 60s so a stuck request never traps the user.
-        // No more "Waking up server" text change — the loader stays calm.
         hardTimeout = setTimeout(function () {
           if (showing) hideLoading();
         }, 60000);
@@ -1021,6 +1268,302 @@
   </script>
 
   {% if user.is_authenticated %}
+
+  <!-- ============================================================
+       NOTIFICATION PANEL + WELCOME OVERLAY + TOAST STACK
+       ============================================================ -->
+  <div id="mp-notif-panel" class="mp-notif-panel" role="dialog" aria-label="Notifications">
+    <div class="mp-notif-header">
+      <span>Notifications</span>
+      <button type="button" id="mp-notif-clear" class="mp-notif-clear">Clear all</button>
+    </div>
+    <div id="mp-notif-list" class="mp-notif-list">
+      <p class="mp-notif-empty">No notifications yet</p>
+    </div>
+  </div>
+
+  <div id="mp-notif-toast-stack" class="mp-notif-toast-stack" aria-live="polite" aria-label="New notifications"></div>
+
+  <div id="mp-welcome-overlay" role="dialog" aria-modal="true" aria-label="Welcome tour">
+    <div id="mp-welcome-card">
+      <div class="mp-welcome-icon-big">👋</div>
+      <h2 class="mp-welcome-card-title">Welcome to MedPracticum Studio!</h2>
+      <p class="mp-welcome-card-sub">Here's what you can do with the app:</p>
+      <div class="mp-welcome-card-tips">
+        <div class="mp-welcome-card-tip"><span>📝</span> Log daily activities &amp; skills</div>
+        <div class="mp-welcome-card-tip"><span>📊</span> Auto-generate reports</div>
+        <div class="mp-welcome-card-tip"><span>🖥️</span> Build PowerPoint slides</div>
+        <div class="mp-welcome-card-tip"><span>🩺</span> Chat with the AI assistant</div>
+      </div>
+      <div class="mp-welcome-card-actions">
+        <button type="button" class="mp-welcome-card-skip" onclick="mpDismissWelcome()">Skip</button>
+        <a href="{% url 'how_to_use' %}" class="mp-welcome-card-cta" onclick="mpDismissWelcome()">
+          Take the tour →
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       NOTIFICATION JS — bell shake + phone-style toasts + badge
+       ============================================================
+       On page load:  fetch /api/notifications/, seed `seen` set
+                      (no toasts — badge only)
+       On every 20s:  fetch again, toast any ID not in `seen`
+                      shake the bell on badge increase
+                      update panel if open
+       ============================================================ -->
+  <script>
+  (function () {
+    var btn = document.getElementById('mp-notif-btn');
+    var panel = document.getElementById('mp-notif-panel');
+    var badge = document.getElementById('mp-notif-badge');
+    var list = document.getElementById('mp-notif-list');
+    var clearBtn = document.getElementById('mp-notif-clear');
+    var toastStack = document.getElementById('mp-notif-toast-stack');
+    if (!btn || !panel) return;
+
+    var isOpen = false;
+    var lastBadgeCount = -1;
+    var initialized = false;
+    var SEEN_KEY = 'mp_notif_seen_v1';
+    var POLL_MS = 20000;
+
+    var csrfToken = (document.cookie.split('; ').find(function (r) {
+      return r.indexOf('csrftoken=') === 0;
+    }) || '').split('=')[1] || '';
+
+    function getSeenIds() {
+      try { return new Set(JSON.parse(sessionStorage.getItem(SEEN_KEY) || '[]')); }
+      catch (e) { return new Set(); }
+    }
+    function saveSeenIds(set) {
+      try {
+        var arr = Array.from(set).slice(-300);
+        sessionStorage.setItem(SEEN_KEY, JSON.stringify(arr));
+      } catch (e) {}
+    }
+    var seenIds = getSeenIds();
+
+    function escapeHtml(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+      });
+    }
+
+    function shakeBell() {
+      if (!btn) return;
+      btn.classList.remove('shake');
+      void btn.offsetWidth;
+      btn.classList.add('shake');
+      setTimeout(function () { btn.classList.remove('shake'); }, 850);
+    }
+
+    function showToast(n) {
+      if (!toastStack) return;
+      var el = document.createElement('div');
+      el.className = 'mp-notif-toast';
+      el.innerHTML =
+        '<div class="mp-notif-toast__icon">' + escapeHtml(n.icon || '🔔') + '</div>' +
+        '<div class="mp-notif-toast__body">' +
+          '<p class="mp-notif-toast__title">New notification</p>' +
+          '<p class="mp-notif-toast__msg">' + escapeHtml(n.message) + '</p>' +
+        '</div>' +
+        '<button type="button" class="mp-notif-toast__close" aria-label="Dismiss">×</button>';
+
+      var dismissed = false;
+      function dismiss() {
+        if (dismissed) return;
+        dismissed = true;
+        el.classList.remove('show');
+        setTimeout(function () { el.remove(); }, 320);
+      }
+
+      var closeBtn = el.querySelector('.mp-notif-toast__close');
+      closeBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        dismiss();
+      });
+      el.addEventListener('click', function () {
+        dismiss();
+        if (!isOpen) {
+          isOpen = true;
+          panel.classList.add('show');
+          loadNotifs();
+        }
+      });
+
+      toastStack.appendChild(el);
+      requestAnimationFrame(function () { el.classList.add('show'); });
+      setTimeout(dismiss, 5500);
+    }
+
+    function renderNotifs(items) {
+      if (!items || items.length === 0) {
+        list.innerHTML = '<p class="mp-notif-empty">No notifications yet</p>';
+        return;
+      }
+      var html = '';
+      items.forEach(function (n) {
+        html += '<div class="mp-notif-item' + (n.is_read ? '' : ' is-unread') + '" data-id="' + n.id + '">'
+          +   '<div class="mp-notif-icon">' + escapeHtml(n.icon || '🔔') + '</div>'
+          +   '<div class="mp-notif-body">'
+          +     '<p class="mp-notif-msg">' + escapeHtml(n.message) + '</p>'
+          +     '<span class="mp-notif-time">' + escapeHtml(n.created_at_display || '') + '</span>'
+          +   '</div>'
+          +   '<button type="button" class="mp-notif-del" data-id="' + n.id + '" title="Delete">×</button>'
+          + '</div>';
+      });
+      list.innerHTML = html;
+      list.querySelectorAll('.mp-notif-del').forEach(function (d) {
+        d.addEventListener('click', function (e) {
+          e.stopPropagation();
+          deleteOne(d.dataset.id);
+        });
+      });
+    }
+
+    function updateBadge(count) {
+      if (count > 0) {
+        badge.textContent = count > 99 ? '99+' : (count > 9 ? '9+' : count);
+        badge.classList.add('show');
+      } else {
+        badge.classList.remove('show');
+      }
+      if (lastBadgeCount >= 0 && count > lastBadgeCount) {
+        shakeBell();
+      }
+      lastBadgeCount = count;
+    }
+
+    function processItems(data) {
+      var items = (data && data.notifications) || [];
+      var unread = (data && typeof data.unread_count === 'number') ? data.unread_count : 0;
+
+      if (!initialized) {
+        items.forEach(function (n) { seenIds.add(n.id); });
+        saveSeenIds(seenIds);
+        initialized = true;
+      } else {
+        var newOnes = [];
+        items.forEach(function (n) {
+          if (!seenIds.has(n.id)) {
+            newOnes.push(n);
+            seenIds.add(n.id);
+          }
+        });
+        if (newOnes.length) {
+          saveSeenIds(seenIds);
+          newOnes.slice().reverse().forEach(function (n, i) {
+            setTimeout(function () { showToast(n); }, i * 220);
+          });
+        }
+      }
+
+      updateBadge(unread);
+      if (isOpen) renderNotifs(items);
+    }
+
+    function loadNotifs() {
+      fetch('/api/notifications/', { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (data) { processItems(data); })
+        .catch(function () {
+          if (isOpen) {
+            list.innerHTML = '<p class="mp-notif-empty">Could not load notifications</p>';
+          }
+        });
+    }
+
+    function deleteOne(id) {
+      fetch('/api/notifications/' + id + '/delete/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfToken },
+        credentials: 'same-origin'
+      }).then(function () { loadNotifs(); }).catch(function () {});
+    }
+
+    function clearAll() {
+      if (!confirm('Clear all notifications?')) return;
+      fetch('/api/notifications/clear-all/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfToken },
+        credentials: 'same-origin'
+      }).then(function () { loadNotifs(); }).catch(function () {});
+    }
+
+    function toggle() {
+      isOpen = !isOpen;
+      panel.classList.toggle('show', isOpen);
+      if (isOpen) loadNotifs();
+    }
+
+    function close() {
+      isOpen = false;
+      panel.classList.remove('show');
+    }
+
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      toggle();
+    });
+
+    if (clearBtn) {
+      clearBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        clearAll();
+      });
+    }
+
+    document.addEventListener('click', function (e) {
+      if (isOpen && !panel.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
+        close();
+      }
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && isOpen) close();
+    });
+
+    loadNotifs();
+    setInterval(loadNotifs, POLL_MS);
+  })();
+  </script>
+
+  <!-- ============================================================
+       WELCOME OVERLAY — shown once on dashboard, then never again
+       ============================================================ -->
+  <script>
+  (function () {
+    var overlay = document.getElementById('mp-welcome-overlay');
+    if (!overlay) return;
+
+    var isDashboard = ['/', '/dashboard', '/dashboard/'].indexOf(window.location.pathname) !== -1;
+    if (!isDashboard) return;
+
+    var seen = false;
+    try { seen = localStorage.getItem('mp_welcome_seen') === 'true'; } catch (e) {}
+    if (seen) return;
+
+    setTimeout(function () { overlay.classList.add('show'); }, 900);
+
+    window.mpDismissWelcome = function () {
+      overlay.classList.remove('show');
+      try { localStorage.setItem('mp_welcome_seen', 'true'); } catch (e) {}
+      window.dispatchEvent(new Event('mp:welcome-closed'));
+    };
+
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) window.mpDismissWelcome();
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && overlay.classList.contains('show')) {
+        window.mpDismissWelcome();
+      }
+    });
+  })();
+  </script>
 
   <div id="mp-ai-tooltip">
       <span class="close-tip" onclick="document.getElementById('mp-ai-tooltip').classList.remove('show'); sessionStorage.setItem('mp_ai_tooltip_seen', '1');">×</span>
@@ -1744,13 +2287,13 @@
     }
   </style>
 
-  <div id="mp-pay-banner" role="dialog" aria-live="polite" aria-label="Subscribe to unlock reports">
-    <div class="mp-pay-banner__icon">💳</div>
+  <div id="mp-pay-banner" role="dialog" aria-live="polite" aria-label="View subscription plans">
+    <div class="mp-pay-banner__icon">✨</div>
     <div class="mp-pay-banner__text">
-      <p class="mp-pay-banner__title">Unlock Report &amp; Presentation Builder</p>
-      <p class="mp-pay-banner__sub">₵50 for this semester · Unlimited logs, AI reports, and slide decks</p>
+      <p class="mp-pay-banner__title">Unlock Your Full Potential</p>
+      <p class="mp-pay-banner__sub">View available plans to unlock unlimited logs, AI reports, and presentation decks.</p>
     </div>
-    <a href="{% url 'subscribe' %}" class="mp-pay-banner__cta">Subscribe →</a>
+    <a href="{% url 'subscribe' %}" class="mp-pay-banner__cta">View Plans →</a>
     <button type="button" class="mp-pay-banner__close" onclick="dismissPaymentBanner()" aria-label="Dismiss">×</button>
   </div>
 
@@ -1759,196 +2302,23 @@
     var banner = document.getElementById('mp-pay-banner');
     if (!banner) return;
 
-    var p = window.location.pathname;
-    if (p.indexOf('/payments/') === 0 || p.indexOf('/admin/') === 0) {
-      banner.remove();
-      return;
-    }
+    var KEY = 'mp_pay_banner_dismissed_at';
+    var ONE_DAY = 24 * 60 * 60 * 1000;
+    var last = 0;
+    try { last = parseInt(localStorage.getItem(KEY) || '0', 10) || 0; } catch (e) {}
+    if (Date.now() - last < ONE_DAY) return;
 
-    var showTimer = null;
-    var reshowTimer = null;
-    var RESHOW_MS = 8000;
-
-    function showBanner() {
-      if (!banner || !document.body.contains(banner)) return;
+    setTimeout(function () {
       banner.classList.add('show');
-    }
-    function hideBanner() { banner.classList.remove('show'); }
-    function scheduleReshow() {
-      if (reshowTimer) clearTimeout(reshowTimer);
-      reshowTimer = setTimeout(function () {
-        if (banner && document.body.contains(banner)) showBanner();
-      }, RESHOW_MS);
-    }
-    function startBannerLoop() {
-      if (showTimer) clearTimeout(showTimer);
-      showTimer = setTimeout(showBanner, 3000);
-    }
+    }, 4000);
 
     window.dismissPaymentBanner = function () {
-      if (showTimer) clearTimeout(showTimer);
-      hideBanner();
-      scheduleReshow();
+      banner.classList.remove('show');
+      try { localStorage.setItem(KEY, String(Date.now())); } catch (e) {}
     };
-
-    if (localStorage.getItem('mp_welcome_seen')) {
-      startBannerLoop();
-    } else {
-      window.addEventListener('mp:welcome-closed', startBannerLoop, { once: true });
-    }
   })();
   </script>
   {% endif %}
 
-  {% if user.is_authenticated %}
-  <div id="mp-update-banner" role="alert" aria-live="polite">
-    <div class="mp-update-icon">🔄</div>
-    <div class="mp-update-text">
-      <p class="mp-update-title">Update available</p>
-      <p class="mp-update-sub">A newer version of MedPracticum is ready</p>
-    </div>
-    <a href="{% url 'pwa_update' %}" class="mp-update-cta" onclick="mpApplyUpdate(event)" data-no-loading>Update →</a>
-    <button type="button" class="mp-update-close" onclick="mpDismissUpdateBanner()" aria-label="Dismiss">×</button>
-  </div>
-  {% endif %}
-
-  <script src="{% static 'js/offline-sync.js' %}"></script>
-  <script src="{% static 'js/pwa.js' %}"></script>
-
-  <script>
-  function mpManualRefresh() {
-    if (confirm('Refresh this page? Any unsaved changes will be lost.')) {
-      window.location.reload();
-    }
-  }
-
-  /* ============================================================
-     PWA back-button handling
-     ------------------------------------------------------------
-     Ensures the Android hardware/gesture back button navigates
-     back within the app instead of closing it when the user is
-     on a sub-page that was reached via an in-app link.
-     Falls through to normal close behaviour on the dashboard so
-     users can still exit the app with the standard gesture.
-     ============================================================ */
-  (function () {
-    var isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
-                       window.navigator.standalone === true;
-    if (!isStandalone) return;
-
-    var ROOT_PATHS = ['/', '/dashboard', '/dashboard/'];
-
-    // Mark this history entry as an app entry so we can distinguish
-    // an in-app "back" from a "close-the-app" back.
-    if (!history.state || !history.state.mp_app) {
-      try {
-        history.replaceState(
-          { mp_app: true, path: window.location.pathname },
-          '',
-          window.location.href
-        );
-      } catch (e) {}
-    }
-
-    window.addEventListener('popstate', function (e) {
-      var path = window.location.pathname;
-      var isRoot = ROOT_PATHS.indexOf(path) !== -1;
-      var hasAppState = e.state && e.state.mp_app;
-
-      // About to leave the app from a sub-page (no app state in
-      // history = we've gone past every in-app entry). Send the
-      // user back to the dashboard instead of letting the PWA
-      // close. Non-intrusive: only fires when there is genuinely
-      // nowhere to go.
-      if (!hasAppState && !isRoot) {
-        try {
-          window.location.replace('/dashboard/');
-        } catch (err) {}
-      }
-      // On the dashboard or when a valid in-app state exists,
-      // let the browser handle back normally.
-    });
-  })();
-
-  (function () {
-    if (!('serviceWorker' in navigator)) return;
-    if (window.location.pathname.indexOf('/update') === 0) return;
-
-    var banner = document.getElementById('mp-update-banner');
-    var indicator = document.getElementById('mp-update-indicator');
-
-    function showBanner() {
-      if (banner) banner.classList.add('show');
-      if (indicator) indicator.style.display = 'block';
-    }
-    function hideBanner() {
-      if (banner) banner.classList.remove('show');
-      if (indicator) indicator.style.display = 'none';
-    }
-
-    window.mpDismissUpdateBanner = function () {
-      hideBanner();
-      sessionStorage.setItem('mp_update_dismissed', '1');
-    };
-
-    // ✅ v8.1: Apply update in place — tell the waiting SW to activate, then reload once
-    window.mpApplyUpdate = function (e) {
-      if (e) e.preventDefault();
-      navigator.serviceWorker.getRegistration().then(function (reg) {
-        if (reg && reg.waiting) {
-          reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-        } else {
-          location.reload();
-        }
-      }).catch(function () { location.reload(); });
-    };
-
-    navigator.serviceWorker.addEventListener('controllerchange', function () {
-      var b = document.getElementById('mp-update-banner');
-      if (b) {
-        var sub = b.querySelector('.mp-update-sub');
-        var cta = b.querySelector('.mp-update-cta');
-        if (sub) sub.textContent = 'Applying update… please wait';
-        if (cta) { cta.textContent = 'Updating…'; cta.style.pointerEvents = 'none'; cta.style.opacity = '0.7'; }
-        b.classList.add('show');
-      }
-      fetch(window.location.pathname, { credentials: 'same-origin', cache: 'no-store' })
-        .catch(function () {})
-        .then(function () { location.reload(); });
-    });
-
-    if (sessionStorage.getItem('mp_update_dismissed') === '1') return;
-
-    navigator.serviceWorker.getRegistration().then(function (reg) {
-      if (!reg) return;
-
-      if (reg.waiting && navigator.serviceWorker.controller) {
-        showBanner();
-      }
-
-      reg.addEventListener('updatefound', function () {
-        var nw = reg.installing;
-        if (!nw) return;
-        nw.addEventListener('statechange', function () {
-          if (nw.state === 'installed' && navigator.serviceWorker.controller) {
-            showBanner();
-          }
-        });
-      });
-
-      setInterval(function () {
-        reg.update().catch(function () {});
-      }, 60000);
-
-      document.addEventListener('visibilitychange', function () {
-        if (document.visibilityState === 'visible') {
-          reg.update().catch(function () {});
-        }
-      });
-    }).catch(function () {});
-  })();
-  </script>
-
-  {% block scripts %}{% endblock %}
 </body>
 </html>

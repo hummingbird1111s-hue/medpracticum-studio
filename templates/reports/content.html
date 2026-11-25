@@ -3,7 +3,7 @@
 
 {% block content %}
 <style>
-  /* ===== Saving / regenerating overlay (spinner) ===== */
+  /* ===== Saving / regenerating overlay ===== */
   #edit-overlay {
     display: none;
     position: fixed;
@@ -16,7 +16,6 @@
     padding: 16px;
   }
   #edit-overlay.show { display: flex; }
-
   #edit-overlay .edit-card {
     background: #ffffff;
     border-radius: 20px;
@@ -31,136 +30,161 @@
     from { opacity: 0; transform: translateY(8px) scale(0.98); }
     to   { opacity: 1; transform: translateY(0) scale(1); }
   }
-
   #edit-overlay .edit-spinner {
-    width: 64px;
-    height: 64px;
-    margin: 0 auto 20px;
+    width: 64px; height: 64px; margin: 0 auto 20px;
     border: 5px solid #d1fae5;
-    border-top-color: #059669;
-    border-right-color: #10b981;
-    border-radius: 50%;
-    animation: edit-spin 0.9s linear infinite;
+    border-top-color: #059669; border-right-color: #10b981;
+    border-radius: 50%; animation: edit-spin 0.9s linear infinite;
   }
-  @keyframes edit-spin {
-    to { transform: rotate(360deg); }
-  }
-
-  #edit-overlay h3 {
-    margin: 0 0 8px;
-    font-size: 18px;
-    font-weight: 700;
-    color: #065f46;
-  }
-  #edit-overlay .edit-status {
-    margin: 0 0 20px;
-    font-size: 14px;
-    color: #6b7280;
-    line-height: 1.5;
-    min-height: 42px;
-  }
+  @keyframes edit-spin { to { transform: rotate(360deg); } }
+  #edit-overlay h3 { margin: 0 0 8px; font-size: 18px; font-weight: 700; color: #065f46; }
+  #edit-overlay .edit-status { margin: 0 0 20px; font-size: 14px; color: #6b7280; line-height: 1.5; min-height: 42px; }
   #edit-overlay .edit-dots::after {
-    content: '';
-    display: inline-block;
-    width: 1.2em;
-    text-align: left;
+    content: ''; display: inline-block; width: 1.2em; text-align: left;
     animation: edit-dots 1.4s steps(4, end) infinite;
   }
   @keyframes edit-dots {
-    0%, 20%   { content: ''; }
-    40%       { content: '.'; }
-    60%       { content: '..'; }
-    80%, 100% { content: '...'; }
+    0%, 20% { content: ''; } 40% { content: '.'; } 60% { content: '..'; } 80%, 100% { content: '...'; }
   }
-  #edit-overlay .edit-hint {
-    font-size: 12px;
-    color: #9ca3af;
-    margin: 0;
-    line-height: 1.4;
-  }
+  #edit-overlay .edit-hint { font-size: 12px; color: #9ca3af; margin: 0; line-height: 1.4; }
 
-  /* ===== Section-order map and section visual separators ===== */
-  .mp-section-map {
-    counter-reset: section;
+  /* ===== Summary panel ===== */
+  .mp-ai-summary {
+    background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%);
+    border: 1px solid #a7f3d0;
+    border-radius: 16px;
+    padding: 16px 18px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.03);
   }
-  .mp-section-map li {
-    counter-increment: section;
-    position: relative;
-    padding-left: 28px;
-    line-height: 1.6;
-  }
-  .mp-section-map li::before {
-    content: counter(section);
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 20px;
-    height: 20px;
-    display: inline-flex;
+  .mp-ai-summary-head {
+    display: flex;
     align-items: center;
-    justify-content: center;
-    background: #ecfdf5;
-    color: #047857;
-    border-radius: 50%;
-    font-size: 11px;
-    font-weight: 700;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
   }
-  .mp-section-map li.mp-voice-third::before {
-    background: #fef3c7;
-    color: #92400e;
+  .mp-ai-summary-title {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 800;
+    color: #065f46;
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
-  .mp-section-map li.mp-voice-prof::before {
-    background: #eff6ff;
-    color: #1e40af;
+  .mp-ai-summary-counts { display: flex; gap: 10px; font-size: 11px; flex-wrap: wrap; }
+  .mp-ai-summary-count {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 8px; border-radius: 999px; font-weight: 700;
   }
-  .mp-section-voice {
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
-    margin-left: 4px;
-    padding: 1px 6px;
-    border-radius: 4px;
-    vertical-align: 1px;
+  .mp-ai-summary-count--ai    { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+  .mp-ai-summary-count--empty { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+  .mp-ai-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 6px;
+    font-size: 12px;
   }
-  .mp-section-voice--first { background: #ecfdf5; color: #047857; }
-  .mp-section-voice--third { background: #fef3c7; color: #92400e; }
-  .mp-section-voice--prof  { background: #eff6ff; color: #1e40af; }
+  .mp-ai-summary-item {
+    display: flex; align-items: center; justify-content: space-between; gap: 6px;
+    padding: 6px 8px; background: #ffffff; border: 1px solid #e5e7eb;
+    border-radius: 8px; color: #374151;
+  }
+  .mp-ai-summary-item.is-ai    { border-color: #a7f3d0; background: #f0fdf4; }
+  .mp-ai-summary-item.is-empty { border-color: #fecaca; background: #fef2f2; }
+  .mp-ai-summary-item-label {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-weight: 600; flex: 1; min-width: 0;
+  }
+  .mp-ai-summary-item-count {
+    flex-shrink: 0; font-size: 10px; font-weight: 700; color: #6b7280;
+    font-variant-numeric: tabular-nums;
+  }
 
-  /* ===== Voice badge injected above each textarea ===== */
-  .mp-voice-note {
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    padding: 6px 10px;
-    border-radius: 6px;
-    margin-bottom: 8px;
-    display: inline-block;
-    line-height: 1.4;
+  /* ===== Section cards ===== */
+  .mp-section-card {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 14px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.02);
   }
-  .mp-voice-note--first { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
-  .mp-voice-note--third { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
-  .mp-voice-note--prof  { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
-
-  /* Highlight each editable section a bit — makes long forms easier to scan */
-  #edit-form textarea {
-    min-height: 140px;
-    font-family: inherit;
-    line-height: 1.55;
-    transition: border-color 0.15s, box-shadow 0.15s;
-  }
-  #edit-form textarea:focus {
-    outline: none;
+  .mp-section-card:focus-within {
     border-color: #059669;
+    box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
+  }
+  .mp-section-card.is-bullet { background: #f9fefb; }
+  .mp-section-card-header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 10px; margin-bottom: 10px; flex-wrap: wrap;
+  }
+  .mp-section-title {
+    margin: 0; font-size: 14px; font-weight: 700; color: #111827;
+    display: flex; align-items: center; gap: 6px; line-height: 1.3;
+  }
+  .mp-section-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: #ecfdf5; color: #047857;
+    font-size: 10px; font-weight: 800; flex-shrink: 0;
+  }
+  .mp-section-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .mp-section-badge {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.02em;
+    text-transform: uppercase; padding: 2px 7px; border-radius: 4px; white-space: nowrap;
+  }
+  .mp-section-badge--first   { background: #ecfdf5; color: #047857; }
+  .mp-section-badge--third   { background: #fef3c7; color: #92400e; }
+  .mp-section-badge--prof    { background: #eff6ff; color: #1e40af; }
+  .mp-section-badge--bullet  { background: #ede9fe; color: #6d28d9; }
+  .mp-section-badge--empty   { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+  .mp-section-badge--ai      { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+
+  .mp-section-wordcount {
+    font-size: 11px; color: #6b7280;
+    font-variant-numeric: tabular-nums; font-weight: 600;
+  }
+  .mp-section-wordcount.is-low { color: #b45309; }
+
+  .mp-section-textarea {
+    width: 100%; min-height: 140px; padding: 12px;
+    border: 1px solid #d1d5db; border-radius: 8px;
+    font-family: inherit; font-size: 13.5px; line-height: 1.6;
+    background: #ffffff;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    box-sizing: border-box; resize: vertical;
+  }
+  .mp-section-textarea:focus {
+    outline: none; border-color: #059669;
     box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.15);
   }
-  /* Section anchor smooth scroll */
+  .mp-section-textarea[data-empty="1"] { background: #fef2f2; }
+  .mp-section-textarea[data-bullet="1"] { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 13px; }
+
+  .mp-section-hint {
+    font-size: 11px; color: #6b7280; margin: 6px 0 0; line-height: 1.4;
+  }
+  .mp-section-hint code {
+    background: #f3f4f6; padding: 1px 5px; border-radius: 4px;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 10.5px;
+  }
+
   html { scroll-behavior: smooth; }
+
+  @media (max-width: 640px) {
+    .mp-ai-summary-grid { grid-template-columns: 1fr 1fr; }
+    .mp-section-card { padding: 14px; }
+  }
 </style>
 
 <div class="max-w-3xl mx-auto">
 
-  <!-- Header with Back Link -->
+  <!-- Header -->
   <div class="mb-6 flex flex-col md:flex-row md:items-start justify-between gap-4">
     <div>
       <h1 class="text-2xl font-bold mb-1">Edit Report Manually</h1>
@@ -176,109 +200,278 @@
     </a>
   </div>
 
-  <!-- Voice guide card — most important clarity fix -->
+  <!-- Summary panel -->
+  <div class="mp-ai-summary">
+    <div class="mp-ai-summary-head">
+      <h2 class="mp-ai-summary-title">📄 Report sections — what's in your PDF right now</h2>
+      <div class="mp-ai-summary-counts">
+        <span class="mp-ai-summary-count mp-ai-summary-count--ai"    id="ai-count-ai">Has content: —</span>
+        <span class="mp-ai-summary-count mp-ai-summary-count--empty" id="ai-count-empty">Empty: —</span>
+      </div>
+    </div>
+    <div class="mp-ai-summary-grid" id="ai-summary-grid"></div>
+    <p class="text-xs text-emerald-700 mt-3">
+      Everything below is exactly what your PDF contains. Edit any section and
+      click <strong>Save &amp; rebuild PDF</strong> to see your changes in the PDF,
+      or <strong>Regenerate with AI</strong> to have the AI polish your edits into academic English.
+    </p>
+  </div>
+
+  <!-- Voice guide -->
   <div class="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 mb-4">
     <p class="text-sm text-amber-900 leading-relaxed">
-      <strong>✍️ Voice: everything here is written in FIRST PERSON ("I").</strong>
-      Every section narrates <em>your</em> experience — use
-      <em>"I registered…"</em>, <em>"I observed…"</em>, <em>"I learnt…"</em>.
+      <strong>✍️ Voice: most sections use FIRST PERSON ("I").</strong>
+      Write <em>"I registered…"</em>, <em>"I observed…"</em>, <em>"I learnt…"</em>.
     </p>
-    <p class="text-sm text-amber-900 leading-relaxed mt-2">
-      <strong>Two exceptions:</strong>
-    </p>
+    <p class="text-sm text-amber-900 leading-relaxed mt-2"><strong>Exceptions:</strong></p>
     <ul class="text-sm text-amber-900 leading-relaxed mt-1 ml-5 list-disc space-y-1">
-      <li>
-        <strong>Facility Profile</strong> — always <strong>third person</strong>
-        ("The hospital has…", never "I visited…"). This section is auto-built from the
-        facility record in the database — the AI never drafts it.
-      </li>
-      <li>
-        <strong>Recommendations</strong> — <strong>professional tone</strong>
-        ("The facility should…" or "We recommend…"). Never use first-person singular "I"
-        in recommendations.
-      </li>
+      <li><strong>Facility Profile</strong> — third person ("The hospital has…").</li>
+      <li><strong>Recommendations</strong> — professional ("The facility should…", "We recommend…").</li>
     </ul>
   </div>
 
-  <!-- How-this-works card — updated for new save behavior -->
-  <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 mb-4">
-    <p class="text-sm text-emerald-900">
-      <strong>How this works:</strong> the fields below show the AI draft built from
-      your logs and format samples. Edit any section, then choose one of the two buttons
-      at the bottom:
+  <!-- Bullet behavior explainer -->
+  <div class="bg-purple-50 border border-purple-200 rounded-2xl p-4 mb-4">
+    <p class="text-sm text-purple-900">
+      <strong>💡 Bullet sections:</strong> <em>Skills Acquired</em>, <em>Lessons Learnt</em>, and <em>Recommendations</em>
+      use bullet points. Each line becomes one bullet in the PDF.
     </p>
+    <p class="text-sm text-purple-800 mt-2">
+      Press <strong>Enter</strong> on a bullet line to start the next bullet.
+      Press <strong>Enter</strong> on an empty bullet line to end the bullet list and start a paragraph.
+    </p>
+  </div>
+
+  <!-- How this works -->
+  <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 mb-6">
+    <p class="text-sm text-emerald-900"><strong>Two ways to rebuild:</strong></p>
     <ul class="text-sm text-emerald-800 mt-2 ml-5 list-disc space-y-1">
       <li>
-        <strong>Regenerate with AI</strong> — re-drafts any <em>blank</em> fields with
-        the AI (or regenerates everything if you click "Reset" below), then rebuilds the
-        PDF. Takes 1–3 minutes.
+        <strong>💾 Save &amp; rebuild PDF</strong> — saves your text <em>exactly as you typed it</em>
+        and rebuilds the PDF. Instant (~5 sec). No AI cost.
       </li>
       <li>
-        <strong>Save &amp; rebuild PDF</strong> — saves your edits and rebuilds the PDF
-        <em>without</em> calling the AI. Takes ~5 seconds.
+        <strong>🔄 Regenerate with AI</strong> — takes your edits, polishes the grammar and flow
+        into academic English (keeping your structure and facts), then rebuilds the PDF.
+        1–3 min. Uses AI credits.
       </li>
     </ul>
     <p class="text-xs text-emerald-700 mt-2">
-      Sections you don't touch stay exactly as the AI drafted them.
+      Both options preserve everything you've written. Nothing is invented or removed.
     </p>
   </div>
 
-  <!-- Section order reference card — now annotated with voice -->
-  <div class="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-6">
-    <div class="flex items-start justify-between gap-3 flex-wrap mb-3">
-      <div>
-        <p class="text-sm font-bold text-blue-900">📖 Report structure — edit in this order</p>
-        <p class="text-xs text-blue-700 mt-1">
-          Each section below follows the COHY canonical order.
-          <span class="font-semibold">First-person (green)</span> ·
-          <span class="font-semibold">Third-person (amber)</span> ·
-          <span class="font-semibold">Professional (blue)</span>.
-        </p>
-      </div>
-      <span class="text-xs bg-white text-blue-800 px-2 py-1 rounded-md font-semibold whitespace-nowrap border border-blue-200">
-        COHY Standard
-      </span>
-    </div>
-    <ol class="mp-section-map grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm text-blue-900">
-      <li>Introduction <span class="mp-section-voice mp-section-voice--first">first person</span></li>
-      <li class="mp-voice-third">Facility Profile <span class="mp-section-voice mp-section-voice--third">third person</span></li>
-      <li>Activities Performed <span class="mp-section-voice mp-section-voice--first">first person</span></li>
-      <li>Skills Acquired <span class="mp-section-voice mp-section-voice--first">first person</span></li>
-      <li>Workshops <span class="mp-section-voice mp-section-voice--first">first person</span></li>
-      <li>Lessons Learnt <span class="mp-section-voice mp-section-voice--first">first person</span></li>
-      <li>Observations <span class="mp-section-voice mp-section-voice--first">first person</span></li>
-      <li>Challenges <span class="mp-section-voice mp-section-voice--first">first person</span></li>
-      <li class="mp-voice-prof">Recommendations <span class="mp-section-voice mp-section-voice--prof">professional</span></li>
-      <li>Conclusion <span class="mp-section-voice mp-section-voice--first">first person</span></li>
-      <li>Signature and Date <span class="mp-section-voice" style="background:#f3f4f6;color:#374151;">not narrative</span></li>
-    </ol>
-  </div>
-
-  <!-- Warning banner — appears via JS if any section is under 15 words -->
+  <!-- Under-written warning banner -->
   <div id="edit-warning-banner" class="hidden bg-red-50 border-2 border-red-300 rounded-2xl p-4 mb-4">
     <p class="text-sm text-red-900">
-      <strong>⚠️ Some sections look under-written or blank.</strong>
-      Fields below 15 words are flagged with an amber badge.
-      Click <strong>Regenerate with AI</strong> at the bottom to draft them automatically,
-      or edit them manually before saving.
+      <strong>⚠️ Some sections are blank or very short.</strong>
+      Sections under 15 words are marked red. Click
+      <strong>Regenerate with AI</strong> to fill them, or type your own content.
     </p>
   </div>
 
-  <!-- Main Edit Form -->
-  <form method="post" id="edit-form" class="bg-white rounded-2xl shadow p-6 mb-4 border border-gray-100">
+  <!-- ============================================================ -->
+  <!-- MAIN FORM                                                    -->
+  <!-- ============================================================ -->
+  <form method="post" id="edit-form" class="mb-4">
     {% csrf_token %}
     <input type="hidden" name="attachment_id" value="{{ session.id }}">
 
-    {% include 'partials/form_fields.html' %}
+    {# ─────── 1. Introduction ─────── #}
+    <section class="mp-section-card" data-section-card="introduction">
+      <header class="mp-section-card-header">
+        <h3 class="mp-section-title">
+          <span class="mp-section-num">1</span>
+          Introduction
+        </h3>
+        <div class="mp-section-meta">
+          <span class="mp-section-badge mp-section-badge--first">first person</span>
+          <span class="mp-section-badge" data-status-badge>—</span>
+          <span class="mp-section-wordcount" data-wordcount>0 words</span>
+        </div>
+      </header>
+      <textarea name="introduction" id="id_introduction" rows="8"
+                class="mp-section-textarea" data-section-key="introduction">{{ form.introduction.value|default_if_none:"" }}</textarea>
+      <p class="mp-section-hint">3-4 paragraphs, first person. Purpose of attachment, facility, units rotated, competencies targeted.</p>
+    </section>
 
-    <div class="pt-4 border-t border-gray-100 mt-6 flex flex-col md:flex-row gap-2">
-      <button type="submit" name="action" value="regenerate" id="edit-regenerate-btn"
-              class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg py-2.5 transition-colors shadow-sm disabled:opacity-70 disabled:cursor-wait">
-        🔄 Regenerate with AI
-      </button>
+    {# ─────── 2. Facility Profile ─────── #}
+    <section class="mp-section-card" data-section-card="facility_profile">
+      <header class="mp-section-card-header">
+        <h3 class="mp-section-title">
+          <span class="mp-section-num">2</span>
+          Facility Profile
+        </h3>
+        <div class="mp-section-meta">
+          <span class="mp-section-badge mp-section-badge--third">third person</span>
+          <span class="mp-section-badge" data-status-badge>—</span>
+          <span class="mp-section-wordcount" data-wordcount>0 words</span>
+        </div>
+      </header>
+      <textarea name="facility_profile" id="id_facility_profile" rows="6"
+                class="mp-section-textarea" data-section-key="facility_profile">{{ form.facility_profile.value|default_if_none:"" }}</textarea>
+      <p class="mp-section-hint">Describes the hospital itself — third person, no "I". Built from your facility record; edit only if you need to add more.</p>
+    </section>
+
+    {# ─────── 3. Activities Performed ─────── #}
+    <section class="mp-section-card" data-section-card="activities_performed">
+      <header class="mp-section-card-header">
+        <h3 class="mp-section-title">
+          <span class="mp-section-num">3</span>
+          Activities Performed
+        </h3>
+        <div class="mp-section-meta">
+          <span class="mp-section-badge mp-section-badge--first">first person</span>
+          <span class="mp-section-badge" data-status-badge>—</span>
+          <span class="mp-section-wordcount" data-wordcount>0 words</span>
+        </div>
+      </header>
+      <textarea name="activities_performed" id="id_activities_performed" rows="14"
+                class="mp-section-textarea" data-section-key="activities_performed">{{ form.activities_performed.value|default_if_none:"" }}</textarea>
+      <p class="mp-section-hint">Sub-headings per unit (Records Unit, OPC, RCH…) followed by 2-3 paragraphs each. Blank line separates paragraphs.</p>
+    </section>
+
+    {# ─────── 4. Skills Acquired — BULLET SECTION ─────── #}
+    <section class="mp-section-card is-bullet" data-section-card="skills_acquired">
+      <header class="mp-section-card-header">
+        <h3 class="mp-section-title">
+          <span class="mp-section-num">4</span>
+          Skills Acquired
+        </h3>
+        <div class="mp-section-meta">
+          <span class="mp-section-badge mp-section-badge--bullet">bulleted</span>
+          <span class="mp-section-badge mp-section-badge--first">first person</span>
+          <span class="mp-section-badge" data-status-badge>—</span>
+          <span class="mp-section-wordcount" data-wordcount>0 words</span>
+        </div>
+      </header>
+      <textarea name="skills_acquired" id="id_skills_acquired" rows="12"
+                class="mp-section-textarea" data-section-key="skills_acquired"
+                data-bullet="1">{{ form.skills_acquired.value|default_if_none:"" }}</textarea>
+      <p class="mp-section-hint">One skill per bullet. Format: <code>Skill Name: 2-3 sentences describing how you developed it.</code></p>
+    </section>
+
+    {# ─────── 5. Workshops ─────── #}
+    <section class="mp-section-card" data-section-card="workshops">
+      <header class="mp-section-card-header">
+        <h3 class="mp-section-title">
+          <span class="mp-section-num">5</span>
+          Workshops
+        </h3>
+        <div class="mp-section-meta">
+          <span class="mp-section-badge mp-section-badge--first">first person</span>
+          <span class="mp-section-badge" data-status-badge>—</span>
+          <span class="mp-section-wordcount" data-wordcount>0 words</span>
+        </div>
+      </header>
+      <textarea name="workshops" id="id_workshops" rows="5"
+                class="mp-section-textarea" data-section-key="workshops">{{ form.workshops.value|default_if_none:"" }}</textarea>
+      <p class="mp-section-hint">2 paragraphs. If no formal workshops were attended, say so and describe on-the-job training instead.</p>
+    </section>
+
+    {# ─────── 6. Lessons Learnt — BULLET SECTION ─────── #}
+    <section class="mp-section-card is-bullet" data-section-card="lessons_learnt">
+      <header class="mp-section-card-header">
+        <h3 class="mp-section-title">
+          <span class="mp-section-num">6</span>
+          Lessons Learnt
+        </h3>
+        <div class="mp-section-meta">
+          <span class="mp-section-badge mp-section-badge--bullet">bulleted</span>
+          <span class="mp-section-badge mp-section-badge--first">first person</span>
+          <span class="mp-section-badge" data-status-badge>—</span>
+          <span class="mp-section-wordcount" data-wordcount>0 words</span>
+        </div>
+      </header>
+      <textarea name="lessons_learnt" id="id_lessons_learnt" rows="12"
+                class="mp-section-textarea" data-section-key="lessons_learnt"
+                data-bullet="1">{{ form.lessons_learnt.value|default_if_none:"" }}</textarea>
+      <p class="mp-section-hint">One lesson per bullet. Each bullet 3-4 sentences, tied to a competency area.</p>
+    </section>
+
+    {# ─────── 7. Observations ─────── #}
+    <section class="mp-section-card" data-section-card="observation">
+      <header class="mp-section-card-header">
+        <h3 class="mp-section-title">
+          <span class="mp-section-num">7</span>
+          Observations
+        </h3>
+        <div class="mp-section-meta">
+          <span class="mp-section-badge mp-section-badge--first">first person</span>
+          <span class="mp-section-badge" data-status-badge>—</span>
+          <span class="mp-section-wordcount" data-wordcount>0 words</span>
+        </div>
+      </header>
+      <textarea name="observation" id="id_observation" rows="8"
+                class="mp-section-textarea" data-section-key="observation">{{ form.observation.value|default_if_none:"" }}</textarea>
+      <p class="mp-section-hint">3-4 paragraphs about workflows, staffing, record systems, data quality, coordination.</p>
+    </section>
+
+    {# ─────── 8. Challenges ─────── #}
+    <section class="mp-section-card" data-section-card="challenges">
+      <header class="mp-section-card-header">
+        <h3 class="mp-section-title">
+          <span class="mp-section-num">8</span>
+          Challenges
+        </h3>
+        <div class="mp-section-meta">
+          <span class="mp-section-badge mp-section-badge--first">first person</span>
+          <span class="mp-section-badge" data-status-badge>—</span>
+          <span class="mp-section-wordcount" data-wordcount>0 words</span>
+        </div>
+      </header>
+      <textarea name="challenges" id="id_challenges" rows="8"
+                class="mp-section-textarea" data-section-key="challenges">{{ form.challenges.value|default_if_none:"" }}</textarea>
+      <p class="mp-section-hint">3-4 paragraphs. Specific challenges you actually faced, their impact, and how you responded.</p>
+    </section>
+
+    {# ─────── 9. Recommendations — BULLET SECTION ─────── #}
+    <section class="mp-section-card is-bullet" data-section-card="recommendations">
+      <header class="mp-section-card-header">
+        <h3 class="mp-section-title">
+          <span class="mp-section-num">9</span>
+          Recommendations
+        </h3>
+        <div class="mp-section-meta">
+          <span class="mp-section-badge mp-section-badge--bullet">bulleted</span>
+          <span class="mp-section-badge mp-section-badge--prof">professional</span>
+          <span class="mp-section-badge" data-status-badge>—</span>
+          <span class="mp-section-wordcount" data-wordcount>0 words</span>
+        </div>
+      </header>
+      <textarea name="recommendations" id="id_recommendations" rows="12"
+                class="mp-section-textarea" data-section-key="recommendations"
+                data-bullet="1">{{ form.recommendations.value|default_if_none:"" }}</textarea>
+      <p class="mp-section-hint">Opening paragraph, then bulleted actions. "The facility should…" / "We recommend…" — no "I".</p>
+    </section>
+
+    {# ─────── 10. Conclusion ─────── #}
+    <section class="mp-section-card" data-section-card="conclusion">
+      <header class="mp-section-card-header">
+        <h3 class="mp-section-title">
+          <span class="mp-section-num">10</span>
+          Conclusion
+        </h3>
+        <div class="mp-section-meta">
+          <span class="mp-section-badge mp-section-badge--first">first person</span>
+          <span class="mp-section-badge" data-status-badge>—</span>
+          <span class="mp-section-wordcount" data-wordcount>0 words</span>
+        </div>
+      </header>
+      <textarea name="conclusion" id="id_conclusion" rows="8"
+                class="mp-section-textarea" data-section-key="conclusion">{{ form.conclusion.value|default_if_none:"" }}</textarea>
+      <p class="mp-section-hint">3 paragraphs. Summarise the experience, reflect on professional readiness, thank facility and College.</p>
+    </section>
+
+    {# ─────── Buttons ─────── #}
+    <div class="pt-4 border-t border-gray-200 mt-6 flex flex-col md:flex-row gap-2">
       <button type="submit" name="action" value="save" id="edit-save-btn"
-              class="flex-1 bg-white border border-emerald-600 text-emerald-700 font-semibold rounded-lg py-2.5 hover:bg-emerald-50 transition-colors disabled:opacity-70 disabled:cursor-wait">
+              class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg py-2.5 transition-colors shadow-sm disabled:opacity-70 disabled:cursor-wait">
         💾 Save &amp; rebuild PDF
+      </button>
+      <button type="submit" name="action" value="regenerate" id="edit-regenerate-btn"
+              class="flex-1 bg-white border border-emerald-600 text-emerald-700 font-semibold rounded-lg py-2.5 hover:bg-emerald-50 transition-colors disabled:opacity-70 disabled:cursor-wait">
+        🔄 Regenerate with AI
       </button>
       <a href="{% url 'report_options' %}?attachment_id={{ session.id }}"
          class="flex-1 text-center bg-gray-100 text-gray-700 font-semibold rounded-lg py-2.5 hover:bg-gray-200 transition-colors">
@@ -286,12 +479,11 @@
       </a>
     </div>
     <p class="text-xs text-gray-500 mt-3 text-center">
-      <strong>Regenerate</strong> calls the AI (slow, 1–3 min).
-      <strong>Save</strong> is instant (~5 sec, no AI cost).
+      <strong>Save</strong> keeps your words exactly as typed · <strong>Regenerate</strong> polishes grammar with AI
     </p>
   </form>
 
-  <!-- Reset to fresh AI draft -->
+  <!-- Reset -->
   <form method="post" id="edit-reset-form" class="text-center mb-10">
     {% csrf_token %}
     <input type="hidden" name="attachment_id" value="{{ session.id }}">
@@ -304,286 +496,342 @@
 
 </div>
 
-<!-- ============================================================ -->
-<!-- Saving / regenerating overlay                                -->
-<!-- ============================================================ -->
+<!-- Overlay -->
 <div id="edit-overlay" aria-hidden="true" role="status" aria-live="polite">
   <div class="edit-card">
     <div class="edit-spinner"></div>
     <h3 id="edit-overlay-heading">Regenerating your report<span class="edit-dots"></span></h3>
-    <p class="edit-status" id="edit-status-text">
-      Applying your edits and rebuilding the PDF.
-    </p>
+    <p class="edit-status" id="edit-status-text">Applying your edits and rebuilding the PDF.</p>
     <p class="edit-hint" id="edit-overlay-hint">This can take 1&ndash;3 minutes. Keep this page open.</p>
   </div>
 </div>
 
 <script>
-  // ============================================================
-  // VOICE MAP — the ONE source of truth for section-voice guidance.
-  // Used for:
-  //   1) Injecting a voice badge above each textarea
-  //   2) The warning badge for under-written fields
-  // ============================================================
-  var VOICE_MAP = {
-    'introduction':         { key: 'first', badge: '✍️ FIRST PERSON — write as "I"', warn: 'Write this in first person ("I…").' },
-    'facility_profile':     { key: 'third', badge: '🏥 THIRD PERSON — describe the hospital (never "I")', warn: 'Always third person. Built from the facility record.' },
-    'activities_performed': { key: 'first', badge: '✍️ FIRST PERSON — "In the Records Unit, I processed…"', warn: 'Write what YOU did — first person.' },
-    'skills_acquired':      { key: 'first', badge: '✍️ FIRST PERSON — "I developed the skill of…"', warn: 'One skill per line, first person.' },
-    'workshops':            { key: 'first', badge: '✍️ FIRST PERSON — "I attended…", "I learned…"', warn: 'First person, 2 short paragraphs.' },
-    'lessons_learnt':       { key: 'first', badge: '✍️ FIRST PERSON — "I learnt…", "I realised…"', warn: 'One lesson per line, first person.' },
-    'observations':         { key: 'first', badge: '✍️ FIRST PERSON — "I observed that…"', warn: 'First person, describes what YOU noticed.' },
-    'observation':          { key: 'first', badge: '✍️ FIRST PERSON — "I observed that…"', warn: 'First person, describes what YOU noticed.' },
-    'challenges':           { key: 'first', badge: '✍️ FIRST PERSON — "I faced…", "I overcame…"', warn: 'First person, actual challenges you faced.' },
-    'recommendations':      { key: 'prof',  badge: '🎯 PROFESSIONAL — "The facility should…" or "We recommend…"', warn: 'Not "I" — professional tone.' },
-    'conclusion':           { key: 'first', badge: '✍️ FIRST PERSON — "I completed…", "I am grateful…"', warn: 'First person, wrapping up.' },
-  };
+(function () {
+  'use strict';
 
-  function detectVoice(fieldName) {
-    var name = String(fieldName || '').toLowerCase();
-    for (var key in VOICE_MAP) {
-      if (name.indexOf(key) !== -1) return VOICE_MAP[key];
-    }
-    return null;
+  /* ============================================================
+     CONFIG
+     ============================================================ */
+  var SECTION_LABELS = {
+    'introduction':         'Introduction',
+    'facility_profile':     'Facility Profile',
+    'activities_performed': 'Activities Performed',
+    'skills_acquired':      'Skills Acquired',
+    'workshops':            'Workshops',
+    'lessons_learnt':       'Lessons Learnt',
+    'observation':          'Observations',
+    'challenges':           'Challenges',
+    'recommendations':      'Recommendations',
+    'conclusion':           'Conclusion'
+  };
+  var SECTION_ORDER = [
+    'introduction', 'facility_profile', 'activities_performed',
+    'skills_acquired', 'workshops', 'lessons_learnt',
+    'observation', 'challenges', 'recommendations', 'conclusion'
+  ];
+  var BULLET_SECTIONS = ['skills_acquired', 'lessons_learnt', 'recommendations'];
+
+  var form = document.getElementById('edit-form');
+  if (!form) return;
+
+  /* ============================================================
+     WORD COUNT
+     ============================================================ */
+  function wordCount(text) {
+    return (String(text || '').trim().match(/\S+/g) || []).length;
   }
 
-  // ============================================================
-  // A) Inject voice badges above each textarea + count words
-  // ============================================================
-  (function () {
-    var form = document.getElementById('edit-form');
-    if (!form) return;
+  /* ============================================================
+     BULLET NORMALIZATION
+     - Ensures every non-empty line in a bullet section starts with "• "
+     - Idempotent: re-runs safely without duplicating
+     ============================================================ */
+  function normalizeBullets(text) {
+    return String(text || '')
+      .split('\n')
+      .map(function (line) {
+        return line.replace(/^[•\-\*]\s+/, '').replace(/^\s+/, '');
+      })
+      .filter(function (line) { return line.length > 0; })
+      .map(function (line) { return '• ' + line; })
+      .join('\n');
+  }
 
-    var hasUnderwritten = false;
+  function stripBullets(text) {
+    return String(text || '')
+      .split('\n')
+      .map(function (line) {
+        return line.replace(/^[•\-\*]\s+/, '').trim();
+      })
+      .filter(function (line) { return line.length > 0; })
+      .join('\n');
+  }
 
-    form.querySelectorAll('textarea').forEach(function (ta) {
-      var voice = detectVoice(ta.name || ta.id || '');
-      if (!voice) return;
+  /* ============================================================
+     INITIALIZE EACH SECTION
+     ============================================================ */
+  form.querySelectorAll('textarea[data-section-key]').forEach(function (ta) {
+    var key = ta.dataset.sectionKey;
 
-      // Skip if badge already present (protects against double-execution)
-      if (ta.parentElement && ta.parentElement.querySelector('.mp-voice-note')) return;
+    // Bullet sections: normalize on load
+    if (BULLET_SECTIONS.indexOf(key) !== -1) {
+      ta.dataset.bullet = '1';
+      ta.value = normalizeBullets(ta.value);
+      attachBulletEnterHandler(ta);
+    }
 
-      var badge = document.createElement('div');
-      badge.className = 'mp-voice-note mp-voice-note--' + voice.key;
-      badge.textContent = voice.badge;
-      ta.parentElement.insertBefore(badge, ta);
+    // Live word count on input
+    ta.addEventListener('input', function () { updateSectionMeta(ta); });
 
-      // Word-count check for the warning banner
-      var wordCount = (ta.value || '').trim().split(/\s+/).filter(Boolean).length;
-      if (wordCount > 0 && wordCount < 15) {
-        hasUnderwritten = true;
-        // Add a small amber note below the textarea
-        var warn = document.createElement('p');
-        warn.style.cssText =
-          'font-size: 11px; color: #92400e; background: #fef3c7; border: 1px solid #fcd34d;' +
-          'border-radius: 6px; padding: 4px 8px; margin-top: 6px; display: inline-block;';
-        warn.textContent = '⚠️ Only ' + wordCount + ' word' + (wordCount === 1 ? '' : 's') +
-                          ' — ' + voice.warn + ' Click Regenerate below to expand.';
-        ta.parentElement.insertBefore(warn, ta.nextSibling);
-      } else if (wordCount === 0) {
-        hasUnderwritten = true;
+    // Initial state
+    updateSectionMeta(ta);
+  });
+
+  /* ============================================================
+     ENTER-KEY BULLET BEHAVIOR
+     - Enter on a bullet line → next line starts with "• "
+     - Enter on empty bullet line → exits bullet list
+     - Shift+Enter → soft line break (no bullet)
+     ============================================================ */
+  function attachBulletEnterHandler(ta) {
+    ta.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' || e.shiftKey) return;
+
+      var pos = ta.selectionStart;
+      var before = ta.value.substring(0, pos);
+      var lineStart = before.lastIndexOf('\n') + 1;
+      var currentLine = before.substring(lineStart);
+      var after = ta.value.substring(pos);
+
+      var isEmptyBullet =
+        currentLine.trim() === '' ||
+        currentLine.trim() === '•';
+
+      if (isEmptyBullet) {
+        // Exit bullet list: replace the current line's bullet with a plain newline
+        e.preventDefault();
+        var linePrefix = before.substring(0, lineStart);
+        var newValue = linePrefix + '\n' + after;
+        // If linePrefix is empty, drop the leading newline
+        if (!linePrefix) newValue = after;
+        ta.value = newValue;
+        var newPos = lineStart + (linePrefix ? 1 : 0);
+        ta.selectionStart = ta.selectionEnd = newPos;
+        updateSectionMeta(ta);
+        return;
       }
+
+      if (/^•\s/.test(currentLine)) {
+        // Continue bullet list
+        e.preventDefault();
+        var newValue2 = before + '\n• ' + after;
+        ta.value = newValue2;
+        ta.selectionStart = ta.selectionEnd = pos + 3;
+        updateSectionMeta(ta);
+        return;
+      }
+
+      // Non-bullet line: normal Enter (paragraph)
+    });
+  }
+
+  /* ============================================================
+     PER-SECTION META UPDATE (word count + status badge)
+     ============================================================ */
+  function updateSectionMeta(ta) {
+    var card = ta.closest('[data-section-card]');
+    if (!card) return;
+
+    var text = ta.value || '';
+    var wc = wordCount(text);
+    var isEmpty = wc === 0;
+
+    // Word count
+    var wcEl = card.querySelector('[data-wordcount]');
+    if (wcEl) {
+      wcEl.textContent = wc + ' word' + (wc === 1 ? '' : 's');
+      wcEl.classList.toggle('is-low', wc < 15);
+    }
+
+    // Status badge
+    var statusBadge = card.querySelector('[data-status-badge]');
+    if (statusBadge) {
+      if (isEmpty) {
+        statusBadge.className = 'mp-section-badge mp-section-badge--empty';
+        statusBadge.textContent = '✕ Empty';
+      } else if (wc < 15) {
+        statusBadge.className = 'mp-section-badge mp-section-badge--empty';
+        statusBadge.textContent = '⚠ Short';
+      } else {
+        statusBadge.className = 'mp-section-badge mp-section-badge--ai';
+        statusBadge.textContent = '✓ Has content';
+      }
+    }
+
+    ta.dataset.empty = isEmpty ? '1' : '0';
+
+    // Refresh summary
+    updateSummary();
+  }
+
+  /* ============================================================
+     SUMMARY PANEL
+     ============================================================ */
+  function updateSummary() {
+    var grid = document.getElementById('ai-summary-grid');
+    if (!grid) return;
+
+    var hasContent = 0, empty = 0;
+    var html = '';
+
+    SECTION_ORDER.forEach(function (key) {
+      var ta = form.querySelector('textarea[data-section-key="' + key + '"]');
+      if (!ta) return;
+
+      var wc = wordCount(ta.value);
+      var status = wc === 0 ? 'empty' : 'ai';
+      if (status === 'ai') hasContent++;
+      else empty++;
+
+      html +=
+        '<div class="mp-ai-summary-item is-' + status + '">' +
+          '<span class="mp-ai-summary-item-label">' + SECTION_LABELS[key] + '</span>' +
+          '<span class="mp-ai-summary-item-count">' + wc + 'w</span>' +
+        '</div>';
     });
 
-    if (hasUnderwritten) {
-      var banner = document.getElementById('edit-warning-banner');
-      if (banner) banner.classList.remove('hidden');
+    grid.innerHTML = html || '<p class="text-xs text-gray-500">No sections detected.</p>';
+
+    var aiEl  = document.getElementById('ai-count-ai');
+    var empEl = document.getElementById('ai-count-empty');
+    if (aiEl)  aiEl.textContent  = 'Has content: ' + hasContent;
+    if (empEl) empEl.textContent = 'Empty: ' + empty;
+
+    var banner = document.getElementById('edit-warning-banner');
+    if (banner) {
+      if (empty > 0) banner.classList.remove('hidden');
+      else           banner.classList.add('hidden');
     }
-  })();
+  }
 
-  // ============================================================
-  // B) Reorder form fields to match COHY canonical section order
-  // ============================================================
-  (function () {
-    var form = document.getElementById('edit-form');
-    if (!form) return;
+  updateSummary();
 
-    var SECTION_KEYS = [
-      ['introduction', 'intro'],
-      ['facility_profile', 'facility profile', 'facility'],
-      ['activities_performed', 'activities performed', 'activities'],
-      ['skills_acquired', 'skills acquired', 'skills'],
-      ['workshops', 'workshop'],
-      ['lessons_learnt', 'lessons learned', 'lessons'],
-      ['observations', 'observation'],
-      ['challenges', 'challenge'],
-      ['recommendations', 'recommendation'],
-      ['conclusion'],
-      ['signature_and_date', 'signature and date', 'signature', 'date']
-    ];
+  /* ============================================================
+     OVERLAY + SUBMIT
+     ============================================================ */
+  var overlay    = document.getElementById('edit-overlay');
+  var heading    = document.getElementById('edit-overlay-heading');
+  var statusText = document.getElementById('edit-status-text');
+  var hintEl     = document.getElementById('edit-overlay-hint');
 
-    function normalize(s) {
-      return String(s || '').toLowerCase().replace(/[_\-\s]+/g, ' ').trim();
+  var MODES = {
+    save: {
+      heading: 'Saving your edits',
+      steps: [
+        'Saving your text',
+        'Rebuilding the PDF from your exact edits',
+        'Preparing the Word document',
+        'Done',
+      ],
+      hint: 'This will be quick (~5 seconds). No AI cost.',
+    },
+    regenerate: {
+      heading: 'Refining with AI',
+      steps: [
+        'Reading your edits',
+        'Polishing grammar and flow',
+        'Rebuilding the PDF',
+        'Preparing the Word document',
+      ],
+      hint: 'This can take 1–3 minutes. Keep this page open.',
+    },
+    reset_ai: {
+      heading: 'Resetting to fresh AI draft',
+      steps: [
+        'Clearing your edits',
+        'Re-drafting all sections from logs',
+        'Rebuilding the report',
+      ],
+      hint: 'This can take 1–3 minutes. Keep this page open.',
+    },
+  };
+
+  var currentMode = null;
+  var stepIndex = 0;
+  var stepTimer = null;
+
+  function advanceStatus() {
+    if (!currentMode) return;
+    var steps = MODES[currentMode].steps;
+    stepIndex = (stepIndex + 1) % steps.length;
+    if (statusText) statusText.textContent = steps[stepIndex] + '…';
+  }
+
+  function showOverlay(mode) {
+    currentMode = mode;
+    var cfg = MODES[mode] || MODES.regenerate;
+    if (heading) heading.innerHTML = cfg.heading + '<span class="edit-dots"></span>';
+    if (statusText) statusText.textContent = cfg.steps[0] + '…';
+    if (hintEl) hintEl.textContent = cfg.hint;
+    stepIndex = 0;
+    overlay.classList.add('show');
+    overlay.setAttribute('aria-hidden', 'false');
+    if (stepTimer) clearInterval(stepTimer);
+    stepTimer = setInterval(advanceStatus, mode === 'save' ? 1800 : 6000);
+  }
+
+  function hideOverlay() {
+    overlay.classList.remove('show');
+    overlay.setAttribute('aria-hidden', 'true');
+    if (stepTimer) { clearInterval(stepTimer); stepTimer = null; }
+  }
+
+  var regenBtn = document.getElementById('edit-regenerate-btn');
+  var saveBtn  = document.getElementById('edit-save-btn');
+
+  form.addEventListener('submit', function (e) {
+    // Prevent double-submit
+    if (overlay.classList.contains('show')) {
+      e.preventDefault();
+      return;
     }
 
-    function detectSection(text) {
-      var t = normalize(text);
-      if (!t) return -1;
-      for (var i = 0; i < SECTION_KEYS.length; i++) {
-        for (var j = 0; j < SECTION_KEYS[i].length; j++) {
-          if (t === normalize(SECTION_KEYS[i][j]) ||
-              t.indexOf(normalize(SECTION_KEYS[i][j])) !== -1) {
-            return i;
-          }
-        }
-      }
-      return -1;
-    }
-
-    var textareas = form.querySelectorAll('textarea');
-    if (!textareas.length) return;
-
-    var items = [];
-    textareas.forEach(function (ta) {
-      var labelEl = form.querySelector('label[for="' + ta.id + '"]');
-      if (!labelEl) {
-        var parent = ta.closest('div');
-        if (parent) labelEl = parent.querySelector('label');
-      }
-      var labelText = labelEl ? labelEl.textContent : '';
-      var idx = detectSection(labelText);
-      if (idx === -1) idx = detectSection(ta.name || ta.id || '');
-      if (idx === -1) return;
-
-      var wrapper = labelEl ? labelEl.closest('div') : ta.parentElement;
-      if (!wrapper || !wrapper.contains(ta)) {
-        wrapper = ta.parentElement;
-      }
-      if (!wrapper) return;
-      if (labelEl && !wrapper.contains(labelEl)) return;
-
-      items.push({ wrapper: wrapper, order: idx, name: ta.name || ta.id });
+    // Strip bullet markers from bullet sections so the DB stays clean
+    BULLET_SECTIONS.forEach(function (key) {
+      var ta = form.querySelector('textarea[data-section-key="' + key + '"]');
+      if (ta) ta.value = stripBullets(ta.value);
     });
 
-    if (items.length < 3) return;
+    // Determine which button was clicked
+    var submitter = e.submitter || document.activeElement;
+    var mode = 'save';
+    if (submitter && submitter.value === 'regenerate') mode = 'regenerate';
 
-    var sorted = items.slice().sort(function (a, b) { return a.order - b.order; });
-    var alreadySorted = items.every(function (it, i) { return it === sorted[i]; });
-    if (alreadySorted) return;
+    if (regenBtn) regenBtn.disabled = true;
+    if (saveBtn)  saveBtn.disabled  = true;
 
-    var parent = items[0].wrapper.parentElement;
-    if (!parent) return;
-    var allSameParent = items.every(function (it) { return it.wrapper.parentElement === parent; });
-    if (!allSameParent) return;
+    showOverlay(mode);
+  });
 
-    try {
-      sorted.forEach(function (it) { parent.appendChild(it.wrapper); });
-      console.log('[edit-form] Reordered ' + items.length + ' section(s) to COHY canonical order');
-    } catch (err) {
-      console.warn('[edit-form] Reorder skipped:', err);
-    }
-  })();
-
-  // ============================================================
-  // C) Saving / regenerating overlay logic
-  // ============================================================
-  (function () {
-    var overlay   = document.getElementById('edit-overlay');
-    var heading   = document.getElementById('edit-overlay-heading');
-    var statusText = document.getElementById('edit-status-text');
-    var hintEl    = document.getElementById('edit-overlay-hint');
-    if (!overlay) return;
-
-    var MODES = {
-      regenerate: {
-        heading: 'Regenerating with AI',
-        steps: [
-          'Drafting blank sections with AI',
-          'Rebuilding chapters and formatting',
-          'Rendering the PDF',
-          'Preparing the Word document',
-        ],
-        hint: 'This can take 1–3 minutes. Keep this page open.',
-      },
-      save: {
-        heading: 'Saving your edits & rebuilding PDF',
-        steps: [
-          'Saving your text',
-          'Re-rendering the PDF from your edits',
-          'Refreshing the page',
-        ],
-        hint: 'This will be quick (~5 seconds). No AI cost.',
-      },
-      reset_ai: {
-        heading: 'Resetting to fresh AI draft',
-        steps: [
-          'Clearing your edits',
-          'Re-drafting all sections with AI',
-          'Rebuilding the report',
-        ],
-        hint: 'This can take 1–3 minutes. Keep this page open.',
-      },
-    };
-
-    var currentMode = null;
-    var stepIndex = 0;
-    var stepTimer = null;
-
-    function advanceStatus() {
-      if (!currentMode) return;
-      var steps = MODES[currentMode].steps;
-      stepIndex = (stepIndex + 1) % steps.length;
-      if (statusText) statusText.textContent = steps[stepIndex] + '…';
-    }
-
-    function showOverlay(mode) {
-      currentMode = mode;
-      var cfg = MODES[mode] || MODES.regenerate;
-      if (heading) heading.innerHTML = cfg.heading + '<span class="edit-dots"></span>';
-      if (statusText) statusText.textContent = cfg.steps[0] + '…';
-      if (hintEl) hintEl.textContent = cfg.hint;
-      stepIndex = 0;
-      overlay.classList.add('show');
-      overlay.setAttribute('aria-hidden', 'false');
-      if (stepTimer) clearInterval(stepTimer);
-      // Longer interval for longer modes so text doesn't spin too fast
-      stepTimer = setInterval(advanceStatus, mode === 'save' ? 1500 : 6000);
-    }
-
-    function hideOverlay() {
-      overlay.classList.remove('show');
-      overlay.setAttribute('aria-hidden', 'true');
-      if (stepTimer) { clearInterval(stepTimer); stepTimer = null; }
-    }
-
-    var editForm = document.getElementById('edit-form');
-    var regenBtn = document.getElementById('edit-regenerate-btn');
-    var saveBtn  = document.getElementById('edit-save-btn');
-
-    if (editForm) {
-      editForm.addEventListener('submit', function (e) {
-        if (overlay.classList.contains('show')) {
-          e.preventDefault();
-          return;
-        }
-        var submitter = e.submitter || document.activeElement;
-        var mode = 'regenerate';
-        if (submitter && submitter.value === 'save') mode = 'save';
-
-        if (regenBtn) regenBtn.disabled = true;
-        if (saveBtn) saveBtn.disabled = true;
-
-        showOverlay(mode);
-      });
-    }
-
-    var resetForm = document.getElementById('edit-reset-form');
-    var resetBtn  = document.getElementById('edit-reset-btn');
-    if (resetForm) {
-      resetForm.addEventListener('submit', function (e) {
-        if (overlay.classList.contains('show')) {
-          e.preventDefault();
-          return;
-        }
-        if (resetBtn) resetBtn.disabled = true;
-        showOverlay('reset_ai');
-      });
-    }
-
-    window.addEventListener('pageshow', function (e) {
-      if (e.persisted) hideOverlay();
+  var resetForm = document.getElementById('edit-reset-form');
+  var resetBtn  = document.getElementById('edit-reset-btn');
+  if (resetForm) {
+    resetForm.addEventListener('submit', function (e) {
+      if (overlay.classList.contains('show')) {
+        e.preventDefault();
+        return;
+      }
+      if (resetBtn) resetBtn.disabled = true;
+      showOverlay('reset_ai');
     });
-  })();
+  }
+
+  window.addEventListener('pageshow', function (e) {
+    if (e.persisted) hideOverlay();
+  });
+
+})();
 </script>
 
 {% endblock %}

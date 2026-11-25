@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+
+{% block title %}User Activity Logs · MedPracticum Studio{% endblock %}
+
+{% block content %}
+<style>
+  .admin-wrap    { max-width: 1200px; margin: 2rem auto; padding: 0 1rem; }
+  .admin-header  { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; gap: 1rem; flex-wrap: wrap; }
+  .admin-header h1 { margin: 0; font-size: 1.5rem; color: #111827; }
+  .admin-back    { display: inline-block; padding: 0.5rem 1rem; border-radius: 6px; background: #eef2ff; color: #3730a3; text-decoration: none; font-size: 0.88rem; font-weight: 600; }
+  .admin-back:hover { background: #e0e7ff; }
+  .filter-bar    { background: #f8f9fa; border: 1px solid #e5e7eb; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; }
+  .filter-bar input, .filter-bar select { padding: 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.9rem; background: #fff; }
+  .filter-bar input[type=text] { min-width: 240px; flex: 1; max-width: 380px; }
+  .filter-bar button { padding: 0.5rem 1.25rem; background: #2563eb; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 600; }
+  .filter-bar button:hover { background: #1e40af; }
+  .filter-bar .clear { background: #6b7280; color: #fff; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-size: 0.85rem; }
+  .filter-bar .clear:hover { background: #4b5563; }
+  .count-note    { color: #6b7280; font-size: 0.85rem; margin-bottom: 0.75rem; }
+  .admin-table   { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .admin-table th, .admin-table td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid #eef0f3; font-size: 0.9rem; vertical-align: top; }
+  .admin-table th { background: #f5f7fa; font-weight: 600; color: #4a5568; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  .admin-table tr:last-child td { border-bottom: none; }
+  .admin-table tr:hover td { background: #fafbfc; }
+  .badge { display: inline-block; padding: 0.2rem 0.65rem; border-radius: 999px; font-size: 0.74rem; font-weight: 600; }
+  .badge-login   { background: #dcfce7; color: #166534; }
+  .badge-logout  { background: #e0e7ff; color: #3730a3; }
+  .badge-failed  { background: #fee2e2; color: #991b1b; }
+  .mono { font-family: ui-monospace, 'Courier New', monospace; font-size: 0.82rem; color: #6b7280; }
+  .empty { padding: 3rem 1rem; text-align: center; color: #9ca3af; background: #fff; border-radius: 8px; border: 1px dashed #d1d5db; }
+  .pagination { display: flex; justify-content: center; align-items: center; gap: 0.75rem; margin-top: 1.5rem; font-size: 0.9rem; }
+  .pagination a, .pagination span { padding: 0.4rem 0.85rem; border: 1px solid #d1d5db; border-radius: 6px; text-decoration: none; color: #374151; background: #fff; }
+  .pagination a:hover { background: #f3f4f6; }
+  .pagination .current { background: #2563eb; color: #fff; border-color: #2563eb; font-weight: 600; }
+</style>
+
+<div class="admin-wrap">
+  <div class="admin-header">
+    <h1>User Activity Logs</h1>
+    <a class="admin-back" href="{% url 'admin_all_users' %}">→ All Users</a>
+  </div>
+
+  <form method="get" class="filter-bar">
+    <input type="text" name="user" placeholder="Search username, email, or name…" value="{{ user_query }}">
+    <select name="action">
+      <option value="">All actions</option>
+      {% for value, label in action_choices %}
+        <option value="{{ value }}" {% if value == current_action %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit">Apply filters</button>
+    {% if current_action or user_query %}
+      <a class="clear" href="{% url 'admin_user_logs' %}">Clear</a>
+    {% endif %}
+  </form>
+
+  <div class="count-note">
+    {{ total }} {% if total == 1 %}entry{% else %}entries{% endif %}
+  </div>
+
+  {% if logs %}
+    <table class="admin-table">
+      <thead>
+        <tr>
+          <th>When</th>
+          <th>User</th>
+          <th>Action</th>
+          <th>IP address</th>
+          <th>User agent</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in logs %}
+          <tr>
+            <td>{{ log.created_at|date:"d M Y, H:i" }}</td>
+            <td>
+              {% if log.user %}
+                <strong>{{ log.user.username }}</strong>
+                {% if log.user.get_full_name %}<br><span class="mono">{{ log.user.get_full_name }}</span>{% endif %}
+              {% else %}
+                <span class="mono">{{ log.username_attempted|default:"(unknown)" }}</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if log.action == 'login' %}<span class="badge badge-login">Login</span>
+              {% elif log.action == 'logout' %}<span class="badge badge-logout">Logout</span>
+              {% elif log.action == 'failed_login' %}<span class="badge badge-failed">Failed login</span>
+              {% else %}<span class="badge">{{ log.action }}</span>{% endif %}
+            </td>
+            <td class="mono">{{ log.ip_address|default:"—" }}</td>
+            <td class="mono">{{ log.user_agent|truncatechars:60|default:"—" }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% if page.has_other_pages %}
+      <div class="pagination">
+        {% if page.has_previous %}
+          <a href="?page={{ page.previous_page_number }}{% if current_action %}&action={{ current_action }}{% endif %}{% if user_query %}&user={{ user_query }}{% endif %}">← Prev</a>
+        {% endif %}
+        <span class="current">{{ page.number }} / {{ page.paginator.num_pages }}</span>
+        {% if page.has_next %}
+          <a href="?page={{ page.next_page_number }}{% if current_action %}&action={{ current_action }}{% endif %}{% if user_query %}&user={{ user_query }}{% endif %}">Next →</a>
+        {% endif %}
+      </div>
+    {% endif %}
+  {% else %}
+    <div class="empty">No activity yet. Entries appear here after users log in or out.</div>
+  {% endif %}
+</div>
+{% endblock %}

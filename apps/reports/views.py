@@ -30,14 +30,37 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================================
+# Constants
+# ============================================================
+
+_KNOWN_SECTION_KEYS = (
+    'introduction',
+    'facility_profile',
+    'activities_performed',
+    'skills_acquired',
+    'workshops',
+    'lessons_learnt',
+    'observation',
+    'challenges',
+    'recommendations',
+    'conclusion',
+)
+
+
+# ============================================================
 # Small helpers
 # ============================================================
 
+def _notify_build(user, message, kind):
+    """Fire a bell notification. Never raises — build must never fail on notify."""
+    try:
+        from apps.notifications.models import notify
+        notify(user, message, kind=kind)
+    except Exception:
+        logger.exception('Failed to create %s notification for %s', kind, user)
+
+
 def _redirect_after_generation(request, view_name, session, **extra):
-    """
-    Post-generation redirect. Adds ?attachment_id=<id>&generated=1 so
-    options.html / pptx_options.html can skip the auto-show overlay.
-    """
     base = reverse(view_name)
     params = {'attachment_id': session.id, 'generated': '1'}
     params.update(extra)
@@ -53,7 +76,6 @@ def _get_session(request):
 
 
 def _has_real_sections(content):
-    """True if `content` contains at least one non-private section key."""
     if not content:
         return False
     return any(not str(k).startswith('_') for k in content.keys())
@@ -64,10 +86,6 @@ def _count_real_sections(content):
 
 
 def _ppt_is_real_pptx(path):
-    """
-    True if the file starts with the ZIP magic bytes that PowerPoint uses.
-    Catches the "PDF saved as .pptx" bug — a PDF starts with b'%PDF'.
-    """
     try:
         with open(path, 'rb') as f:
             header = f.read(4)
@@ -81,14 +99,6 @@ def _ppt_is_real_pptx(path):
 # ============================================================
 
 def _rebuild_report_files(request, session):
-    """
-    Rebuild the report PDF + DOCX from the saved report.content.
-
-    Used by download/view handlers when the physical file has gone missing
-    (Render's free tier wipes /media/ on every redeploy). Does NOT call
-    the AI — just re-renders WeasyPrint + python-docx from what's already
-    in report.content.
-    """
     try:
         builder = PracticumReportBuilder(session)
         builder.save()
@@ -106,17 +116,6 @@ def _rebuild_report_files(request, session):
 # ============================================================
 
 def _build(request, session, use_ai=True, force_ai=False):
-    """
-    Build (or rebuild) the report PDF + DOCX.
-
-    AI re-drafting rules (v8):
-      - force_ai=True             → clear content, draft fresh.
-      - use_ai=True + no content  → draft fresh.
-      - use_ai=True + fingerprint mismatch (new logs / workshops /
-        competencies since last draft) → draft fresh.
-      - use_ai=True + fingerprint matches → reuse saved content.
-      - use_ai=False              → never touch content; just re-render.
-    """
     report, _ = GeneratedReport.objects.get_or_create(attachment=session)
 
     if force_ai:
@@ -147,7 +146,7 @@ def _build(request, session, use_ai=True, force_ai=False):
                     if ai_note:
                         messages.warning(request, ai_note)
 
-                    report.content = drafts   # includes '_source_hash'
+                    report.content = drafts
                     report.save(update_fields=['content'])
                     logger.info(
                         'AI drafted %d sections for report %s (fingerprint=%s)',
@@ -199,6 +198,9 @@ def _build(request, session, use_ai=True, force_ai=False):
             messages.success(request, f"✅ Report ready: {summary}. {note}")
         else:
             messages.success(request, f"✅ Report ready: {summary}.")
+
+    # ---- Bell notification ----
+    _notify_build(request.user, 'Report generated successfully', 'report_generated')
     return True
 
 
@@ -233,11 +235,6 @@ def _make_qr_data_uri(url):
 
 
 def _report_abstract_preview(session, report):
-    """
-    Return (paragraphs_list, keywords_str) for the abstract preview overlay
-    on the report-options page. Uses saved content if present, else the
-    builder's default abstract.
-    """
     import re as _re
     try:
         builder = PracticumReportBuilder(session)
@@ -415,41 +412,84 @@ def report_content(request):
 
         form = ReportContentForm(request.POST)
         if form.is_valid():
-            # MERGE instead of REPLACE — preserves AI-drafted abstract,
-            # keywords, acknowledgments, references, and the _source_hash
-            # marker (needed so we don't re-draft after manual edits).
             merged = dict(report.content or {})
+
             for key, value in form.cleaned_data.items():
+                if key not in request.POST:
+                    continue
                 v = (value or '').strip()
                 if v:
                     merged[key] = v
                 elif key in merged:
                     merged.pop(key, None)
+
+            for section_key in _KNOWN_SECTION_KEYS:
+                if section_key not in request.POST:
+                    continue
+                if section_key in form.cleaned_data:
+                    continue
+                v = (request.POST.get(section_key) or '').strip()
+                if v:
+                    merged[section_key] = v
+                elif section_key in merged:
+                    merged.pop(section_key, None)
+
             report.content = merged
             report.save(update_fields=['content'])
 
-            # Rebuild the PDF+DOCX from saved content. use_ai=False → no
-            # AI call, no fingerprint check, just WeasyPrint re-render.
+            if action == 'regenerate':
+                try:
+                    from .ai_drafting import refine_user_content
+                    refined = refine_user_content(session, merged)
+
+                    if refined and refined != merged:
+                        report.content = refined
+                        report.save(update_fields=['content'])
+                        messages.success(
+                            request,
+                            '✨ Your edits were refined into academic English '
+                            'and saved. Every fact, unit, and bullet was preserved.'
+                        )
+                    else:
+                        messages.info(
+                            request,
+                            '✨ AI refinement made no changes — your text '
+                            'was already polished.'
+                        )
+                except Exception:
+                    logger.exception(
+                        'AI refinement failed for report %s — keeping raw edits',
+                        report.pk,
+                    )
+                    messages.warning(
+                        request,
+                        'AI refinement failed, but your exact edits were saved. '
+                        'The PDF was rebuilt with your text as typed.'
+                    )
+
             rebuild_ok = _build(request, session, use_ai=False)
 
-            if action == 'regenerate':
-                if rebuild_ok:
-                    messages.success(request, 'Report regenerated with your edits.')
-                return _redirect_after_generation(request, 'report_options', session)
-
-            if rebuild_ok:
-                messages.success(
-                    request,
-                    'Your text has been saved and the PDF refreshed. '
-                    'Click "View / Print PDF" to see it.'
-                )
-            else:
+            if not rebuild_ok:
                 messages.warning(
                     request,
-                    'Your text has been saved, but the PDF rebuild failed. '
-                    'Try "Regenerate Report" or go back to the options page.'
+                    'Your text was saved, but the PDF rebuild failed. '
+                    'Try again from the options page.'
                 )
-            return redirect(f"{reverse('report_content')}?attachment_id={session.id}")
+                return redirect(f"{reverse('report_content')}?attachment_id={session.id}")
+
+            if action == 'save':
+                messages.success(
+                    request,
+                    '✅ Your exact edits are saved and the PDF was rebuilt.'
+                )
+
+            return _redirect_after_generation(request, 'report_options', session)
+
+        else:
+            messages.error(
+                request,
+                "Your edits couldn't be saved — please check the form for errors."
+            )
     else:
         form = ReportContentForm(initial=builder.effective_content())
 
@@ -497,10 +537,6 @@ def verify_report(request, token):
 # ============================================================
 
 def _serve_file(report, field_name, inline, content_type, filename_override=None):
-    """
-    Return a FileResponse for report.<field_name>. Raises FileNotFoundError
-    when the file record exists but the file on disk does not.
-    """
     file_field = getattr(report, field_name)
     return FileResponse(
         file_field.open('rb'),
@@ -512,16 +548,6 @@ def _serve_file(report, field_name, inline, content_type, filename_override=None
 
 def _try_serve_report_file(request, session, field_name, inline, content_type,
                             rebuild_ok_message=None, rebuild_fail_message=None):
-    """
-    Unified file-serving with auto-rebuild fallback (for PDF + DOCX).
-
-    Flow:
-      1. Report + file record must exist, else 404.
-      2. Try to open the file and return the response (fast path).
-      3. If FileNotFoundError → rebuild from report.content (no AI)
-         and try again.
-      4. If rebuild fails → friendly message + redirect.
-    """
     report = getattr(session, 'report', None) if session else None
     if not report or not getattr(report, field_name):
         raise Http404('No report file has been generated yet.')
@@ -621,12 +647,6 @@ def preview_report(request):
 # ============================================================
 
 def _ensure_ai_content(request, session, force_ai=False):
-    """
-    Ensure report.content has fresh AI-drafted report sections.
-
-    v8: respects the source fingerprint. If logs / workshops /
-    competencies changed since the last draft, we re-draft.
-    """
     report, _ = GeneratedReport.objects.get_or_create(attachment=session)
 
     if force_ai:
@@ -665,13 +685,6 @@ def _ensure_ai_content(request, session, force_ai=False):
 
 
 def _ensure_pptx_content(request, session, force_ai=False):
-    """
-    Ensure report.pptx_content has fresh AI-drafted slide bullets.
-
-    v8: same fingerprint mechanism as the report. When logs / workshops /
-    competencies change, this re-drafts the slide bullets so the deck
-    reflects the newest data.
-    """
     report, _ = GeneratedReport.objects.get_or_create(attachment=session)
 
     if force_ai:
@@ -694,7 +707,7 @@ def _ensure_pptx_content(request, session, force_ai=False):
     try:
         drafts = draft_presentation_with_ai(session)
         if drafts:
-            report.pptx_content = drafts   # includes '_source_hash'
+            report.pptx_content = drafts
             report.save(update_fields=['pptx_content'])
             logger.info(
                 'PPTX AI drafted %d sections for report %s (fingerprint=%s)',
@@ -707,13 +720,6 @@ def _ensure_pptx_content(request, session, force_ai=False):
 
 
 def _build_pptx_from_scratch(request, session, template_key, force_ai=False):
-    """
-    Build the .pptx + PDF preview, then report back to the user with an
-    accurate summary of what was actually built.
-
-    v8: freshness is ensured BEFORE calling save_pptx(force_ai=False) —
-    so services.py never needs to invoke the AI internally from this path.
-    """
     _ensure_ai_content(request, session, force_ai=force_ai)
     _ensure_pptx_content(request, session, force_ai=force_ai)
 
@@ -747,6 +753,9 @@ def _build_pptx_from_scratch(request, session, template_key, force_ai=False):
                 request,
                 f'Presentation built with the "{template_key}" template.'
             )
+
+        # ---- Bell notification ----
+        _notify_build(request.user, 'Presentation generated successfully', 'pptx_generated')
         return True
     except Exception as exc:
         logger.exception('PPTX build failed for session %s', session.pk)
@@ -756,14 +765,6 @@ def _build_pptx_from_scratch(request, session, template_key, force_ai=False):
 
 @login_required
 def build_pptx(request):
-    """
-    Direct-download PPTX endpoint.
-
-    v8: instead of returning whatever `builder.build_pptx()` produces,
-    we ensure fresh content, build through save_pptx(), then serve
-    report.pptx_file from disk — with a magic-byte check so a PDF
-    accidentally stored under .pptx can never reach the user.
-    """
     session, bounce = _session_with_logs(request)
     if bounce:
         return bounce
@@ -772,7 +773,6 @@ def build_pptx(request):
     if template_key not in PPTX_TEMPLATES:
         template_key = 'cohy_classic'
 
-    # Ensure fresh AI content for both the report and the slide deck.
     _ensure_ai_content(request, session, force_ai=False)
     _ensure_pptx_content(request, session, force_ai=False)
 
@@ -789,9 +789,6 @@ def build_pptx(request):
         messages.error(request, 'The presentation file was not written to disk.')
         return redirect(f"{reverse('pptx_options')}?attachment_id={session.id}")
 
-    # Magic-byte guard: real PPTX files are ZIP archives (PK\x03\x04).
-    # A PDF starts with b'%PDF' — that's the "cannot edit in PowerPoint"
-    # bug. Fail loudly instead of shipping a corrupt .pptx.
     try:
         path = report.pptx_file.path
     except Exception:
@@ -844,7 +841,6 @@ def download_pptx(request):
     if not report or not report.pptx_file:
         raise Http404('No presentation has been generated yet.')
 
-    # Magic-byte guard on the download path too.
     try:
         path = report.pptx_file.path
     except Exception:
@@ -936,10 +932,6 @@ def download_pptx_pdf(request):
 
 
 def _apply_pptx_options(report, cleaned):
-    """
-    Persist PptxOptionsForm data into report.pptx_options, keeping the
-    same nested {'sections': {...}} shape the builder reads.
-    """
     report.pptx_options = {
         'font_size': int(cleaned.get('font_size') or 18),
         'max_bullets': int(cleaned.get('max_bullets') or 6),
@@ -1047,10 +1039,6 @@ def pptx_options(request):
 
 @login_required
 def pptx_content(request):
-    """
-    Edit slide bullets and speaker notes after the first PPTX build.
-    Mirrors report_content, but for the deck.
-    """
     session, bounce = _session_with_logs(request)
     if bounce:
         return bounce
@@ -1080,9 +1068,6 @@ def pptx_content(request):
 
         form = PptxContentForm(request.POST)
         if form.is_valid():
-            # Preserve '_'-prefixed keys (notably '_source_hash') so the
-            # next build doesn't think the content is stale and overwrite
-            # the user's edits.
             new_content = dict(report.pptx_content or {})
             for key, value in form.cleaned_data.items():
                 v = (value or '').strip()
@@ -1120,7 +1105,7 @@ def pptx_content(request):
 
 
 # ============================================================
-# Format samples
+# Format samples (staff-only endpoints)
 # ============================================================
 
 @login_required

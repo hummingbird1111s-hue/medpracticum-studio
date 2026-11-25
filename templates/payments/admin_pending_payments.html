@@ -1,0 +1,122 @@
+{% extends 'base.html' %}
+
+{% block title %}Pending Payments · MedPracticum Studio{% endblock %}
+
+{% block content %}
+<style>
+  .admin-wrap    { max-width: 1200px; margin: 2rem auto; padding: 0 1rem; }
+  .admin-header  { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; gap: 1rem; flex-wrap: wrap; }
+  .admin-header h1 { margin: 0; font-size: 1.5rem; color: #111827; }
+  .admin-nav     { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .admin-back    { display: inline-block; padding: 0.5rem 1rem; border-radius: 6px; background: #eef2ff; color: #3730a3; text-decoration: none; font-size: 0.88rem; font-weight: 600; }
+  .admin-back:hover { background: #e0e7ff; }
+  .admin-back.active { background: #2563eb; color: #fff; }
+  .count-note    { color: #6b7280; font-size: 0.85rem; margin-bottom: 0.75rem; }
+  .admin-table   { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .admin-table th, .admin-table td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid #eef0f3; font-size: 0.9rem; vertical-align: top; }
+  .admin-table th { background: #f5f7fa; font-weight: 600; color: #4a5568; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  .admin-table tr:last-child td { border-bottom: none; }
+  .admin-table tr:hover td { background: #fafbfc; }
+  .mono { font-family: ui-monospace, 'Courier New', monospace; font-size: 0.82rem; color: #6b7280; }
+  .badge { display: inline-block; padding: 0.2rem 0.65rem; border-radius: 999px; font-size: 0.74rem; font-weight: 600; margin-right: 0.25rem; }
+  .badge-single { background: #dbeafe; color: #1e40af; }
+  .badge-double { background: #fef3c7; color: #92400e; }
+  .badge-warn   { background: #fee2e2; color: #991b1b; }
+  .btn-verify   { background: #059669; color: #fff; border: none; padding: 0.45rem 1rem; border-radius: 6px; font-weight: 600; font-size: 0.85rem; cursor: pointer; }
+  .btn-verify:hover { background: #047857; }
+  .btn-verify:disabled { background: #d1d5db; cursor: not-allowed; }
+  .empty { padding: 3rem 1rem; text-align: center; color: #9ca3af; background: #fff; border-radius: 8px; border: 1px dashed #d1d5db; }
+  .pagination { display: flex; justify-content: center; align-items: center; gap: 0.75rem; margin-top: 1.5rem; font-size: 0.9rem; }
+  .pagination a, .pagination span { padding: 0.4rem 0.85rem; border: 1px solid #d1d5db; border-radius: 6px; text-decoration: none; color: #374151; background: #fff; }
+  .pagination a:hover { background: #f3f4f6; }
+  .pagination .current { background: #2563eb; color: #fff; border-color: #2563eb; font-weight: 600; }
+</style>
+
+<div class="admin-wrap">
+  <div class="admin-header">
+    <h1>Pending Payments</h1>
+    <div class="admin-nav">
+      <a class="admin-back" href="{% url 'admin_user_logs' %}">User Logs</a>
+      <a class="admin-back" href="{% url 'admin_all_users' %}">All Users</a>
+      <a class="admin-back active" href="{% url 'admin_pending_payments' %}">Pending Payments</a>
+    </div>
+  </div>
+
+  <div class="count-note">
+    {{ total }} pending submission{{ total|pluralize }}
+  </div>
+
+  {% if rows %}
+    <table class="admin-table">
+      <thead>
+        <tr>
+          <th>Submitted</th>
+          <th>User</th>
+          <th>Plan</th>
+          <th>Reference</th>
+          <th>Amount</th>
+          <th>Attachment</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            <td class="mono">
+              {% if row.sub.pending_submitted_at %}
+                {{ row.sub.pending_submitted_at|date:"d M Y, H:i" }}
+              {% else %}—{% endif %}
+            </td>
+            <td>
+              <strong>{{ row.sub.user.username }}</strong><br>
+              <span class="mono">{{ row.sub.user.email }}</span>
+            </td>
+            <td>
+              {% if row.plan == 'double' %}
+                <span class="badge badge-double">{{ row.plan_label }}</span>
+              {% else %}
+                <span class="badge badge-single">{{ row.plan_label }}</span>
+              {% endif %}
+            </td>
+            <td><code class="mono">{{ row.sub.pending_reference|default:"—" }}</code></td>
+            <td><strong>₵{{ row.amount }}</strong></td>
+            <td>
+              {% if row.session %}
+                {{ row.session.facility.name }}<br>
+                <span class="mono">
+                  {{ row.session.start_date|date:"j M Y" }} → {{ row.session.end_date|date:"j M Y" }}
+                </span>
+              {% else %}
+                <span class="badge badge-warn">No attachment</span>
+              {% endif %}
+            </td>
+            <td>
+              <form method="post" action="{% url 'admin_verify_payment' row.sub.pk %}" style="margin:0;">
+                {% csrf_token %}
+                <button type="submit" class="btn-verify"
+                        {% if not row.session %}disabled title="User has no attachment — ask them to start one first"{% endif %}>
+                  ✅ Verify &amp; Activate
+                </button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% if page.has_other_pages %}
+      <div class="pagination">
+        {% if page.has_previous %}
+          <a href="?page={{ page.previous_page_number }}">← Prev</a>
+        {% endif %}
+        <span class="current">{{ page.number }} / {{ page.paginator.num_pages }}</span>
+        {% if page.has_next %}
+          <a href="?page={{ page.next_page_number }}">Next →</a>
+        {% endif %}
+      </div>
+    {% endif %}
+  {% else %}
+    <div class="empty">No pending payments. Submissions will appear here as they come in.</div>
+  {% endif %}
+</div>
+{% endblock %}

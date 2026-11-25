@@ -86,6 +86,67 @@ def _clean_list_lines(text):
     return cleaned
 
 
+def _parse_activities_blocks(text):
+    """
+    Parse AI-generated activities_performed text into structured blocks.
+
+    The v10 AI prompt tells the model to produce:
+        Opening paragraph.
+
+        Records Unit
+        Activity line 1.
+        Activity line 2.
+
+        RCH
+        Activity line 1.
+        Activity line 2.
+
+    This helper turns that into:
+        [
+            {'type': 'paragraph', 'text': 'Opening paragraph.'},
+            {'type': 'unit', 'heading': 'Records Unit', 'activities': ['Activity line 1.', 'Activity line 2.']},
+            {'type': 'unit', 'heading': 'RCH', 'activities': ['Activity line 1.', 'Activity line 2.']},
+        ]
+
+    Heuristic for a "unit heading" line:
+      - the block has 2+ lines
+      - the first line is short (<80 chars)
+      - the first line doesn't end with a period (headings are usually labels)
+
+    If the block doesn't match the heading pattern, the whole block is treated
+    as a paragraph. This is a safe fallback — the layout degrades to plain
+    paragraphs rather than crashing.
+    """
+    blocks = []
+    if not text:
+        return blocks
+
+    raw_blocks = re.split(r'\n\s*\n', text.strip())
+
+    for block in raw_blocks:
+        lines = [l.strip() for l in block.split('\n') if l.strip()]
+        if not lines:
+            continue
+
+        if (len(lines) >= 2
+                and len(lines[0]) < 80
+                and not lines[0].rstrip().endswith('.')):
+            heading = lines[0].rstrip(':').strip()
+            activities = [l for l in lines[1:] if l]
+            if activities:
+                blocks.append({
+                    'type': 'unit',
+                    'heading': heading,
+                    'activities': activities,
+                })
+                continue
+
+        # Fallback: treat whole block as a paragraph
+        blocks.append({'type': 'paragraph', 'text': ' '.join(lines)})
+
+    return blocks
+
+
 def _first_sentence(text, limit=140):
     text = ' '.join((text or '').split())
     cut = re.split(r'(?<=[.!?])\s', text, maxsplit=1)[0]
@@ -178,8 +239,7 @@ def _dedupe_activities(items):
 def _build_activities_narrative(unit_activities):
     """
     Build the activities_performed default text from unit_activities.
-    Used as fallback when the AI didn't draft this section — so the edit
-    page and PDF still show the log-derived narrative instead of blank.
+    Used as fallback when the AI didn't draft this section.
     """
     if not unit_activities:
         return ''
@@ -242,9 +302,6 @@ class PracticumReportBuilder:
           1. Per-report custom logo (uploaded by the student for this report)
           2. SchoolProfile.logo (uploaded via Django admin)
           3. static/branding/school-logo.png (committed to git — never missing)
-
-        Render's free tier wipes /media/ on every deploy, so steps 1 & 2 can
-        fail with FileNotFoundError. Step 3 guarantees the logo always shows.
         """
         if self._school_cache is None:
             from django.contrib.staticfiles import finders
@@ -589,8 +646,6 @@ class PracticumReportBuilder:
 
         facility_profile_text = self._build_facility_profile()
 
-        # ✅ Build defaults for activities_performed and recommendations
-        # so they're always available as fallback.
         default_activities = _build_activities_narrative(unit_activities)
         default_recommendations = _build_recommendations_text(dynamic_facility_recs, recs)
 
@@ -843,6 +898,10 @@ class PracticumReportBuilder:
         references = _lines(content.get('references', ''))
         report = self.report_obj
 
+        # v10: parse activities_performed into structured blocks so the
+        # template can render unit sub-headings + activity bullets.
+        activities_blocks = _parse_activities_blocks(content.get('activities_performed', ''))
+
         return {
             'f': f, 'css': self._css(spacing),
             's': s, 'student': self.user, 'facility': self.facility,
@@ -853,8 +912,10 @@ class PracticumReportBuilder:
             'report_title': report_title, 'course_code': course_code, 'semester': semester,
             'content': content,
 
+            # v10: skills stay bullets; lessons become paragraphs.
             'content_skills_acquired': _clean_list_lines(content.get('skills_acquired', '')),
-            'content_lessons_learnt': _clean_list_lines(content.get('lessons_learnt', '')),
+            'content_lessons_learnt': _lines(content.get('lessons_learnt', '')),
+            'activities_blocks': activities_blocks,
 
             'introduction_paras': _paragraphs(content.get('introduction', '')),
             'workshops': d['workshops'], 'lessons_learnt': _lines(content.get('lessons_learnt', '')),
@@ -1100,10 +1161,30 @@ class PracticumReportBuilder:
                     f"{self.facility.district} of the {self.facility.region} Region.",
                 )
 
+        # ════════════════════════════════════════════════════════════
+        # ACTIVITIES PERFORMED — v10: parse into structured blocks
+        # ════════════════════════════════════════════════════════════
         add_heading('ACTIVITIES PERFORMED')
         if content.get('activities_performed'):
-            for para in _paragraphs(content['activities_performed']):
-                self._add_rich_paragraph(doc, para)
+            blocks = _parse_activities_blocks(content['activities_performed'])
+            if blocks:
+                for block in blocks:
+                    if block['type'] == 'paragraph':
+                        self._add_rich_paragraph(doc, block['text'])
+                    elif block['type'] == 'unit':
+                        # Bold unit sub-heading
+                        p = doc.add_paragraph()
+                        run = p.add_run(block['heading'])
+                        run.bold = True
+                        run.font.name = 'Times New Roman'
+                        run.font.size = Pt(12)
+                        # Bulleted activities under the heading
+                        for activity in block['activities']:
+                            self._add_rich_paragraph(doc, activity, style='List Bullet')
+            else:
+                # Fallback: no blocks parsed — render as plain paragraphs
+                for para in _paragraphs(content['activities_performed']):
+                    self._add_rich_paragraph(doc, para)
         else:
             self._add_rich_paragraph(
                 doc,
@@ -1127,13 +1208,16 @@ class PracticumReportBuilder:
         else:
             self._add_rich_paragraph(doc, "No formal workshop was attended during the practicum period.")
 
+        # ════════════════════════════════════════════════════════════
+        # LESSONS LEARNT — v10: paragraphs, NOT bullets
+        # ════════════════════════════════════════════════════════════
         add_heading('LESSONS LEARNT')
         if content.get('lessons_learnt'):
-            for line in _clean_list_lines(content['lessons_learnt']):
-                self._add_rich_paragraph(doc, line, style='List Bullet')
+            for line in _lines(content['lessons_learnt']):
+                self._add_rich_paragraph(doc, line)
         else:
             for l in _lines(content.get('lessons_learnt', '')):
-                self._add_rich_paragraph(doc, l, style='List Bullet')
+                self._add_rich_paragraph(doc, l)
 
         add_heading('OBSERVATIONS')
         if content.get('observation'):
@@ -1226,20 +1310,14 @@ class PracticumReportBuilder:
         Build the .pptx + PDF preview, save both to the report record,
         and record the build summary.
 
-        v8 fingerprint logic (defence-in-depth):
+        v8 fingerprint logic (defence-in-depth): if the caller already ran
+        _ensure_pptx_content(), report.pptx_content will be fresh and this
+        method won't re-draft. If called directly without that pre-step,
+        this method ALSO checks the fingerprint.
 
-          If the caller already ran _ensure_pptx_content() (which views.py
-          does), report.pptx_content will be fresh and this method does
-          not re-draft. If called directly without that pre-step, this
-          method ALSO checks the fingerprint and _has_real_sections()
-          before deciding to draft — so it behaves correctly in both
-          call paths.
-
-        Magic-byte guard:
-          Before saving, we assert the PPTX bytes really are ZIP/OOXML.
-          If they're not (e.g. someone swapped build() to return PDF
-          bytes), we fail loudly instead of shipping a file that
-          Microsoft PowerPoint will open as read-only.
+        Magic-byte guard: before saving, we assert the PPTX bytes really
+        are ZIP/OOXML. If they're not, we fail loudly instead of shipping
+        a file PowerPoint will open as read-only.
         """
         from .pptx_builder import PracticumPptxBuilder
 
@@ -1280,8 +1358,6 @@ class PracticumReportBuilder:
                         'trimmed report text'
                     )
         except Exception:
-            # If fingerprinting is unavailable for any reason, fall back to
-            # the pre-v8 behaviour: draft only when content is empty.
             logger.exception(
                 'PPTX fingerprint check failed — falling back to empty-content check'
             )
@@ -1366,12 +1442,10 @@ class PracticumReportBuilder:
         if report.docx_file:
             report.docx_file.delete(save=False)
 
-        # ✅ v8: persist the merged content (AI + defaults) so the edit page
-        # shows exactly what went into this PDF — BUT preserve private
-        # `_`-prefixed keys (notably `_source_hash`) so the fingerprint
-        # check in views._build() can still detect staleness on the next
-        # regeneration. Without this, every save() would wipe
-        # `_source_hash` and force a needless AI re-draft next time.
+        # ✅ v8: persist the merged content (AI + defaults) BUT preserve
+        # private `_`-prefixed keys (notably `_source_hash`) so the
+        # fingerprint check in views._build() can still detect staleness
+        # on the next regeneration.
         old_content = dict(report.content or {})
         new_content = self.effective_content()
         for k, v in old_content.items():

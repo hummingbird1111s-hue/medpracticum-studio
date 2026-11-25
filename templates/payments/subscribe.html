@@ -1,128 +1,43 @@
-
 {% extends 'base.html' %}
 
 {% block title %}Subscribe · MedPracticum Studio{% endblock %}
 
 {% block content %}
 <style>
-  /* Subscription page: explicit, high-contrast colors.
-     Scoped to this page so the shared base.html remains untouched. */
+  /* ============================================================
+     Subscription page styles — scoped to #subscribe-page so the
+     rest of the app is untouched.
+     ============================================================ */
   #subscribe-page {
     color: #1f2937;
     color-scheme: light;
   }
-
   #subscribe-page,
   #subscribe-page * {
     box-sizing: border-box;
   }
 
   #subscribe-page .subscribe-heading,
-  #subscribe-page .subscribe-card-title,
-  #subscribe-page .subscribe-body-text {
+  #subscribe-page .subscribe-card-title {
     color: #111827 !important;
   }
+  #subscribe-page .subscribe-muted { color: #4b5563 !important; }
 
-  #subscribe-page .subscribe-muted {
-    color: #4b5563 !important;
-  }
-
-  #subscribe-page .subscribe-soft-muted {
-    color: #525f70 !important;
-  }
-
-  #subscribe-page .subscribe-green-text {
-    color: #065f46 !important;
-  }
-
-  #subscribe-page .subscribe-amber-text {
-    color: #78350f !important;
-  }
-
-  #subscribe-page .subscribe-light-surface {
-    background-color: #ffffff !important;
-  }
-
-  #subscribe-page .subscribe-emerald-surface {
-    background-color: #ecfdf5 !important;
-  }
-
-  #subscribe-page .subscribe-amber-surface {
-    background-color: #fffbeb !important;
-  }
+  #subscribe-page .subscribe-emerald-surface { background-color: #ecfdf5 !important; }
+  #subscribe-page .subscribe-amber-surface   { background-color: #fffbeb !important; }
 
   #subscribe-page .subscribe-primary-button {
     background-color: #047857 !important;
     color: #ffffff !important;
   }
-
-  #subscribe-page .subscribe-primary-button:hover {
-    background-color: #065f46 !important;
-  }
+  #subscribe-page .subscribe-primary-button:hover { background-color: #065f46 !important; }
 
   #subscribe-page .subscribe-secondary-button {
     background-color: #ffffff !important;
     color: #065f46 !important;
     border: 1px solid #a7f3d0 !important;
   }
-
-  #subscribe-page .subscribe-secondary-button:hover {
-    background-color: #ecfdf5 !important;
-  }
-
-  /* White text is intentional only on the dark price header. */
-  #subscribe-page .subscribe-price-header,
-  #subscribe-page .subscribe-price-header * {
-    color: #ffffff !important;
-  }
-
-  #subscribe-page .subscribe-price-header .subscribe-price-kicker,
-  #subscribe-page .subscribe-price-header .subscribe-price-caption {
-    color: #d1fae5 !important;
-  }
-
-  #subscribe-page .subscribe-feature-title {
-    color: #111827 !important;
-  }
-
-  #subscribe-page .subscribe-feature-description {
-    color: #4b5563 !important;
-  }
-
-  #subscribe-page .subscribe-trust-strip {
-    color: #064e3b !important;
-  }
-
-  #subscribe-page #paystack-btn {
-    background-color: #047857 !important;
-    color: #ffffff !important;
-  }
-
-  #subscribe-page #paystack-btn:hover {
-    background-color: #065f46 !important;
-  }
-
-  #subscribe-page .subscribe-staff-panel {
-    background: #111827 !important;
-    color: #f9fafb !important;
-  }
-
-  #subscribe-page .subscribe-staff-panel p {
-    color: #d1d5db !important;
-  }
-
-  #subscribe-page .subscribe-staff-panel .staff-panel-title {
-    color: #ffffff !important;
-  }
-
-  #subscribe-page .subscribe-staff-panel .staff-panel-warning {
-    color: #fbbf24 !important;
-  }
-
-  #subscribe-page .subscribe-staff-panel button {
-    background: #fbbf24 !important;
-    color: #111827 !important;
-  }
+  #subscribe-page .subscribe-secondary-button:hover { background-color: #ecfdf5 !important; }
 
   #subscribe-page a:focus-visible,
   #subscribe-page button:focus-visible {
@@ -130,437 +45,786 @@
     outline-offset: 3px;
   }
 
+  /* ============================================================
+     Plan picker — two large radio cards
+     ============================================================ */
+  .mp-plan-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  @media (min-width: 640px) {
+    .mp-plan-grid { grid-template-columns: 1fr 1fr; }
+  }
+
+  .mp-plan-card {
+    position: relative;
+    display: block;
+    border: 2px solid #e5e7eb;
+    border-radius: 16px;
+    padding: 20px;
+    cursor: pointer;
+    background: #ffffff;
+    transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+  }
+  .mp-plan-card:hover {
+    border-color: #10b981;
+    box-shadow: 0 4px 14px rgba(5,150,105,0.08);
+  }
+  .mp-plan-card input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .mp-plan-card.is-selected {
+    border-color: #059669;
+    box-shadow: 0 0 0 4px rgba(5,150,105,0.15);
+    background: #f0fdf4;
+  }
+  .mp-plan-card__badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: #fef3c7;
+    color: #92400e;
+    margin-bottom: 10px;
+  }
+  .mp-plan-card__badge--single {
+    background: #d1fae5;
+    color: #065f46;
+  }
+  .mp-plan-card__name {
+    font-size: 15px;
+    font-weight: 700;
+    color: #111827;
+    margin: 0 0 6px;
+  }
+  .mp-plan-card__price {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    margin: 0 0 10px;
+  }
+  .mp-plan-card__currency {
+    font-size: 16px;
+    font-weight: 700;
+    color: #047857;
+  }
+  .mp-plan-card__amount {
+    font-size: 34px;
+    font-weight: 900;
+    color: #047857;
+    line-height: 1;
+  }
+  .mp-plan-card__desc {
+    font-size: 12.5px;
+    color: #4b5563;
+    line-height: 1.55;
+    margin: 0;
+  }
+  .mp-plan-card__check {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid #d1d5db;
+    background: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    color: transparent;
+    transition: all .15s ease;
+  }
+  .mp-plan-card.is-selected .mp-plan-card__check {
+    background: #059669;
+    border-color: #059669;
+    color: #ffffff;
+  }
+
+  /* ============================================================
+     MoMo instruction card
+     ============================================================ */
+  .mp-momo-card {
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    border: 1px solid #fcd34d;
+    border-radius: 16px;
+    padding: 20px;
+  }
+  .mp-momo-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px dashed rgba(180,83,9,0.2);
+  }
+  .mp-momo-row:last-child { border-bottom: 0; }
+  .mp-momo-row__label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: #92400e;
+    margin: 0 0 2px;
+  }
+  .mp-momo-row__value {
+    font-size: 15px;
+    font-weight: 800;
+    color: #111827;
+    margin: 0;
+    word-break: break-word;
+  }
+  .mp-momo-row__value code {
+    background: rgba(255,255,255,0.6);
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 15px;
+    font-weight: 800;
+  }
+
+  /* ============================================================
+     Reference input
+     ============================================================ */
+  .mp-ref-input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 2px solid #d1d5db;
+    border-radius: 10px;
+    font-size: 15px;
+    color: #111827;
+    background: #ffffff;
+    transition: border-color .15s ease, box-shadow .15s ease;
+    font-family: inherit;
+  }
+  .mp-ref-input:focus {
+    outline: none;
+    border-color: #059669;
+    box-shadow: 0 0 0 3px rgba(5,150,105,0.15);
+  }
+
+  /* ============================================================
+     Awaiting verification card
+     ============================================================ */
+  .mp-awaiting-card {
+    background: #ecfdf5;
+    border: 2px solid #6ee7b7;
+    border-radius: 20px;
+    padding: 24px;
+    text-align: center;
+  }
+  .mp-awaiting-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: #d1fae5;
+    font-size: 36px;
+    margin-bottom: 14px;
+    animation: mpPulseA 2s ease-out infinite;
+  }
+  @keyframes mpPulseA {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.06); }
+  }
+  .mp-awaiting-summary {
+    background: #ffffff;
+    border: 1px solid #d1fae5;
+    border-radius: 12px;
+    padding: 14px 16px;
+    text-align: left;
+    max-width: 380px;
+    margin: 18px auto 0;
+    font-size: 13px;
+  }
+  .mp-awaiting-summary dt {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: #6b7280;
+    margin-top: 10px;
+  }
+  .mp-awaiting-summary dt:first-child { margin-top: 0; }
+  .mp-awaiting-summary dd {
+    margin: 2px 0 0;
+    color: #111827;
+    font-weight: 600;
+    word-break: break-word;
+  }
+
   @media (max-width: 480px) {
     #subscribe-page .subscribe-page-title {
       font-size: 1.65rem;
       line-height: 1.2;
-    }
-
-    #subscribe-page .subscribe-price-amount {
-      font-size: 3.25rem;
     }
   }
 </style>
 
 <div id="subscribe-page" class="max-w-3xl mx-auto space-y-6">
 
-  <!-- Header -->
+  <!-- ============================================================
+       HEADER
+       ============================================================ -->
   <div class="text-center mt-4">
-
     <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 mb-4 shadow-sm text-3xl">
-      💳
+      ✨
     </div>
-
     <h1 class="subscribe-heading subscribe-page-title text-3xl font-bold text-gray-900 mb-2">
-      Unlock Report &amp; Presentation Builder
+      Unlock Your Full Potential
     </h1>
-
     <p class="subscribe-muted text-sm text-gray-700 max-w-2xl mx-auto">
-      One payment covers your entire practicum period. Unlimited daily logs,
-      AI-drafted reports, and slide decks — from day one to your final defence.
+      Unlimited daily logs, AI-drafted reports, and PowerPoint decks —
+      for your whole practicum. Pay once, use it all.
     </p>
-
   </div>
 
   {% if subscribed %}
 
-  {# ═══════════════ STATE A — ALREADY SUBSCRIBED ═══════════════ #}
-
+  {# ═══════════════════════════════════════════════════════════════
+     STATE A — ACTIVE SUBSCRIPTION
+     ═══════════════════════════════════════════════════════════════ #}
   <div class="subscribe-emerald-surface bg-emerald-50 border-2 border-emerald-300 rounded-2xl p-6 text-center shadow-sm">
-
     <div class="text-4xl mb-3">✅</div>
-
     <h2 class="text-xl font-bold text-emerald-900 mb-2">
       You're all set!
     </h2>
 
     <p class="text-sm text-emerald-800 mb-1">
       Your subscription is active
-
       {% if subscription.expires_at %}
         until <strong>{{ subscription.expires_at|date:"j F Y" }}</strong>
       {% endif %}.
     </p>
 
-    {% if days_remaining == 0 %}
+    {% if subscription_plan == 'double' %}
+      <p class="text-xs text-emerald-700 mt-2 inline-block bg-emerald-100 px-3 py-1 rounded-full font-semibold">
+        ⭐ Both Practicum Periods plan
+      </p>
+    {% elif subscription_plan == 'single' %}
+      <p class="text-xs text-emerald-700 mt-2 inline-block bg-emerald-100 px-3 py-1 rounded-full font-semibold">
+        Single Practicum Period plan
+      </p>
+    {% endif %}
 
+    {% if days_remaining == 0 %}
     <div class="bg-amber-100 border border-amber-300 rounded-lg px-3 py-2 mb-3 mt-3 text-sm text-amber-900 inline-block">
       ⏰ Your subscription expires <strong>today</strong>. Renew to keep access.
     </div>
-
-    {% elif days_remaining <= 7 %}
-
+    {% elif days_remaining <= 7 and days_remaining %}
     <div class="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3 mt-3 text-sm text-amber-900 inline-block">
       ⏰ Only <strong>{{ days_remaining }} day{{ days_remaining|pluralize }}</strong> remaining.
     </div>
-
-    {% elif days_remaining %}
-
-    <p class="text-xs text-emerald-700 mb-3">
-      ⏳ {{ days_remaining }} day{{ days_remaining|pluralize }} remaining
-    </p>
-
     {% endif %}
 
     {% if subscription.last_reference %}
-
     <p class="text-xs text-emerald-700 mb-4">
-      Last payment ref:
+      Last reference:
       <code class="bg-emerald-100 px-1.5 py-0.5 rounded">{{ subscription.last_reference }}</code>
-      · ₵{{ subscription.last_amount_paid }}
     </p>
-
     {% endif %}
 
     <div class="flex flex-wrap justify-center gap-3 mt-4">
-
       <a href="{% url 'report_options' %}"
          class="subscribe-primary-button bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-5 py-2.5 text-sm shadow-sm transition-colors">
         Build a Report →
       </a>
-
       <a href="{% url 'pptx_options' %}"
          class="subscribe-secondary-button bg-white border border-emerald-300 hover:bg-emerald-50 text-emerald-800 font-semibold rounded-lg px-5 py-2.5 text-sm shadow-sm transition-colors">
         Build a Presentation →
       </a>
+    </div>
+  </div>
 
+  {% elif partially_subscribed %}
+
+  {# ═══════════════════════════════════════════════════════════════
+     STATE B — PARTIALLY SUBSCRIBED
+     (Paid ₵95, one period used, waiting for the next one to be
+      activated by admin.)
+     ═══════════════════════════════════════════════════════════════ #}
+  <div class="bg-blue-50 border-2 border-blue-300 rounded-2xl p-6 shadow-sm">
+    <div class="flex items-start gap-4">
+      <div class="text-4xl flex-shrink-0">🌱</div>
+      <div class="flex-1 min-w-0">
+        <h2 class="text-lg font-bold text-blue-900 mb-2">
+          You're covered for your next practicum
+        </h2>
+        <p class="text-sm text-blue-800 mb-3">
+          You paid for the <strong>Both Practicum Periods</strong> plan.
+          The first period is complete — once you start your next attachment,
+          the admin team will activate access. No new payment needed.
+        </p>
+        {% if subscription and subscription.last_reference %}
+        <p class="text-xs text-blue-700 mb-3">
+          Reference on file:
+          <code class="bg-blue-100 px-1.5 py-0.5 rounded">{{ subscription.last_reference }}</code>
+        </p>
+        {% endif %}
+        <div class="flex flex-wrap gap-3 mt-2">
+          <a href="{% url 'start_attachment' %}"
+             class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg px-4 py-2 text-sm shadow-sm transition-colors">
+            Start your next attachment →
+          </a>
+          <a href="https://wa.me/233533052562" target="_blank" rel="noopener"
+             class="inline-flex items-center gap-2 bg-white border border-blue-300 hover:bg-blue-50 text-blue-800 font-semibold rounded-lg px-4 py-2 text-sm shadow-sm transition-colors">
+            Contact Admin
+          </a>
+        </div>
+      </div>
     </div>
   </div>
 
   {% elif not session %}
 
-  {# ═══════════════ STATE B — NO ACTIVE ATTACHMENT ═══════════════ #}
-
+  {# ═══════════════════════════════════════════════════════════════
+     STATE C — NO ACTIVE ATTACHMENT
+     ═══════════════════════════════════════════════════════════════ #}
   <div class="subscribe-amber-surface bg-amber-50 border-2 border-amber-300 rounded-2xl p-6 shadow-sm">
-
     <div class="flex items-start gap-4">
-
       <div class="text-4xl flex-shrink-0">📍</div>
-
       <div class="flex-1 min-w-0">
-
         <h2 class="text-lg font-bold text-amber-900 mb-2">
           Start your attachment first
         </h2>
-
         <p class="text-sm text-amber-800 mb-4">
           Your subscription is tied to your practicum period — that way you pay once
           and stay active from your attachment's start date through 5 days after it ends.
-          We need to know which facility and which dates so your access matches.
+          Please create your attachment first so we know which facility and dates to cover.
         </p>
-
         <a href="{% url 'start_attachment' %}"
            class="subscribe-primary-button inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg px-5 py-2.5 text-sm shadow-sm transition-colors">
           Start an attachment →
         </a>
-
       </div>
     </div>
   </div>
 
   {% else %}
 
-  {# ═══════════════ STATE C — HAS ATTACHMENT, NOT SUBSCRIBED ═══════════════ #}
+  {# ═══════════════════════════════════════════════════════════════
+     STATE D/E — HAS ATTACHMENT, NOT SUBSCRIBED
+     Shows either the plans form OR the awaiting-verification card,
+     controlled by the `payment_pending` flag from the view.
+     ═══════════════════════════════════════════════════════════════ #}
 
   <!-- Session context bar -->
-
-  <div class="subscribe-light-surface bg-white rounded-2xl shadow-sm border border-emerald-100 p-4 flex items-center gap-3">
-
+  <div class="bg-white rounded-2xl shadow-sm border border-emerald-100 p-4 flex items-center gap-3">
     <div class="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center flex-shrink-0">
       🏥
     </div>
-
     <div class="min-w-0 flex-1">
-
       <p class="text-xs font-bold text-gray-600 uppercase tracking-wide mb-0.5">
         Current attachment
       </p>
-
       <p class="text-sm font-semibold text-gray-900 truncate">
         {{ session.facility.name }}
       </p>
-
       <p class="text-xs text-gray-700">
         {{ session.start_date|date:"j M Y" }} → {{ session.end_date|date:"j M Y" }}
       </p>
-
     </div>
   </div>
 
-  <!-- Pricing card -->
+  <!-- Plans + payment form (hidden if payment_pending) -->
+  <div id="payment-form-section" {% if payment_pending %}style="display:none;"{% endif %}>
 
-  <div class="subscribe-light-surface bg-white rounded-2xl shadow-lg border border-emerald-100 overflow-hidden">
-
-    <!-- Price header -->
-
-    <div class="subscribe-price-header bg-gradient-to-br from-emerald-700 to-emerald-500 text-white p-8 text-center">
-
-      <p class="subscribe-price-kicker text-xs uppercase tracking-widest text-emerald-200 font-bold mb-2">
-        Practicum Period Plan
+    <!-- Plan picker -->
+    <div class="bg-white rounded-2xl shadow-lg border border-emerald-100 p-6 md:p-8">
+      <h2 class="text-base font-bold text-gray-900 mb-1">
+        Choose your plan
+      </h2>
+      <p class="text-sm text-gray-600 mb-5">
+        Both plans give you the same full features. Pick the one that fits your practicum.
       </p>
 
-      <div class="flex items-baseline justify-center gap-2">
+      <div class="mp-plan-grid mb-6">
+        <label class="mp-plan-card is-selected" data-plan-card="single">
+          <input type="radio" name="mp_plan" value="single" checked>
+          <span class="mp-plan-card__check">✓</span>
+          <span class="mp-plan-card__badge mp-plan-card__badge--single">Single Period</span>
+          <p class="mp-plan-card__name">One Practicum Period</p>
+          <div class="mp-plan-card__price">
+            <span class="mp-plan-card__currency">₵</span>
+            <span class="mp-plan-card__amount">{{ price_single|default:"50" }}</span>
+          </div>
+          <p class="mp-plan-card__desc">
+            Covers one attachment period. Active from your attachment start date
+            until <strong>5 days after</strong> your attachment ends.
+          </p>
+        </label>
 
-        <span class="text-2xl font-bold text-emerald-100">₵</span>
-
-        <span class="subscribe-price-amount text-6xl font-black">
-          {{ price }}
-        </span>
-
+        <label class="mp-plan-card" data-plan-card="double">
+          <input type="radio" name="mp_plan" value="double">
+          <span class="mp-plan-card__check">✓</span>
+          <span class="mp-plan-card__badge">Best Value · Both Periods</span>
+          <p class="mp-plan-card__name">Both Practicum Periods</p>
+          <div class="mp-plan-card__price">
+            <span class="mp-plan-card__currency">₵</span>
+            <span class="mp-plan-card__amount">{{ price_double|default:"95" }}</span>
+          </div>
+          <p class="mp-plan-card__desc">
+            Covers both practicum periods for your level. Pay once, stay active
+            through both attachments — no second payment.
+          </p>
+        </label>
       </div>
 
-      <p class="subscribe-price-caption text-sm text-emerald-100 mt-2">
-        One payment · Full practicum period access
-      </p>
-
-    </div>
-
-    <!-- Features -->
-
-    <div class="p-6 md:p-8">
-
-      <!-- Validity banner -->
-
+      <!-- Validity preview -->
       <div class="subscribe-emerald-surface bg-emerald-100 text-emerald-900 px-4 py-3 rounded-lg text-center mb-6">
-
         <p class="text-xs font-bold uppercase tracking-wider mb-1">
           Access valid until
         </p>
-
         <p class="text-2xl font-black">
           {{ expected_expires_at|date:"j F Y" }}
         </p>
-
         {% if session_end_date %}
-
         <p class="text-xs mt-1 text-emerald-800">
           Aligned with your attachment end date
-          ({{ session_end_date|date:"j M Y" }})
-          plus a <strong>5-day grace period</strong> to finalize your report.
+          ({{ session_end_date|date:"j M Y" }}) plus a <strong>5-day grace period</strong>.
         </p>
-
         {% endif %}
-
       </div>
+    </div>
 
-      <h3 class="text-sm font-bold uppercase tracking-wide text-gray-700 mb-4">
-        What's included
-      </h3>
-
-      <ul class="space-y-3 mb-6">
-
-        <li class="flex items-start gap-3">
-
-          <span class="text-emerald-600 mt-0.5 flex-shrink-0 font-bold">
-            <svg viewBox="0 0 24 24"
-                 style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;">
-              <path d="M5 13l4 4L19 7"/>
-            </svg>
-          </span>
-
-          <div>
-            <p class="subscribe-feature-title text-sm font-semibold text-gray-900">
-              Unlimited daily logs
-            </p>
-            <p class="subscribe-feature-description text-xs text-gray-700">
-              Record as many activities as you need — no cap.
-            </p>
-          </div>
-
-        </li>
-
-        <li class="flex items-start gap-3">
-
-          <span class="text-emerald-600 mt-0.5 flex-shrink-0 font-bold">
-            <svg viewBox="0 0 24 24"
-                 style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;">
-              <path d="M5 13l4 4L19 7"/>
-            </svg>
-          </span>
-
-          <div>
-            <p class="subscribe-feature-title text-sm font-semibold text-gray-900">
-              AI-drafted reports (PDF + Word)
-            </p>
-            <p class="subscribe-feature-description text-xs text-gray-700">
-              Full COHY-standard report from your own logs.
-            </p>
-          </div>
-
-        </li>
-
-        <li class="flex items-start gap-3">
-
-          <span class="text-emerald-600 mt-0.5 flex-shrink-0 font-bold">
-            <svg viewBox="0 0 24 24"
-                 style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;">
-              <path d="M5 13l4 4L19 7"/>
-            </svg>
-          </span>
-
-          <div>
-            <p class="subscribe-feature-title text-sm font-semibold text-gray-900">
-              PowerPoint presentations
-            </p>
-            <p class="subscribe-feature-description text-xs text-gray-700">
-              Any template, AI speaker notes, PDF preview.
-            </p>
-          </div>
-
-        </li>
-
-        <li class="flex items-start gap-3">
-
-          <span class="text-emerald-600 mt-0.5 flex-shrink-0 font-bold">
-            <svg viewBox="0 0 24 24"
-                 style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;">
-              <path d="M5 13l4 4L19 7"/>
-            </svg>
-          </span>
-
-          <div>
-            <p class="subscribe-feature-title text-sm font-semibold text-gray-900">
-              All AI assistant features
-            </p>
-            <p class="subscribe-feature-description text-xs text-gray-700">
-              Chat, image transcription, report coaching.
-            </p>
-          </div>
-
-        </li>
-
-      </ul>
-
-      <!-- Payment CTA -->
-
-      <div class="border-t border-gray-100 pt-6">
-
-        <button type="button"
-                id="paystack-btn"
-                data-callback-url="{% url 'paystack_callback' %}"
-                data-public-key="{{ paystack_public_key|escapejs }}"
-                data-user-email="{{ user.email|escapejs }}"
-                data-price="{{ price }}"
-                class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg py-3 text-base shadow-md transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
-
-          Pay ₵{{ price }} with Paystack
-
-        </button>
-
-        <p class="text-xs text-gray-700 text-center mt-3">
-          Secure checkout · Powered by Paystack · MTN MoMo, Visa, Mastercard accepted
-        </p>
-
-        <p class="text-xs text-gray-600 text-center mt-1">
-          You'll enter your payment details on Paystack's secure page.
-        </p>
-
+    <!-- MoMo instructions -->
+    <div class="mp-momo-card mt-4">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="text-2xl">📱</span>
+        <h2 class="text-base font-bold text-amber-900 m-0">
+          Send payment via Mobile Money
+        </h2>
       </div>
+      <p class="text-sm text-amber-900 mb-3">
+        Send the amount for your selected plan to the MoMo account below.
+        Use a reference you'll remember — it should be unique and easy to find later.
+      </p>
 
-      {# ═══════════════ STAFF TEST MODE — forced inline styles for visibility ═══════════════ #}
-
-      {% if user.is_staff %}
-
-      <div class="subscribe-staff-panel mt-6 rounded-xl p-5 shadow-lg"
-           style="background-color: #111827;">
-
-        <div class="flex items-start gap-3 mb-4">
-
-          <div class="text-2xl flex-shrink-0">🧪</div>
-
-          <div class="flex-1 min-w-0">
-
-            <p class="staff-panel-title text-sm font-bold mb-1"
-               style="color: #ffffff;">
-              Staff Test Mode
-            </p>
-
-            <p class="text-xs leading-relaxed" style="color: #d1d5db;">
-
-              Simulates a successful payment for
-              <strong style="color: #ffffff;">{{ session.facility.name }}</strong>'s
-              period (until {{ expected_expires_at|date:"j M Y" }}).
-              Use this to verify the report/presentation flow before Paystack is wired.
-
-              <strong class="staff-panel-warning" style="color: #fbbf24;">
-                Remove before launch.
-              </strong>
-
-            </p>
-
-          </div>
+      <div class="mp-momo-row">
+        <div>
+          <p class="mp-momo-row__label">MoMo Number</p>
+          <p class="mp-momo-row__value"><code>0201404188</code></p>
         </div>
+        <div class="text-right">
+          <p class="mp-momo-row__label">Network</p>
+          <p class="mp-momo-row__value">Telecel</p>
+        </div>
+      </div>
 
+      <div class="mp-momo-row">
+        <div>
+          <p class="mp-momo-row__label">Account Name</p>
+          <p class="mp-momo-row__value">Agyei Osborn Frimpong</p>
+        </div>
+      </div>
+
+      <div class="mp-momo-row">
+        <div>
+          <p class="mp-momo-row__label">Amount to Send</p>
+          <p class="mp-momo-row__value" id="mp-amount-to-send">
+            ₵{{ price_single|default:"50" }}
+          </p>
+        </div>
+      </div>
+
+      <p class="text-xs text-amber-900 mt-3 leading-relaxed">
+        <strong>Tip:</strong> use your username or index number as the reference
+        — it makes verification faster. Keep the SMS confirmation until you're verified.
+      </p>
+    </div>
+
+    <!-- Reference + notify -->
+    <div class="bg-white rounded-2xl shadow-lg border border-emerald-100 p-6 md:p-8 mt-4">
+      <h2 class="text-base font-bold text-gray-900 mb-1">
+        After sending, enter your reference
+      </h2>
+      <p class="text-sm text-gray-600 mb-4">
+        Type the exact reference you used on the MoMo transfer. Then click the button
+        below — we'll open WhatsApp with your details ready to send to the admin.
+      </p>
+
+      <label for="mp-reference-input" class="block text-sm font-semibold text-gray-800 mb-1">
+        Your MoMo transaction reference
+      </label>
+      <input
+        type="text"
+        id="mp-reference-input"
+        class="mp-ref-input"
+        placeholder="e.g. OXBEE-HIM-25 or the ref from your MoMo SMS"
+        autocomplete="off"
+        maxlength="60"
+      >
+      <p class="text-xs text-gray-500 mt-1">
+        You'll find this on the MoMo confirmation SMS.
+      </p>
+
+      <button
+        type="button"
+        id="mp-notify-btn"
+        class="subscribe-primary-button w-full mt-5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg py-3 text-base shadow-md transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+      >
+        I've Paid · Notify Admin on WhatsApp
+      </button>
+
+      <p class="text-xs text-gray-500 text-center mt-3">
+        This opens WhatsApp with a pre-filled message to
+        <strong>0533052562</strong>. Just tap <em>Send</em>.
+      </p>
+
+      {# Staff test mode — kept for admin debugging #}
+      {% if user.is_staff %}
+      <div class="mt-6 rounded-xl p-4" style="background-color: #111827;">
+        <p class="text-sm font-bold mb-1" style="color: #ffffff;">🧪 Staff Test Mode</p>
+        <p class="text-xs leading-relaxed mb-3" style="color: #d1d5db;">
+          Simulate an active subscription for
+          <strong style="color:#ffffff;">{{ session.facility.name }}</strong>'s period
+          (until {{ expected_expires_at|date:"j M Y" }}).
+        </p>
         <form method="post" action="{% url 'subscribe_activate_test' %}">
-
           {% csrf_token %}
-
           <button type="submit"
-                  class="w-full font-bold rounded-lg py-3 text-sm shadow-md transition-colors"
+                  class="w-full font-bold rounded-lg py-2.5 text-sm"
                   style="background-color: #fbbf24; color: #111827;">
-
-            Activate for testing (staff only)
-
+            Activate for testing
           </button>
-
         </form>
       </div>
-
       {% endif %}
-
     </div>
   </div>
 
-  <!-- Trust strip -->
+  <!-- Awaiting verification card (shown on payment_pending OR after submit) -->
+  <div id="awaiting-verification" {% if not payment_pending %}style="display:none;"{% endif %}>
+    <div class="mp-awaiting-card">
+      <div class="mp-awaiting-icon">⏳</div>
+      <h2 class="text-xl font-bold text-emerald-900 mb-2">
+        Reference received!
+      </h2>
+      <p class="text-sm text-emerald-800 max-w-md mx-auto leading-relaxed">
+        Your reference <strong id="awaiting-reference">{{ pending_reference|default:"(your reference)" }}</strong>
+        has been sent to the admin team via WhatsApp.
+        Verification usually takes a few minutes during business hours.
+      </p>
+      <p class="text-xs text-emerald-700 max-w-md mx-auto mt-3 leading-relaxed">
+        Once verified, your account will automatically switch to <strong>Subscribed</strong>
+        and you'll be able to generate reports and presentations.
+      </p>
 
-  <div class="subscribe-emerald-surface subscribe-trust-strip bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-center text-sm text-emerald-900">
+      <dl class="mp-awaiting-summary" id="awaiting-summary">
+        <dt>Plan</dt>
+        <dd id="awaiting-plan-label">—</dd>
+        <dt>Amount</dt>
+        <dd id="awaiting-amount-label">—</dd>
+        <dt>Reference</dt>
+        <dd id="awaiting-reference-inline">—</dd>
+      </dl>
 
-    🔒 <strong>Your data stays yours.</strong> We never share your logs.
-    Payment is processed by Paystack — we never see your card details.
-
+      <div class="mt-5 flex flex-wrap justify-center gap-3">
+        <a href="https://wa.me/233533052562" target="_blank" rel="noopener"
+           class="subscribe-secondary-button inline-flex items-center gap-2 bg-white border border-emerald-300 hover:bg-emerald-50 text-emerald-800 font-semibold rounded-lg px-4 py-2 text-sm shadow-sm transition-colors">
+          Message Admin on WhatsApp
+        </a>
+        <button type="button"
+                id="mp-resend-wa"
+                class="subscribe-secondary-button inline-flex items-center gap-2 bg-white border border-emerald-300 hover:bg-emerald-50 text-emerald-800 font-semibold rounded-lg px-4 py-2 text-sm shadow-sm transition-colors">
+          Didn't work? Send again
+        </button>
+      </div>
+    </div>
   </div>
 
   {% endif %}
 
+  <!-- Trust strip -->
+  <div class="subscribe-emerald-surface bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-center text-sm text-emerald-900">
+    🔒 <strong>Your data stays yours.</strong>
+    We never share your logs, and payments are processed directly via MoMo — no card details involved.
+  </div>
+
 </div>
 
+{# Hidden WhatsApp handoff form — submits a GET to wa.me with the pre-filled text #}
+<form id="mp-wa-form"
+      method="GET"
+      target="_blank"
+      rel="noopener"
+      action="https://wa.me/233533052562"
+      style="display:none;">
+  <input type="hidden" name="text" id="mp-wa-text">
+</form>
+
 <script>
-  document.addEventListener('DOMContentLoaded', function () {
+(function () {
+  'use strict';
 
-    var btn = document.getElementById('paystack-btn');
+  // ============================================================
+  // Config — hardcoded admin WhatsApp number (international, no +)
+  // and plan prices. Adjust here if they change.
+  // ============================================================
+  var ADMIN_WHATSAPP = '233533052562';
 
-    if (!btn) return;
+  var PRICE_SINGLE = parseFloat('{{ price_single|default:"50" }}');
+  var PRICE_DOUBLE = parseFloat('{{ price_double|default:"95" }}');
 
-    var publicKey = btn.dataset.publicKey || '';
-    var callbackUrl = btn.dataset.callbackUrl || '';
-    var userEmail = btn.dataset.userEmail || '';
-    var price = parseFloat(btn.dataset.price || '0');
+  var fmt = function (n) { return '₵' + n.toFixed(0); };
 
-    btn.addEventListener('click', function () {
+  // ============================================================
+  // Plan card selection — radio + visual .is-selected state
+  // ============================================================
+  var planCards = document.querySelectorAll('[data-plan-card]');
+  var currentPlan = 'single';
 
-      if (!publicKey) {
+  function selectPlan(plan) {
+    currentPlan = plan;
+    planCards.forEach(function (c) {
+      var on = c.dataset.planCard === plan;
+      c.classList.toggle('is-selected', on);
+      var input = c.querySelector('input[type="radio"]');
+      if (input) input.checked = on;
+    });
 
-        alert(
-          'Paystack checkout is being set up.\n\n' +
-          'If you are an admin, add PAYSTACK_PUBLIC_KEY to your environment ' +
-          'to enable real payments.\n\n' +
-          'For now, staff can use the "Activate for testing" button below.'
-        );
+    var amountToSend = document.getElementById('mp-amount-to-send');
+    if (amountToSend) {
+      amountToSend.textContent = fmt(plan === 'double' ? PRICE_DOUBLE : PRICE_SINGLE);
+    }
+  }
 
+  planCards.forEach(function (card) {
+    card.addEventListener('click', function (e) {
+      // Let the native radio click through, then override to sync styling
+      selectPlan(card.dataset.planCard);
+      if (e.target.tagName !== 'INPUT') {
+        e.preventDefault();
+      }
+    });
+  });
+
+  // ============================================================
+  // Notify admin — build WhatsApp message + submit hidden form
+  // ============================================================
+  var notifyBtn = document.getElementById('mp-notify-btn');
+  var refInput  = document.getElementById('mp-reference-input');
+  var waForm    = document.getElementById('mp-wa-form');
+  var waText    = document.getElementById('mp-wa-text');
+
+  function buildMessage(plan, ref) {
+    var planLabel = (plan === 'double')
+      ? 'Both Practicum Periods (₵' + PRICE_DOUBLE.toFixed(0) + ')'
+      : 'Single Practicum Period (₵' + PRICE_SINGLE.toFixed(0) + ')';
+    var amount    = (plan === 'double') ? PRICE_DOUBLE : PRICE_SINGLE;
+
+    var username = '{{ user.username|default:""|escapejs }}';
+    var email    = '{{ user.email|default:"(not set)"|escapejs }}';
+    var facility = '{{ session.facility.name|default:""|escapejs }}';
+    var start    = '{{ session.start_date|date:"j M Y"|escapejs }}';
+    var end      = '{{ session.end_date|date:"j M Y"|escapejs }}';
+
+    var lines = [
+      'Hello Admin, I have paid for a MedPracticum subscription.',
+      '',
+      'Plan: ' + planLabel,
+      'Amount: ' + fmt(amount),
+      'Reference: ' + ref,
+      '',
+      'Account: ' + username,
+      'Email: ' + email,
+      'Facility: ' + facility,
+      'Period: ' + start + ' → ' + end
+    ];
+    return lines.join('\n');
+  }
+
+  function submitToWhatsapp(plan, ref) {
+    waText.value = buildMessage(plan, ref);
+    waForm.submit();
+  }
+
+  function showAwaitingCard(plan, ref) {
+    var form = document.getElementById('payment-form-section');
+    var awaiting = document.getElementById('awaiting-verification');
+    if (form) form.style.display = 'none';
+    if (awaiting) awaiting.style.display = 'block';
+
+    var amount = (plan === 'double') ? PRICE_DOUBLE : PRICE_SINGLE;
+    var planLabel = (plan === 'double') ? 'Both Practicum Periods' : 'Single Practicum Period';
+
+    function setText(id, v) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = v;
+    }
+    setText('awaiting-reference', ref);
+    setText('awaiting-reference-inline', ref);
+    setText('awaiting-plan-label', planLabel);
+    setText('awaiting-amount-label', fmt(amount));
+
+    if (awaiting && awaiting.scrollIntoView) {
+      awaiting.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  if (notifyBtn && refInput) {
+    notifyBtn.addEventListener('click', function () {
+      var ref = (refInput.value || '').trim();
+      if (!ref) {
+        refInput.focus();
+        refInput.style.borderColor = '#dc2626';
+        refInput.style.boxShadow = '0 0 0 3px rgba(220,38,38,0.15)';
+        setTimeout(function () {
+          refInput.style.borderColor = '';
+          refInput.style.boxShadow = '';
+        }, 1600);
+        alert('Please enter your MoMo transaction reference first.');
         return;
       }
 
-      // Paystack Inline JS wiring — placeholder for now.
-      // When you're ready to go live:
-      // 1. Add the Paystack inline script to base.html <head>.
-      // 2. Replace the alert below with the proper setup object.
-      // Refer to Paystack docs for the exact syntax.
+      // 1) Open WhatsApp in a new tab with the message pre-filled.
+      submitToWhatsapp(currentPlan, ref);
 
-      alert('Paystack checkout not wired yet — public key is set, but the JS snippet still needs to be enabled.');
+      // 2) Swap the UI to the awaiting card.
+      showAwaitingCard(currentPlan, ref);
 
+      // 3) Best-effort: persist pending state on the server so a reload
+      //    shows the same awaiting card. Silently ignored if the view
+      //    doesn't accept POST or the endpoint 404s.
+      try {
+        var csrf = (document.cookie.split('; ').find(function (r) {
+          return r.indexOf('csrftoken=') === 0;
+        }) || '').split('=')[1] || '';
+        fetch(window.location.pathname, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': csrf
+          },
+          credentials: 'same-origin',
+          body: 'plan=' + encodeURIComponent(currentPlan) +
+                '&reference=' + encodeURIComponent(ref) +
+                '&notify_only=1'
+        }).catch(function () {});
+      } catch (e) {}
     });
+  }
 
-  });
+  // "Send again" — re-opens WhatsApp with the current state
+  var resendBtn = document.getElementById('mp-resend-wa');
+  if (resendBtn) {
+    resendBtn.addEventListener('click', function () {
+      var refEl = document.getElementById('awaiting-reference-inline');
+      var ref = refEl ? refEl.textContent.trim() : '';
+      if (!ref) return;
+      submitToWhatsapp(currentPlan, ref);
+    });
+  }
+})();
 </script>
 
 {% endblock %}

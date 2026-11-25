@@ -204,6 +204,7 @@ INSTALLED_APPS = [
     'apps.logs',
     'apps.reports',
     'apps.payments',
+    'apps.notifications',
 ]
 
 MIDDLEWARE = [

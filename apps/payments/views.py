@@ -1,21 +1,22 @@
 import logging
-from datetime import datetime, timedelta
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .models import activate_subscription, user_is_subscribed
+from .models import (
+    Subscription,
+    activate_subscription,
+    get_subscription,
+    mark_pending,
+    user_is_subscribed,
+)
 
 logger = logging.getLogger(__name__)
-
-
-def _price():
-    # Default fallback is now 45 instead of 50
-    return getattr(settings, 'SUBSCRIPTION_PRICE', 45)
 
 
 def _get_active_session(request):
@@ -27,29 +28,16 @@ def _get_active_session(request):
 
 
 def _compute_expected_expiry(session):
-    """
-    Predicted expiry if the user pays now, tied to their practicum period
-    with a 5-day grace so they can finalize the report after the end date.
+    """Predicted expiry if the user pays now — attachment end + 5 days, floored at today + 5."""
+    from datetime import datetime, timedelta
 
-    Returns a `date` object (not `datetime`) because `session.end_date` is
-    a DateField. Comparing a `date` to a `datetime` raises TypeError in Python.
-    """
     if session and getattr(session, 'end_date', None):
         end = session.end_date
-        
-        # Defensive: if the model is ever migrated to DateTimeField, still return date
         if isinstance(end, datetime):
             end = end.date()
-            
-        # Base date is the later of (attachment end date, today).
-        # This ensures that if someone pays *after* their attachment ended,
-        # they still get a full 5 days of access from today.
         base_date = max(end, timezone.now().date())
-        
-        # Add the 5-day grace period
         return base_date + timedelta(days=5)
 
-    # No attachment → 90-day fallback (rare; UI blocks payment for this case)
     return (timezone.now() + timedelta(days=90)).date()
 
 
@@ -60,70 +48,95 @@ def pwa_update(request):
 
 @login_required
 def subscribe(request):
-    """Show the subscription page (plan + Paystack checkout placeholder)."""
-    subscribed = user_is_subscribed(request.user)
-    sub = getattr(request.user, 'subscription', None)
+    """
+    Subscription page.
+
+    GET  — shows plans + MoMo instructions + reference form
+    POST — receives `notify_only=1` from the JS (best-effort persistence of
+           the pending state so a reload shows the awaiting card).
+    """
+    # ---- Best-effort POST: persist the pending state ----
+    if request.method == 'POST' and request.POST.get('notify_only') == '1':
+        from apps.notifications.models import notify
+        from apps.accounts.models import User
+
+        plan = (request.POST.get('plan') or '').strip()
+        ref = (request.POST.get('reference') or '').strip()
+
+        if plan not in (Subscription.PLAN_SINGLE, Subscription.PLAN_DOUBLE) or not ref:
+            return JsonResponse({'ok': False, 'error': 'invalid plan or reference'}, status=400)
+
+        try:
+            existing = get_subscription(request.user)
+
+            # Never downgrade an already-active subscription via this path.
+            if existing and existing.is_currently_active:
+                return JsonResponse({'ok': False, 'error': 'already subscribed'}, status=400)
+
+            old_ref = (
+                existing.pending_reference
+                if existing and existing.status == Subscription.STATUS_PENDING
+                else ''
+            )
+            mark_pending(request.user, plan, ref)
+            ref_changed = (ref != old_ref)
+
+            if ref_changed:
+                # 1) Acknowledge to the submitter
+                notify(
+                    request.user,
+                    f'Payment reference received ({ref}) — awaiting verification',
+                    kind='payment_submitted',
+                )
+
+                # 2) Alert every staff member except the submitter
+                amount_label = '₵95' if plan == Subscription.PLAN_DOUBLE else '₵50'
+                plan_label = 'Both Periods' if plan == Subscription.PLAN_DOUBLE else 'Single Period'
+                staff_msg = (
+                    f'💳 {request.user.username} submitted a payment · '
+                    f'{plan_label} · {amount_label} · ref {ref}'
+                )
+                for staff in User.objects.filter(is_staff=True, is_active=True).exclude(pk=request.user.pk):
+                    try:
+                        notify(staff, staff_msg, kind='payment_submitted')
+                    except Exception:
+                        logger.exception('Failed to notify staff %s of pending payment', staff.pk)
+
+        except Exception:
+            logger.exception('Failed to persist pending subscription for %s', request.user)
+            return JsonResponse({'ok': False, 'error': 'server error'}, status=500)
+
+        return JsonResponse({'ok': True})
+
+    sub = get_subscription(request.user)
+    subscribed = bool(sub and sub.is_currently_active)
+    partially = bool(sub and sub.status == Subscription.STATUS_PARTIAL)
+    pending = bool(sub and sub.status == Subscription.STATUS_PENDING)
+
     session = _get_active_session(request)
     session_end = getattr(session, 'end_date', None) if session else None
     expected_expires_at = _compute_expected_expiry(session)
 
     return render(request, 'payments/subscribe.html', {
         'subscribed': subscribed,
+        'partially_subscribed': partially,
+        'payment_pending': pending,
+        'pending_reference': sub.pending_reference if pending else '',
         'subscription': sub,
-        'price': _price(),
+        'subscription_plan': sub.plan if sub else '',
+        'price_single': Subscription.PRICE_SINGLE,
+        'price_double': Subscription.PRICE_DOUBLE,
         'session': session,
         'session_end_date': session_end,
         'expected_expires_at': expected_expires_at,
         'days_remaining': sub.days_remaining if sub else 0,
-        'paystack_public_key': getattr(settings, 'PAYSTACK_PUBLIC_KEY', ''),
     })
-
-
-@login_required
-def paystack_callback(request):
-    """
-    Paystack redirects here after checkout.
-
-    FOR NOW: we trust the `reference` from Paystack and activate the
-    subscription, tied to the user's active attachment end date. Replace
-    the direct `activate_subscription()` call below with a real Paystack
-    `/transaction/verify/{reference}` API call once you add your secret
-    key — that way we don't activate on a fake ref.
-    """
-    reference = (
-        request.GET.get('reference')
-        or request.GET.get('trxref')
-        or ''
-    ).strip()
-    if not reference:
-        messages.error(request, 'Missing payment reference.')
-        return redirect('subscribe')
-
-    session = _get_active_session(request)
-    sub = activate_subscription(
-        request.user,
-        reference=reference,
-        amount=_price(),
-        session=session,
-    )
-    expiry_label = sub.expires_at.strftime('%d %B %Y') if sub.expires_at else 'N/A'
-    messages.success(
-        request,
-        f'✅ Payment confirmed (ref: {reference}). '
-        f'Your subscription is active until {expiry_label}. '
-        f'You can now generate reports and presentations.',
-    )
-    return redirect('subscribe')
 
 
 @login_required
 @require_POST
 def activate_test(request):
-    """
-    DEV ONLY — simulate a successful payment so you can test the full flow
-    without Paystack wired yet. Restricted to staff, or any user when
-    DEBUG=True. Remove this view (or lock to staff only) before launch.
-    """
+    """DEV ONLY — simulate a successful payment. Staff-only in production."""
     if not (request.user.is_staff or getattr(settings, 'DEBUG', False)):
         messages.error(request, 'Test activation is disabled.')
         return redirect('subscribe')
@@ -137,16 +150,32 @@ def activate_test(request):
         )
         return redirect('subscribe')
 
+    plan = (request.POST.get('plan') or Subscription.PLAN_SINGLE).strip()
+    if plan not in (Subscription.PLAN_SINGLE, Subscription.PLAN_DOUBLE):
+        plan = Subscription.PLAN_SINGLE
+
     sub = activate_subscription(
         request.user,
+        plan=plan,
         reference='TEST-' + timezone.now().strftime('%Y%m%d%H%M%S'),
-        amount=_price(),
         session=session,
     )
     expiry_label = sub.expires_at.strftime('%d %B %Y') if sub.expires_at else 'N/A'
+
+    # Bell notification so the user sees the change without reloading
+    try:
+        from apps.notifications.models import notify
+        notify(
+            request.user,
+            f'✅ Test subscription activated ({plan}) — valid until {expiry_label}',
+            kind='payment_submitted',
+        )
+    except Exception:
+        logger.exception('Failed to notify user of test activation')
+
     messages.success(
         request,
-        f'✅ Test subscription activated — valid until {expiry_label}. '
+        f'✅ Test subscription activated ({plan}) — valid until {expiry_label}. '
         f'Rebuild your report or presentation to verify access.',
     )
     return redirect('subscribe')

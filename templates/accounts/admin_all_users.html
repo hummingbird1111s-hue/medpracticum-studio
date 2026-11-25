@@ -1,0 +1,316 @@
+{% extends 'base.html' %}
+
+{% block title %}All Users · MedPracticum Studio{% endblock %}
+
+{% block content %}
+<style>
+  .admin-wrap    { max-width: 1200px; margin: 2rem auto; padding: 0 1rem; }
+  .admin-header  { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; gap: 1rem; flex-wrap: wrap; }
+  .admin-header h1 { margin: 0; font-size: 1.5rem; color: #111827; }
+  .admin-back    { display: inline-block; padding: 0.5rem 1rem; border-radius: 6px; background: #eef2ff; color: #3730a3; text-decoration: none; font-size: 0.88rem; font-weight: 600; }
+  .admin-back:hover { background: #e0e7ff; }
+  .filter-bar    { background: #f8f9fa; border: 1px solid #e5e7eb; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; }
+  .filter-bar input, .filter-bar select { padding: 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.9rem; background: #fff; }
+  .filter-bar input[type=text] { min-width: 240px; flex: 1; max-width: 380px; }
+  .filter-bar button { padding: 0.5rem 1.25rem; background: #2563eb; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 600; }
+  .filter-bar button:hover { background: #1e40af; }
+  .filter-bar .clear { background: #6b7280; color: #fff; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-size: 0.85rem; }
+  .filter-bar .clear:hover { background: #4b5563; }
+  .count-note    { color: #6b7280; font-size: 0.85rem; margin-bottom: 0.75rem; }
+  .admin-table   { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .admin-table th, .admin-table td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid #eef0f3; font-size: 0.9rem; vertical-align: top; }
+  .admin-table th { background: #f5f7fa; font-weight: 600; color: #4a5568; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  .admin-table tr:last-child td { border-bottom: none; }
+  .admin-table tr:hover td { background: #fafbfc; }
+  .admin-table tr.selected td { background: #eff6ff; }
+  .admin-table input[type=checkbox] { cursor: pointer; width: 16px; height: 16px; accent-color: #2563eb; }
+  .badge { display: inline-block; padding: 0.2rem 0.65rem; border-radius: 999px; font-size: 0.74rem; font-weight: 600; margin-right: 0.25rem; }
+  .badge-staff    { background: #fef3c7; color: #92400e; }
+  .badge-active   { background: #dcfce7; color: #166534; }
+  .badge-inactive { background: #f3f4f6; color: #4b5563; }
+  .mono { font-family: ui-monospace, 'Courier New', monospace; font-size: 0.82rem; color: #6b7280; }
+  .empty { padding: 3rem 1rem; text-align: center; color: #9ca3af; background: #fff; border-radius: 8px; border: 1px dashed #d1d5db; }
+  .pagination { display: flex; justify-content: center; align-items: center; gap: 0.75rem; margin-top: 1.5rem; font-size: 0.9rem; }
+  .pagination a, .pagination span { padding: 0.4rem 0.85rem; border: 1px solid #d1d5db; border-radius: 6px; text-decoration: none; color: #374151; background: #fff; }
+  .pagination a:hover { background: #f3f4f6; }
+  .pagination .current { background: #2563eb; color: #fff; border-color: #2563eb; font-weight: 600; }
+
+  /* ----- Floating bulk-action bar ----- */
+  .selection-bar {
+    position: fixed; left: 50%; bottom: 1.5rem; transform: translateX(-50%);
+    background: #111827; color: #fff; padding: 0.75rem 1.25rem;
+    border-radius: 999px; box-shadow: 0 8px 30px rgba(0,0,0,0.25);
+    display: none; align-items: center; gap: 1rem; z-index: 100;
+    font-size: 0.9rem;
+  }
+  .selection-bar.active { display: flex; }
+  .selection-bar button {
+    background: #2563eb; color: #fff; border: none; padding: 0.5rem 1rem;
+    border-radius: 999px; cursor: pointer; font-weight: 600; font-size: 0.88rem;
+  }
+  .selection-bar button:hover { background: #1e40af; }
+
+  /* ----- Modal ----- */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(17,24,39,0.55);
+    display: none; align-items: center; justify-content: center; z-index: 200;
+    padding: 1rem;
+  }
+  .modal-backdrop.active { display: flex; }
+  .modal {
+    background: #fff; border-radius: 12px; padding: 1.5rem; width: 100%;
+    max-width: 540px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  }
+  .modal h2 { margin: 0 0 0.35rem; font-size: 1.2rem; color: #111827; }
+  .modal .recipients { color: #6b7280; font-size: 0.85rem; margin-bottom: 1rem; }
+  .modal label { display: block; font-size: 0.82rem; font-weight: 600; color: #374151; margin-bottom: 0.35rem; }
+  .modal select, .modal textarea {
+    width: 100%; padding: 0.6rem 0.75rem; border: 1px solid #d1d5db;
+    border-radius: 6px; font-size: 0.9rem; font-family: inherit; margin-bottom: 0.9rem;
+    box-sizing: border-box; background: #fff;
+  }
+  .modal textarea { resize: vertical; min-height: 130px; line-height: 1.5; }
+  .modal textarea:focus, .modal select:focus { outline: 2px solid #93c5fd; outline-offset: 1px; border-color: #2563eb; }
+  .modal .counter { float: right; font-size: 0.75rem; color: #9ca3af; margin-top: -0.6rem; margin-bottom: 0.5rem; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
+  .btn-primary   { background: #2563eb; color: #fff; border: none; padding: 0.6rem 1.25rem; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.9rem; }
+  .btn-primary:hover { background: #1e40af; }
+  .btn-primary:disabled { background: #93c5fd; cursor: not-allowed; }
+  .btn-secondary { background: #f3f4f6; color: #374151; border: none; padding: 0.6rem 1.25rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
+  .btn-secondary:hover { background: #e5e7eb; }
+</style>
+
+<!-- Hidden form that actually submits the message. Checkboxes in the table
+     are associated with this form via form="send-msg-form" so they aren't
+     part of the GET filter form. -->
+<form method="post" action="{% url 'admin_send_message' %}" id="send-msg-form" style="display:none;">
+  {% csrf_token %}
+</form>
+
+<div class="admin-wrap">
+  <div class="admin-header">
+    <h1>All Users</h1>
+    <a class="admin-back" href="{% url 'admin_user_logs' %}">→ User Activity Logs</a>
+  </div>
+
+  <form method="get" class="filter-bar">
+    <input type="text" name="q" placeholder="Search username, email, name, or index…" value="{{ q }}">
+    <select name="department">
+      <option value="">All departments</option>
+      {% for value, label in departments %}
+        <option value="{{ value }}" {% if value == current_department %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <select name="role">
+      <option value="">All roles</option>
+      <option value="staff"    {% if current_role == 'staff' %}selected{% endif %}>Staff only</option>
+      <option value="active"   {% if current_role == 'active' %}selected{% endif %}>Active users</option>
+      <option value="inactive" {% if current_role == 'inactive' %}selected{% endif %}>Inactive users</option>
+    </select>
+    <button type="submit">Apply filters</button>
+    {% if current_department or current_role or q %}
+      <a class="clear" href="{% url 'admin_all_users' %}">Clear</a>
+    {% endif %}
+  </form>
+
+  <div class="count-note">
+    {{ total }} {% if total == 1 %}user{% else %}users{% endif %}
+  </div>
+
+  {% if users %}
+    <table class="admin-table">
+      <thead>
+        <tr>
+          <th style="width:36px;"><input type="checkbox" id="select-all" aria-label="Select all"></th>
+          <th>Username</th>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Department</th>
+          <th>Level</th>
+          <th>Status</th>
+          <th>Last login</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+          <tr>
+            <td>
+              {% if u.is_active %}
+                <input type="checkbox"
+                       class="user-checkbox"
+                       name="user_ids"
+                       value="{{ u.id }}"
+                       form="send-msg-form"
+                       aria-label="Select {{ u.username }}">
+              {% endif %}
+            </td>
+            <td><strong>{{ u.username }}</strong><br><span class="mono">{{ u.index_number }}</span></td>
+            <td>{{ u.get_full_name|default:"—" }}</td>
+            <td class="mono">{{ u.email }}</td>
+            <td>{{ u.get_department_display }}</td>
+            <td>{{ u.level }}</td>
+            <td>
+              {% if u.is_staff %}<span class="badge badge-staff">Staff</span>{% endif %}
+              {% if u.is_active %}<span class="badge badge-active">Active</span>
+              {% else %}<span class="badge badge-inactive">Inactive</span>{% endif %}
+            </td>
+            <td class="mono">
+              {% if u.last_login %}{{ u.last_login|date:"d M Y, H:i" }}{% else %}—{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% if page.has_other_pages %}
+      <div class="pagination">
+        {% if page.has_previous %}
+          <a href="?page={{ page.previous_page_number }}{% if current_department %}&department={{ current_department }}{% endif %}{% if current_role %}&role={{ current_role }}{% endif %}{% if q %}&q={{ q }}{% endif %}">← Prev</a>
+        {% endif %}
+        <span class="current">{{ page.number }} / {{ page.paginator.num_pages }}</span>
+        {% if page.has_next %}
+          <a href="?page={{ page.next_page_number }}{% if current_department %}&department={{ current_department }}{% endif %}{% if current_role %}&role={{ current_role }}{% endif %}{% if q %}&q={{ q }}{% endif %}">Next →</a>
+        {% endif %}
+      </div>
+    {% endif %}
+  {% else %}
+    <div class="empty">No users match the current filters.</div>
+  {% endif %}
+</div>
+
+<!-- Floating selection bar -->
+<div class="selection-bar" id="selection-bar" role="region" aria-live="polite">
+  <span id="sel-count">0 users selected</span>
+  <button type="button" id="btn-open-modal">Send message</button>
+</div>
+
+<!-- Compose modal -->
+<div class="modal-backdrop" id="msg-modal" role="dialog" aria-modal="true" aria-labelledby="msg-modal-title">
+  <div class="modal">
+    <h2 id="msg-modal-title">Send message</h2>
+    <div class="recipients" id="msg-recipients">To: 0 users</div>
+
+    <label for="preset-select">Start from a draft (optional)</label>
+    <select id="preset-select">
+      <option value="">— Custom message —</option>
+      {% for p in message_presets %}
+        <option value="{{ p.text|escape }}">{{ p.label }}</option>
+      {% endfor %}
+    </select>
+
+    <label for="msg-text">Message</label>
+    <textarea id="msg-text" name="message" form="send-msg-form"
+              maxlength="1000" placeholder="Type your message…" required></textarea>
+    <div class="counter"><span id="char-count">0</span> / 1000</div>
+
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="btn-cancel">Cancel</button>
+      <button type="submit" class="btn-primary" form="send-msg-form" id="btn-send">Send</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const checkboxes    = () => Array.from(document.querySelectorAll('.user-checkbox'));
+  const selectAll     = document.getElementById('select-all');
+  const selectionBar  = document.getElementById('selection-bar');
+  const selCount      = document.getElementById('sel-count');
+  const btnOpen       = document.getElementById('btn-open-modal');
+  const modal         = document.getElementById('msg-modal');
+  const btnCancel     = document.getElementById('btn-cancel');
+  const sendForm      = document.getElementById('send-msg-form');
+  const recipientsLbl = document.getElementById('msg-recipients');
+  const presetSelect  = document.getElementById('preset-select');
+  const msgText       = document.getElementById('msg-text');
+  const charCount     = document.getElementById('char-count');
+  const btnSend       = document.getElementById('btn-send');
+
+  function updateSelection() {
+    const boxes    = checkboxes();
+    const checked  = boxes.filter(cb => cb.checked);
+    const n        = checked.length;
+
+    selCount.textContent = n === 1 ? '1 user selected' : n + ' users selected';
+    selectionBar.classList.toggle('active', n > 0);
+
+    // Row highlighting
+    boxes.forEach(cb => cb.closest('tr').classList.toggle('selected', cb.checked));
+
+    // Select-all state
+    if (selectAll) {
+      selectAll.checked       = n > 0 && n === boxes.length;
+      selectAll.indeterminate = n > 0 && n < boxes.length;
+    }
+  }
+
+  if (selectAll) {
+    selectAll.addEventListener('change', () => {
+      checkboxes().forEach(cb => cb.checked = selectAll.checked);
+      updateSelection();
+    });
+  }
+
+  checkboxes().forEach(cb => cb.addEventListener('change', updateSelection));
+
+  function openModal() {
+    const n = checkboxes().filter(cb => cb.checked).length;
+    if (n === 0) return;
+    recipientsLbl.textContent = n === 1 ? 'To: 1 user' : 'To: ' + n + ' users';
+    presetSelect.value = '';
+    msgText.value = '';
+    charCount.textContent = '0';
+    btnSend.disabled = false;
+    btnSend.textContent = 'Send';
+    modal.classList.add('active');
+    setTimeout(() => msgText.focus(), 30);
+  }
+
+  function closeModal() {
+    modal.classList.remove('active');
+  }
+
+  btnOpen.addEventListener('click', openModal);
+  btnCancel.addEventListener('click', closeModal);
+
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) closeModal();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && modal.classList.contains('active')) closeModal();
+  });
+
+  // Preset → fill textarea, reset the select so the same preset can be re-picked
+  presetSelect.addEventListener('change', () => {
+    if (presetSelect.value) {
+      msgText.value = presetSelect.value;
+      presetSelect.value = '';
+      msgText.dispatchEvent(new Event('input'));
+      msgText.focus();
+    }
+  });
+
+  msgText.addEventListener('input', () => {
+    charCount.textContent = msgText.value.length;
+  });
+
+  // Prevent accidental submit with nothing typed / nothing selected
+  sendForm.addEventListener('submit', (e) => {
+    const n = checkboxes().filter(cb => cb.checked).length;
+    if (n === 0) {
+      e.preventDefault();
+      closeModal();
+      return;
+    }
+    if (!msgText.value.trim()) {
+      e.preventDefault();
+      msgText.focus();
+      return;
+    }
+    btnSend.disabled = true;
+    btnSend.textContent = 'Sending…';
+  });
+})();
+</script>
+{% endblock %}
