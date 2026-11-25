@@ -2,7 +2,7 @@ from django.urls import path
 from . import views, pwa, competency_views
 
 urlpatterns = [
-    path('', views.dashboard, name='dashboard'),
+    path('dashboard/', views.dashboard, name='dashboard'),   # → reverse('dashboard') = '/dashboard/'
     path('terms/', views.terms_and_conditions, name='terms'),  # <-- ADD THIS LINE
     path('guide/', views.how_to_use, name='how_to_use'),
     path('attachment/new/', views.start_attachment, name='start_attachment'),

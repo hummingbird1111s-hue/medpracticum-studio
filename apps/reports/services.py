@@ -86,36 +86,53 @@ def _clean_list_lines(text):
     return cleaned
 
 
+# ============================================================
+# v11: hardened activities parser
+# ============================================================
+# The AI is prompted (in ai_drafting.DRAFT_SECTIONS) to return Activities
+# Performed as:
+#
+#     Opening paragraph.
+#
+#     Records Unit
+#     Registered fifteen new patients
+#     Booked follow-up appointments
+#
+#     RCH Unit
+#     Recorded infant demographics
+#
+# That is Format A below. If the AI ignores the format and returns
+# paragraph-style instead ("In the Records Unit, I registered fifteen
+# new patients..."), Format B catches it and converts to unit groups so
+# the DOCX/PDF still renders bullets. This guarantees Activities
+# Performed shows as bullets no matter what the AI returns.
+
 def _parse_activities_blocks(text):
     """
     Parse AI-generated activities_performed text into structured blocks.
 
-    The v10 AI prompt tells the model to produce:
+    Recognises THREE input shapes:
+
+    Format A — unit heading + activity lines (preferred):
         Opening paragraph.
 
         Records Unit
-        Activity line 1.
-        Activity line 2.
+        Activity line 1
+        Activity line 2
 
-        RCH
-        Activity line 1.
-        Activity line 2.
+        RCH Unit
+        Activity line 1
 
-    This helper turns that into:
-        [
-            {'type': 'paragraph', 'text': 'Opening paragraph.'},
-            {'type': 'unit', 'heading': 'Records Unit', 'activities': ['Activity line 1.', 'Activity line 2.']},
-            {'type': 'unit', 'heading': 'RCH', 'activities': ['Activity line 1.', 'Activity line 2.']},
-        ]
+    Format B — paragraph-style with "In the X Unit" openers:
+        In the Records Unit, I registered fifteen new patients and booked
+        appointments. In the RCH Unit, I recorded infant demographics.
 
-    Heuristic for a "unit heading" line:
-      - the block has 2+ lines
-      - the first line is short (<80 chars)
-      - the first line doesn't end with a period (headings are usually labels)
+    Format C — anything else (plain paragraphs).
+        Rendered as paragraphs. This is a safety net, not the goal.
 
-    If the block doesn't match the heading pattern, the whole block is treated
-    as a paragraph. This is a safe fallback — the layout degrades to plain
-    paragraphs rather than crashing.
+    Returns a list of dicts:
+        {'type': 'paragraph', 'text': '...'}
+        {'type': 'unit', 'heading': 'Records Unit', 'activities': [...]}
     """
     blocks = []
     if not text:
@@ -128,11 +145,17 @@ def _parse_activities_blocks(text):
         if not lines:
             continue
 
+        # ---- Format A: short, non-sentence first line = unit heading ----
         if (len(lines) >= 2
                 and len(lines[0]) < 80
                 and not lines[0].rstrip().endswith('.')):
             heading = lines[0].rstrip(':').strip()
-            activities = [l for l in lines[1:] if l]
+            activities = []
+            for line in lines[1:]:
+                # Strip any leading bullet / asterisk / numbered markers
+                cleaned = re.sub(r'^[\-\*\u2022\d\.\)]+\s*', '', line).strip()
+                if cleaned:
+                    activities.append(cleaned)
             if activities:
                 blocks.append({
                     'type': 'unit',
@@ -141,10 +164,88 @@ def _parse_activities_blocks(text):
                 })
                 continue
 
-        # Fallback: treat whole block as a paragraph
+        # ---- Format B: try to break a paragraph into unit groups ----
+        unit_groups = _try_parse_paragraph_as_units(block)
+        if unit_groups:
+            blocks.extend(unit_groups)
+            continue
+
+        # ---- Format C: last-resort plain paragraph ----
         blocks.append({'type': 'paragraph', 'text': ' '.join(lines)})
 
     return blocks
+
+
+def _try_parse_paragraph_as_units(block_text):
+    """
+    Convert a paragraph-style activities block into unit groups.
+
+    Detects sentences that begin with patterns like:
+      - 'In the <Unit> Unit, ...'
+      - 'In the <Unit> Department, ...'
+      - '<Unit> Unit, ...'
+      - 'At the <Unit> Unit, ...'
+
+    Sentences before the first unit opener cause the whole block to be
+    rejected (returns None) — we can't safely attribute them to a unit,
+    so Format C takes over.
+
+    Returns:
+      list of unit dicts on success
+      None if the block doesn't look like a per-unit listing
+    """
+    if not block_text:
+        return None
+
+    sentences = re.split(r'(?<=[.!?])\s+', block_text.strip())
+    if len(sentences) < 2:
+        return None
+
+    # Matches "In the Records Unit, ...", "At the RCH Department, ...",
+    # "Records Unit: ...", "RCH unit, ..."
+    unit_re = re.compile(
+        r'^(?:In\s+the\s+|At\s+the\s+|Within\s+the\s+)?'
+        r'((?:[A-Z][\w&/\s]{0,40}?)\s+(?:Unit|Department|Section|Ward|Clinic|Center|Centre|Division))'
+        r'[,:]?\s+(.*)$'
+    )
+
+    groups = []
+    current_unit = None
+    current_activities = []
+
+    for sentence in sentences:
+        s = sentence.strip()
+        if not s:
+            continue
+        m = unit_re.match(s)
+        if m:
+            # Flush the previous unit before starting a new one
+            if current_unit and current_activities:
+                groups.append({
+                    'type': 'unit',
+                    'heading': current_unit,
+                    'activities': current_activities,
+                })
+            current_unit = m.group(1).strip()
+            first_activity = m.group(2).strip()
+            current_activities = [first_activity] if first_activity else []
+        else:
+            if current_unit is None:
+                # Sentence before any unit was introduced — this block isn't
+                # a per-unit listing; reject so Format C handles it.
+                return None
+            if current_activities and s:
+                current_activities.append(s)
+
+    # Flush the final unit
+    if current_unit and current_activities:
+        groups.append({
+            'type': 'unit',
+            'heading': current_unit,
+            'activities': current_activities,
+        })
+
+    return groups or None
 
 
 def _first_sentence(text, limit=140):
@@ -240,13 +341,26 @@ def _build_activities_narrative(unit_activities):
     """
     Build the activities_performed default text from unit_activities.
     Used as fallback when the AI didn't draft this section.
+
+    v11: emits unit-heading + activity-lines format so the fallback path
+    also renders as bullets instead of one wall of paragraph text.
     """
     if not unit_activities:
         return ''
-    parts = ["During the practicum period, I was involved in the following activities as recorded in my logbook:"]
+    parts = [
+        "During the practicum period, I was involved in the following activities "
+        "as recorded in my logbook:"
+    ]
     for group in unit_activities:
-        parts.append(group['narrative'])
-    return '\n\n'.join(parts)
+        heading = group['unit'].rstrip(':').strip()
+        activity_lines = [a['summary'] for a in group['activities'] if a.get('summary')]
+        if not activity_lines:
+            continue
+        parts.append(heading)
+        for line in activity_lines:
+            parts.append(line)
+        parts.append('')  # blank line between units
+    return '\n\n'.join(p for p in parts if p is not None).strip()
 
 
 def _build_recommendations_text(dynamic_facility_recs, recs):
@@ -898,7 +1012,7 @@ class PracticumReportBuilder:
         references = _lines(content.get('references', ''))
         report = self.report_obj
 
-        # v10: parse activities_performed into structured blocks so the
+        # v11: parse activities_performed into structured blocks so the
         # template can render unit sub-headings + activity bullets.
         activities_blocks = _parse_activities_blocks(content.get('activities_performed', ''))
 
@@ -912,7 +1026,6 @@ class PracticumReportBuilder:
             'report_title': report_title, 'course_code': course_code, 'semester': semester,
             'content': content,
 
-            # v10: skills stay bullets; lessons become paragraphs.
             'content_skills_acquired': _clean_list_lines(content.get('skills_acquired', '')),
             'content_lessons_learnt': _lines(content.get('lessons_learnt', '')),
             'activities_blocks': activities_blocks,
@@ -1162,7 +1275,7 @@ class PracticumReportBuilder:
                 )
 
         # ════════════════════════════════════════════════════════════
-        # ACTIVITIES PERFORMED — v10: parse into structured blocks
+        # ACTIVITIES PERFORMED — v11: bullet-per-unit rendering
         # ════════════════════════════════════════════════════════════
         add_heading('ACTIVITIES PERFORMED')
         if content.get('activities_performed'):
@@ -1191,7 +1304,14 @@ class PracticumReportBuilder:
                 "During the practicum period, I was involved in the following activities as recorded in my logbook:",
             )
             for group in d['unit_activities']:
-                self._add_rich_paragraph(doc, group['narrative'])
+                p = doc.add_paragraph()
+                run = p.add_run(group['unit'])
+                run.bold = True
+                run.font.name = 'Times New Roman'
+                run.font.size = Pt(12)
+                for act in group['activities']:
+                    if act.get('summary'):
+                        self._add_rich_paragraph(doc, act['summary'], style='List Bullet')
 
         add_heading('SKILLS ACQUIRED')
         if content.get('skills_acquired'):
@@ -1208,9 +1328,6 @@ class PracticumReportBuilder:
         else:
             self._add_rich_paragraph(doc, "No formal workshop was attended during the practicum period.")
 
-        # ════════════════════════════════════════════════════════════
-        # LESSONS LEARNT — v10: paragraphs, NOT bullets
-        # ════════════════════════════════════════════════════════════
         add_heading('LESSONS LEARNT')
         if content.get('lessons_learnt'):
             for line in _lines(content['lessons_learnt']):
@@ -1309,15 +1426,6 @@ class PracticumReportBuilder:
         """
         Build the .pptx + PDF preview, save both to the report record,
         and record the build summary.
-
-        v8 fingerprint logic (defence-in-depth): if the caller already ran
-        _ensure_pptx_content(), report.pptx_content will be fresh and this
-        method won't re-draft. If called directly without that pre-step,
-        this method ALSO checks the fingerprint.
-
-        Magic-byte guard: before saving, we assert the PPTX bytes really
-        are ZIP/OOXML. If they're not, we fail loudly instead of shipping
-        a file PowerPoint will open as read-only.
         """
         from .pptx_builder import PracticumPptxBuilder
 
@@ -1408,7 +1516,6 @@ class PracticumReportBuilder:
         report.pptx_file.save(f"{filename}.pptx", ContentFile(pptx_bytes), save=False)
         report.pptx_pdf_file.save(f"{filename}.pdf", ContentFile(pdf_bytes), save=True)
 
-        # ---- Sanity log — catch accidental field swaps early ----
         if report.pptx_file and not report.pptx_file.name.endswith('.pptx'):
             logger.error(
                 "pptx_file.name does not end with .pptx: %r (report=%s)",
@@ -1442,10 +1549,6 @@ class PracticumReportBuilder:
         if report.docx_file:
             report.docx_file.delete(save=False)
 
-        # ✅ v8: persist the merged content (AI + defaults) BUT preserve
-        # private `_`-prefixed keys (notably `_source_hash`) so the
-        # fingerprint check in views._build() can still detect staleness
-        # on the next regeneration.
         old_content = dict(report.content or {})
         new_content = self.effective_content()
         for k, v in old_content.items():

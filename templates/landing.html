@@ -753,10 +753,17 @@
       from your daily clinical notes — in minutes, not weeks.
     </p>
     <div class="mp-landing-hero__ctas">
-      <a href="{% url 'login' %}" class="mp-landing-btn mp-landing-btn--primary mp-landing-btn--lg">
-        Get Started
-        <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-      </a>
+      {% if user.is_authenticated %}
+        <a href="{% url 'dashboard' %}" class="mp-landing-btn mp-landing-btn--primary mp-landing-btn--lg">
+          Continue to Dashboard
+          <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </a>
+      {% else %}
+        <a href="{% url 'login' %}" class="mp-landing-btn mp-landing-btn--primary mp-landing-btn--lg">
+          Get Started
+          <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </a>
+      {% endif %}
       <a href="#how-it-works" class="mp-landing-btn mp-landing-btn--ghost mp-landing-btn--lg">
         See How It Works
       </a>
@@ -961,10 +968,17 @@
           <li>QR-verified reports</li>
           <li>AI assistant chat</li>
         </ul>
-        <a href="{% url 'login' %}" class="mp-landing-btn mp-landing-btn--primary">
-          Get Started
-          <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-        </a>
+        {% if user.is_authenticated %}
+          <a href="{% url 'dashboard' %}" class="mp-landing-btn mp-landing-btn--primary">
+            Continue to Dashboard
+            <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </a>
+        {% else %}
+          <a href="{% url 'login' %}" class="mp-landing-btn mp-landing-btn--primary">
+            Get Started
+            <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </a>
+        {% endif %}
       </div>
 
       <!-- Both Periods (featured) -->
@@ -984,10 +998,17 @@
           <li>Covers both practicum attachments</li>
           <li>No second payment needed</li>
         </ul>
-        <a href="{% url 'login' %}" class="mp-landing-btn mp-landing-btn--primary">
-          Get Started
-          <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-        </a>
+        {% if user.is_authenticated %}
+          <a href="{% url 'dashboard' %}" class="mp-landing-btn mp-landing-btn--primary">
+            Continue to Dashboard
+            <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </a>
+        {% else %}
+          <a href="{% url 'login' %}" class="mp-landing-btn mp-landing-btn--primary">
+            Get Started
+            <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </a>
+        {% endif %}
       </div>
 
     </div>
@@ -1130,10 +1151,17 @@
   <section class="mp-landing-final-cta">
     <h2>Ready to turn your logs into a professional report?</h2>
     <p>Join other COHY healthcare students who save 20+ hours per practicum.</p>
-    <a href="{% url 'login' %}" class="mp-landing-btn mp-landing-btn--primary mp-landing-btn--lg">
-      Create Your Account
-      <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-    </a>
+    {% if user.is_authenticated %}
+      <a href="{% url 'dashboard' %}" class="mp-landing-btn mp-landing-btn--primary mp-landing-btn--lg">
+        Continue to Dashboard
+        <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </a>
+    {% else %}
+      <a href="{% url 'login' %}" class="mp-landing-btn mp-landing-btn--primary mp-landing-btn--lg">
+        Create Your Account
+        <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </a>
+    {% endif %}
     <p class="mp-landing-final-cta__small">
       Questions? <a href="{% url 'contact' %}">Contact our team</a> ·
       <a href="https://wa.me/233533052562" target="_blank" rel="noopener">WhatsApp us</a>
@@ -1166,4 +1194,23 @@
   });
 })();
 </script>
+
+{% if user.is_authenticated %}
+<script>
+/* ============================================================
+   PWA ESCAPE — if the page is running as an installed PWA
+   (display-mode: standalone), skip the landing entirely and
+   jump straight to the dashboard. Regular browser visits still
+   see the landing page first, even when logged in.
+   ============================================================ */
+(function () {
+  'use strict';
+  var isPWA = window.matchMedia('(display-mode: standalone)').matches ||
+              window.navigator.standalone === true;
+  if (isPWA) {
+    window.location.replace('{% url "dashboard" %}');
+  }
+})();
+</script>
+{% endif %}
 {% endblock %}

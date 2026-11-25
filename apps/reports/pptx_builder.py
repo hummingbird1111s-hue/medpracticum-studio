@@ -22,7 +22,7 @@ def _rgb(hex_str):
 
 
 # ============================================================
-# Bullet / text sanitisation (v8)
+# Bullet / text sanitisation (v11)
 # ============================================================
 # All bullet text flows through _sanitize_bullet() before hitting a
 # shape. This is the LAST line of defence: even if the AI sneaks in
@@ -68,6 +68,44 @@ def _sanitize_bullet(text):
 def _strip_markup(text):
     """Kept for backwards-compat — now delegates to _sanitize_bullet."""
     return _sanitize_bullet(text)
+
+
+# ============================================================
+# v11 — Obstacle / solution filtering for Activities & Skills slides
+# ============================================================
+# The Activities and Skills slides must describe WHAT the student DID
+# and WHAT they LEARNED — not the CONDITIONS they endured or HOW they
+# worked around difficulties. Challenges and Recommendations have their
+# own slides. When the AI ignores this and slips a line like
+# "Managed high patient volume during registration" onto the Activities
+# slide, this filter drops it. The report-side filter in ai_drafting.py
+# handles the same problem for the DOCX/PDF; this one handles the PPTX.
+
+_OBSTACLE_MARKERS_PPTX = (
+    # Challenges / difficulties
+    'challeng', 'difficult', 'struggl', 'obstacle', 'barrier',
+    'hinder', 'disrupt', 'delay', 'congest', 'overcrowd', 'shortage',
+    'lack of', 'insufficient', 'bottleneck', 'downtime', 'slowdown',
+    'high patient volume', 'heavy patient volume',
+    # Solutions / responses to difficulty
+    'extended working hours', 'extended hours', 'long hours',
+    'cope with', 'manage high', 'manage heavy', 'manage large',
+    'despite the', 'in spite of', 'under pressure',
+    'recommend', 'solution', 'should extend', 'should be extended',
+    'streamlin', 'restructur', 'optimi',
+    'assisted with', 'helped manage',
+)
+
+
+def _is_obstacle_bullet(text):
+    """
+    True if the bullet contains obstacle/solution language that must
+    not appear on the Activities or Skills slide.
+    """
+    if not text:
+        return False
+    lowered = text.lower()
+    return any(marker in lowered for marker in _OBSTACLE_MARKERS_PPTX)
 
 
 def _trim_to_slide(items, max_items=6, max_chars=220):
@@ -189,21 +227,31 @@ class PracticumPptxBuilder:
           1. AI-drafted bullets in report.pptx_content[key], sanitised.
           2. Fallback items derived from the report text, sanitised.
 
-        In both paths:
-          - each line is run through _sanitize_bullet,
-          - long lines are trimmed to max_chars,
-          - the final list is capped at max_items.
+        v11: for pptx_activities_bullets and pptx_skills_bullets, any
+        bullet containing obstacle/solution language is DROPPED. Those
+        slides must describe only what the student DID and LEARNED, never
+        what they endured or worked around. Challenges and Recommendations
+        have their own slides.
         """
         max_items = max_items or self._max_bullets()
         max_items = min(max_items, self._max_bullets())
         max_chars = self._max_chars()
         raw = (self._pptx_content().get(key) or '').strip()
 
+        # Only the Activities and Skills slides are scrubbed.
+        strip_obstacles = key in ('pptx_activities_bullets', 'pptx_skills_bullets')
+
         if raw:
             out = []
             for line in raw.splitlines():
                 line = _sanitize_bullet(line)
                 if not line:
+                    continue
+                if strip_obstacles and _is_obstacle_bullet(line):
+                    logger.info(
+                        'PPTX: dropped obstacle bullet from %r: %s',
+                        key, line[:80],
+                    )
                     continue
                 if len(line) > max_chars:
                     line = line[:max_chars].rstrip() + '…'
@@ -215,7 +263,10 @@ class PracticumPptxBuilder:
 
         # Fallback path — count it and sanitise on the way through.
         self.ai_fallback_count += 1
-        return _trim_to_slide(fallback_items, max_items=max_items, max_chars=max_chars)
+        fallback = _trim_to_slide(fallback_items, max_items=max_items, max_chars=max_chars)
+        if strip_obstacles:
+            fallback = [b for b in fallback if not _is_obstacle_bullet(b)]
+        return fallback
 
     def _parse_speaker_notes(self):
         if not self._opts().get('include_speaker_notes', True):
@@ -270,14 +321,23 @@ class PracticumPptxBuilder:
                 self._bullets('pptx_facility_bullets',
                               content.get('facility_profile', '').split('\n\n')),
                 True),
+
+            # v11: filter obstacles from the FALLBACK path for activities.
+            # The AI-drafted path is already filtered inside _bullets().
             ('slide_activities', 'ACTIVITIES PERFORMED',
                 self._bullets('pptx_activities_bullets',
-                              [g['narrative'] for g in d['unit_activities']]),
+                              [g['narrative'] for g in d['unit_activities']
+                               if not _is_obstacle_bullet(g['narrative'])]),
                 True),
+
+            # v11: same treatment for skills — both AI path and fallback
+            # path must be obstacle-free.
             ('slide_skills', 'SKILLS ACQUIRED',
                 self._bullets('pptx_skills_bullets',
-                              self._clean_list(content.get('skills_acquired', ''))),
+                              [line for line in self._clean_list(content.get('skills_acquired', ''))
+                               if not _is_obstacle_bullet(line)]),
                 True),
+
             ('slide_challenges', 'CHALLENGES FACED',
                 self._bullets('pptx_challenges_bullets',
                               content.get('challenges', '').split('\n\n'),

@@ -15,22 +15,23 @@ def root_view(request):
     """
     Public entry point at '/'.
 
-    Anonymous  → landing page
-    Logged-in  → call the dashboard view function directly.
+    ALWAYS serves the landing page, for everyone, on every visit — even
+    if the user is already logged in. This is what makes the site link
+    a clean "entry point" every time it's clicked.
 
-    We call `logs_views.dashboard` instead of `redirect('dashboard')` because
-    the dashboard's URL name resolves to '/' — redirecting would loop forever.
+    PWA users escape this via a small JS redirect in landing.html
+    (display-mode: standalone → /dashboard/). Browser users see the
+    landing page and can click "Continue to Dashboard" if logged in.
     """
-    if not request.user.is_authenticated:
-        return render(request, 'landing.html')
-    return logs_views.dashboard(request)  # ← rename if your view is not `dashboard`
+    return render(request, 'landing.html')
 
 
 urlpatterns = [
     path('admin/', admin.site.urls),
 
-    # Root: landing for anon, dashboard for auth. Must come BEFORE the include
-    # so it wins for '/'. Everything else falls through to apps.logs.urls.
+    # Root: ALWAYS landing.html. The dashboard lives at /dashboard/ (below).
+    # Do NOT change this to branch on auth — landing.html itself shows
+    # "Continue to Dashboard" for logged-in users.
     path('', root_view, name='root'),
 
     # Alias for Paystack submission + external links
@@ -53,6 +54,24 @@ urlpatterns = [
     path('admin-workspace/send-message/', admin_views.admin_send_message, name='admin_send_message'),
     path('admin-workspace/payments/', payments_admin_views.admin_pending_payments, name='admin_pending_payments'),
     path('admin-workspace/payments/verify/<int:pk>/', payments_admin_views.admin_verify_payment, name='admin_verify_payment'),
+
+    # ------------------------------------------------------------------
+    # DASHBOARD OVERRIDE — MUST stay AFTER the logs.urls include.
+    #
+    # logs.urls mounts its dashboard view at '' with name='dashboard',
+    # which makes reverse('dashboard') → '/' (the landing page) → LOOP
+    # when the user clicks "Continue to Dashboard" or the PWA-escape
+    # script fires.
+    #
+    # Placing this AFTER the include makes:
+    #   • reverse('dashboard')  → '/dashboard/'   (last-name-wins)
+    #   • GET /dashboard/       → this view       (first-URL-match for
+    #                                              /dashboard/, since the
+    #                                              '' pattern in logs.urls
+    #                                              only matches the empty
+    #                                              path, not '/dashboard/')
+    # ------------------------------------------------------------------
+    path('dashboard/', logs_views.dashboard, name='dashboard'),
 
     path('offline/', TemplateView.as_view(
         template_name='offline.html',

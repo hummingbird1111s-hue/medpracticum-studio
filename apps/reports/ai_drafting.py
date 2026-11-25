@@ -1,48 +1,20 @@
 """
 Best-effort AI drafting for report sections, with code-enforced quality gates.
 
+v11 — DEEP CLEANUP of section isolation:
+  - Activities Performed MUST be bullet format under unit sub-headings
+  - Skills Acquired MUST derive from specific activities, in bullet format
+  - Lessons Learnt MUST be reflections on skills, not activity restatements
+  - Obstacles/solutions are FORBIDDEN from Activities and Skills
+  - Sparse logs (<5) trigger ENRICHMENT of real activities using competencies
+  - Filler phrases are stripped from all output
+
 Two entry points:
   - draft_sections_with_ai(session)        → report prose   → report.content
   - draft_presentation_with_ai(session)    → slide bullets  → report.pptx_content
 
-Plus one refinement entry point (v9):
+Plus one refinement entry point:
   - refine_user_content(session, content)  → polish user edits without redrafting
-
-QUALITY ENFORCEMENT (v10):
-  Every drafted section passes through a post-processing gate that detects:
-    1. Verbatim copy from raw logs (7-word n-gram match)
-    2. Placeholder text ('[insert', 'TODO', 'lorem ipsum', etc.)
-    3. Markdown pollution (## headings, **bold**, *, -, • bullets)
-    4. Under-length drafts (< 50% of section word floor)
-    5. Over-length drafts (> 125% of section word target — soft warning only)
-  Sections failing a HARD gate are retried once with a stricter prompt that
-  names the specific problem. Retry budget is capped (3 retries / 30s) so
-  the time budget stays intact.
-
-SOURCE-OF-TRUTH (v10):
-  Logs and competencies are the ONLY source of fact. Each log field is
-  labelled in the context (ACTIVITY:, SKILL:, CHALLENGE:, SOLUTION:) so the
-  AI maps each one to the correct report section — activities never absorb
-  solutions, challenges are never invented from activities, and the
-  Recommendations section builds from the challenges, not from log
-  solutions.
-
-SOURCE FINGERPRINT (v8):
-  source_fingerprint(session) is written into the returned drafts dict as
-  '_source_hash'. views.py compares this hash against the saved one to
-  detect stale drafts (new logs, new workshops, new competencies) and
-  trigger re-drafting.
-
-MANUAL EDIT REFINEMENT (v9):
-  refine_user_content(session, content) takes the user's exact edited text
-  from the edit page and returns a polished version that preserves every
-  fact, number, unit, activity, workshop, and skill — only the grammar,
-  sentence flow, and academic tone change.
-
-ORDER MATTERS: Sections are ordered by PRIORITY, not report sequence.
-  If the 90s budget runs out, the sections that got drafted are the ones
-  that matter most. Activities / Introduction / Skills first. Abstract and
-  References last.
 """
 
 import hashlib
@@ -60,16 +32,6 @@ logger = logging.getLogger(__name__)
 # ============================================================
 # Report drafting — section priority order
 # ============================================================
-# NOTE: 'facility_profile' is deliberately NOT drafted by the AI.
-# It's built purely from the facility record in the database.
-#
-# v10 prompt discipline:
-#   - Introduction: 2 paragraphs, 150-250 words
-#   - Activities:   unit-headed activity lines (bullets), source = log ACTIVITY field ONLY
-#   - Skills:       5-7 items, each reflects a specific activity from Activities Performed
-#   - Lessons:      5-7 reflections (NOT activity summaries); each connects to a competency
-#   - Challenges:   actual challenges from logs (paragraphs)
-#   - Recommendations: built from Challenges + Observations, NOT from log solutions
 
 DRAFT_SECTIONS = [
     ('introduction', 'Introduction',
@@ -83,65 +45,125 @@ DRAFT_SECTIONS = [
      "Do NOT use bullet points, asterisks, hyphens, or em dashes. Do NOT include a heading."),
 
     ('activities_performed', 'Activities Performed',
-     "Write ONE opening paragraph of 1-2 sentences framing the attachment's activities. "
-     "Then for EACH unit that ACTUALLY appears in the logs, create a SUB-HEADING with the unit name "
-     "(e.g. 'Records Unit', 'RCH') followed by 2-3 ACTIVITY LINES (one per line). "
-     "Each activity line = ONE activity from the log 'ACTIVITY:' field, rephrased into polished, "
-     "persuasive academic English. Preserve the exact MEANING of the log activity — you may extend "
-     "the sentence with professional context, but do NOT change what the student did. "
-     "CRITICAL: Do NOT include challenges, solutions, or observations here. Those belong to their own sections. "
-     "Do NOT invent activities. Do NOT copy raw log text verbatim — refine grammar and phrasing. "
-     "Do NOT use more than 3 activity lines per unit. Use first-person voice ('I'). "
-     "Aim for 250-350 words total. Do NOT include the main heading."),
+     "Write the 'Activities Performed' section as BULLET-FORMAT ACTIVITY LINES grouped "
+     "under UNIT SUB-HEADINGS. Follow this structure EXACTLY:\n\n"
+     "  [Opening paragraph of 2-3 sentences]\n\n"
+     "  <Unit Name 1>\n"
+     "  Activity line 1\n"
+     "  Activity line 2\n"
+     "  Activity line 3\n\n"
+     "  <Unit Name 2>\n"
+     "  Activity line 1\n"
+     "  Activity line 2\n"
+     "  Activity line 3\n\n"
+     "Each activity line = ONE concrete action, starting with a past-tense verb "
+     "(Registered, Captured, Booked, Processed, Verified, Maintained, Recorded, Prepared, Reconciled). "
+     "3-4 activity lines per unit.\n\n"
+     "CRITICAL BANS — do NOT include in this section:\n"
+     "  - Any challenge, obstacle, difficulty, delay, congestion, overcrowding, shortage, or barrier.\n"
+     "  - Any solution, response, workaround, or recommendation.\n"
+     "  - Any phrasing like 'due to high patient volume', 'to manage overcrowding', "
+     "'extended working hours', 'streamlined', 'address delays', 'cope with demand', "
+     "'under pressure', 'despite', 'in spite of'.\n"
+     "  Those belong to the Challenges and Recommendations sections, NOT here.\n\n"
+     "SPARSE-LOG ENRICHMENT (if fewer than 5 logs): For each real activity in the logs, "
+     "expand it with professional context — name the data system used (LHIMS, HAMS, paper register), "
+     "the data quality check applied, the professional standard followed, or the competency supported. "
+     "Example: log says 'registered 15 patients' → enriched activity: "
+     "'Registered approximately fifteen new patients daily, capturing complete demographic, "
+     "address, and NHIS details in the LHIMS electronic system while maintaining data quality "
+     "and confidentiality standards.' "
+     "Do NOT invent new units, new activities, new workshops, or new patient counts — enrich ONLY "
+     "the real activities by adding professional context.\n\n"
+     "FORMAT RULES:\n"
+     "  - Do NOT prefix any line with '- ', '* ', '• ', or numbers. The renderer adds bullets.\n"
+     "  - Do NOT use markdown (**bold**, ## headings). Plain text.\n"
+     "  - Do NOT include the main heading.\n"
+     "  - Use first-person voice ('I').\n"
+     "Aim for 300-400 words total."),
 
     ('skills_acquired', 'Skills Acquired',
-     "Provide 5-7 specific skills the student developed. Output ONLY plain list items, one per line. "
-     "CRITICAL: ABSOLUTELY NO numbers, hyphens, asterisks, bullets, or HTML tags at the start of the line. "
-     "Use the format: Skill Name: 2 sentences describing HOW the skill was developed through a specific activity. "
-     "Each skill MUST be a MORE DETAILED REFLECTION of an activity from the Activities Performed section — "
-     "explain what the student actually learned from DOING that activity. "
-     "Do NOT introduce a skill not evidenced by a logged activity. Use first-person ('I'). "
-     "Connect each skill to a competency area where natural. Do NOT include a heading. "
-     "Aim for 200-300 words total."),
+     "Write the 'Skills Acquired' section as BULLET-FORMAT SKILL LINES. "
+     "EACH skill MUST trace back to a specific activity from the Activities Performed section.\n\n"
+     "Format each skill as: <Skill Name>: 2-3 sentences describing the skill, the specific "
+     "activity that developed it, and the HIM competency supported.\n\n"
+     "Provide 5-7 skills. One skill per line. No bullet markers.\n\n"
+     "CRITICAL RULES:\n"
+     "  - Every skill MUST be evidenced by an activity in the logs (or by the enriched "
+     "activities above). Never invent a skill not supported by an activity.\n"
+     "  - Name the activity that produced the skill: 'Through registering new patients...', "
+     "'By booking follow-up appointments...', 'While capturing infant demographics...'\n"
+     "  - Do NOT restate the activity verbatim — describe what was LEARNED from doing it.\n\n"
+     "CRITICAL BANS — do NOT include in this section:\n"
+     "  - Any obstacle, challenge, difficulty, or condition endured. Skills describe "
+     "CAPABILITIES GAINED, not conditions survived.\n"
+     "  - Forbidden phrases: 'under pressure', 'despite high volumes', "
+     "'while managing congestion', 'maintained workflow despite', 'coped with', "
+     "'adapted to', 'handled the workload', 'managed stress'.\n\n"
+     "SPARSE-LOG ENRICHMENT (if fewer than 5 logs): You may name sub-skills within a single "
+     "activity to reach 5-6 skills. Legitimate sub-skills of 'patient registration' include: "
+     "'data quality verification during intake', 'demographic capture for pediatric cases', "
+     "'NHIS verification during registration', 'records confidentiality enforcement'. "
+     "These are truthful expansions of one activity, not new inventions.\n\n"
+     "Plain text, one skill per line. No markdown. No main heading. Use first-person ('I').\n"
+     "Aim for 250-350 words total."),
 
     ('lessons_learnt', 'Lessons Learnt',
-     "Provide 5-7 detailed LESSONS, one per line. Output ONLY plain list items. "
-     "CRITICAL: ABSOLUTELY NO numbers, hyphens, asterisks, bullets, or HTML tags at the start of the line. "
-     "CRITICAL: This is NOT a summary of activities. Do NOT list what you did. "
-     "Each lesson MUST be a REFLECTION — an insight, realisation, or principle you learned. "
-     "Start each lesson with 'I learnt', 'I realised', 'I appreciated', 'I now understand', or 'I discovered'. "
-     "Each lesson MUST be 2-3 sentences: what you observed, and what broader principle you took from it. "
-     "EACH lesson MUST connect to a competency area and broaden to real HIM practice: "
-     "patient confidentiality, teamwork, data quality, professional ethics, workflow efficiency. "
-     "Use first-person ('I'). Do NOT copy raw log text. Do NOT repeat Activities Performed or Skills Acquired. "
-     "Do NOT include a heading. Aim for 200-300 words total."),
+     "Write the 'Lessons Learnt' section as REFLECTIONS drawn from the Skills Acquired and "
+     "Activities Performed sections above.\n\n"
+     "Output 5-7 lessons, one per line. OR present them as 2-3 short connected paragraphs. "
+     "One lesson per line is preferred.\n\n"
+     "CRITICAL — each lesson MUST be a REFLECTION, not an activity restatement:\n"
+     "  BAD: 'I registered 15 new patients and booked appointments for them.' "
+     "(This is just restating an activity.)\n"
+     "  GOOD: 'I learnt that accurate patient registration is the foundation of every "
+     "subsequent clinical encounter. When a demographic field is wrong at intake, every "
+     "downstream process — from NHIS claims to appointment reminders — inherits that error. "
+     "This reinforced the HIM principle that data quality must be enforced at the source.'\n\n"
+     "Each lesson starts with a reflection cue: 'I learnt', 'I realised', 'I appreciated', "
+     "'I now understand', or 'I discovered'.\n\n"
+     "Each lesson is 2-3 sentences: WHAT you did, WHAT you learned from it, WHAT broader "
+     "principle or competency this connects to (data quality, confidentiality, ethics, "
+     "teamwork, workflow efficiency).\n\n"
+     "Do NOT mention obstacles, delays, or challenges as a lesson theme — reflect on "
+     "professional principles, not on working conditions.\n"
+     "Plain text, no bullet markers, no markdown. Use first-person ('I'). No heading.\n"
+     "Aim for 250-300 words total."),
 
     ('challenges', 'Challenges',
-     "Write 3-4 substantial paragraphs about the challenges the student ACTUALLY faced. "
-     "CRITICAL FIRST STEP: Read the daily logs below and identify the SPECIFIC challenges the student recorded "
-     "(the 'CHALLENGE:' field of each log). "
-     "If the logs recorded challenges, SYNTHESIZE and REFINE them into academic prose — do NOT copy verbatim. "
-     "If the logs recorded NO challenges, generate 2-3 realistic ones based on the units and competencies listed, "
-     "drawing on typical Ghanaian HIM practice (patient congestion, illegible handwriting on paper records, "
-     "network downtime on LHIMS, incomplete NHIS claim documentation, storage space limitations). "
-     "STRUCTURE: Paragraph 1 introduces the challenges generally and their significance. "
-     "Paragraphs 2-3 each describe ONE specific challenge in detail — what happened, its impact on the work, "
-     "and how the student responded. Paragraph 4 (optional) reflects on what these challenges reveal about "
-     "the facility's systems. "
-     "Use first-person ('I'). Do NOT include a heading or bullet list. "
-     "CRITICAL: NEVER paste raw log text. Always transform into polished academic English."),
+     "Write the 'Challenges' section as 3-4 short paragraphs. Every challenge must come "
+     "FROM THE LOGS (the CHALLENGE field of each daily log). If the logs recorded no "
+     "challenges, generate 2-3 realistic ones for this facility type in Ghanaian HIM "
+     "practice (patient congestion, illegible paper records, LHIMS network downtime, "
+     "incomplete NHIS claim documentation, storage space constraints).\n\n"
+     "STRUCTURE:\n"
+     "  - Paragraph 1: introduce the challenges generally and their professional significance.\n"
+     "  - Paragraphs 2-3: each describes ONE specific challenge in detail — what happened, "
+     "how it impacted the work, how you responded.\n"
+     "  - Paragraph 4 (optional): reflect on what these reveal about the facility's systems.\n\n"
+     "RULES:\n"
+     "  - NEVER copy raw log text. Rephrase into polished academic prose.\n"
+     "  - Do NOT invent challenges contradicted by the logs.\n"
+     "  - Do NOT mention activities or solutions here — challenges ONLY.\n"
+     "  - First-person voice ('I'). No bullets, no markdown, no heading. Plain prose.\n"
+     "Aim for 250-350 words total."),
 
     ('recommendations', 'Recommendations',
-     "Write ONE opening paragraph of 2-3 sentences framing the recommendations, based on the challenges "
-     "and observations described earlier in this report. "
-     "Then provide a NUMBERED list of 6-8 actionable recommendations, each 2-3 sentences. "
-     "Split them into two groups with bold sub-headings: 'For the Facility:' (3-4 items) and 'For the College:' (3-4 items). "
-     "EACH recommendation MUST follow this structure: WHO should do WHAT, and WHY it matters based on a "
-     "specific challenge you encountered. "
-     "CRITICAL: Do NOT copy raw 'SOLUTION:' text from the logs. Do NOT copy template text. "
-     "Generate fresh, specific, actionable recommendations based on the student's actual experience in this attachment. "
-     "Use professional academic tone (first-person plural 'we' or third-person 'the facility should'). "
-     "Do NOT include the main heading."),
+     "Write the 'Recommendations' section. Base every recommendation on the challenges "
+     "and observations described earlier in this report — NOT on the SOLUTION field of "
+     "the logs (paraphrase solutions if present, but generate fresh recommendations too).\n\n"
+     "STRUCTURE:\n"
+     "  - One opening paragraph of 2-3 sentences framing the recommendations.\n"
+     "  - Two groups under bold labels: 'For the Facility:' (3-4 items) and "
+     "'For the College:' (3-4 items).\n"
+     "  - Each recommendation MUST follow this structure: WHO should do WHAT, and WHY "
+     "it matters based on a specific challenge you encountered.\n\n"
+     "RULES:\n"
+     "  - Do NOT copy raw SOLUTION text from logs verbatim.\n"
+     "  - Each recommendation should be 2-3 sentences, actionable, and specific.\n"
+     "  - Use professional tone (third-person 'the facility should' or plural 'we').\n"
+     "  - Do NOT include the main heading.\n"
+     "Aim for 250-350 words total."),
 
     ('conclusion', 'Conclusion',
      "Write 3 substantial paragraphs using first-person ('I'). "
@@ -158,6 +180,8 @@ DRAFT_SECTIONS = [
      "Weave specific details from the logs into a cohesive academic narrative. "
      "Connect observations to the competency areas where relevant. "
      "CRITICAL: YOU ARE FORBIDDEN FROM LISTING RAW LOG ENTRIES. "
+     "CRITICAL: Do NOT repeat challenges here — this section describes HOW the facility works, "
+     "not WHAT went wrong. Save obstacle details for the Challenges section. "
      "Example synthesis: if logs mention 'electronic system' and 'high patient volume', write "
      "'I observed that while the LHIMS electronic health information system streamlined data management, "
      "the high patient volume often led to bottlenecks during peak hours, revealing gaps in workflow efficiency.' "
@@ -199,16 +223,13 @@ DEFAULT_MAX_SECONDS = 90
 # ============================================================
 # Presentation drafting (slide bullets + speaker notes)
 # ============================================================
-# v10 discipline: each slide draws from the CORRECT section of the report.
-# Activities slide = ACTIVITY field only. Challenges slide = CHALLENGE field only.
-# Observation/Recs slide = OBSERVATION + recommendations. Never cross-contaminate.
 
 PPTX_DRAFT_SECTIONS = [
     ('pptx_intro_bullets', 'Slide: Introduction',
      "Write 3 short bullet points for a presentation slide titled 'Introduction'. "
      "Each bullet MUST be 12 words or fewer. Output ONE bullet per line, no markers, no numbers. "
      "Use first-person ('I'). Cover: purpose of attachment, facility name, key units rotated. "
-     "Example line: 'Attached to Adidome Government Hospital for four weeks'\n"
+     "Example line: 'Attached to Adigbe Government Hospital for four weeks'\n"
      "FORBIDDEN: more than 3 bullets. FORBIDDEN: any bullet longer than 12 words. "
      "FORBIDDEN: em dash, en dash, hyphen as bullet separator, asterisks, markdown."),
 
@@ -224,18 +245,24 @@ PPTX_DRAFT_SECTIONS = [
      "Write 4-6 short bullet points for a slide titled 'Activities Performed'. "
      "Each bullet MUST be 10 words or fewer. Output ONE bullet per line, no markers. "
      "Format each bullet as: '<Unit>: <one key activity>'. "
-     "SOURCE: use ONLY the ACTIVITY field from the logs (labelled 'ACTIVITY:' in the data below). "
-     "FORBIDDEN: including CHALLENGE or SOLUTION text from logs — those belong on the Challenges slide, not here. "
+     "SOURCE: use ONLY the ACTIVITY field from the logs (labelled 'ACTIVITY:' in the data below).\n\n"
+     "CRITICAL BANS — do NOT include in this slide:\n"
+     "  - Any challenge, obstacle, difficulty, delay, or barrier.\n"
+     "  - Any solution, workaround, response to pressure, or recommendation.\n"
+     "  - Forbidden phrases: 'extended working hours', 'managing high patient volume', "
+     "'overcrowding', 'streamlining', 'addressing delays', 'coping with', 'under pressure'.\n\n"
+     "FORBIDDEN: more than 6 bullets. FORBIDDEN: bullets longer than 10 words. "
+     "FORBIDDEN: em dash, en dash, hyphen as bullet separator, asterisks, markdown. "
      "FORBIDDEN: including observations, recommendations, or anything that is not a direct activity. "
      "Only mention units that ACTUALLY appear in the logs. "
-     "Example line: 'RCH: registered pregnant women and booked appointments'\n"
-     "FORBIDDEN: more than 6 bullets. FORBIDDEN: bullets longer than 10 words. "
-     "FORBIDDEN: em dash, en dash, hyphen as bullet separator, asterisks, markdown."),
+     "Example line: 'RCH: registered pregnant women and booked appointments'\n"),
 
     ('pptx_skills_bullets', 'Slide: Skills Acquired',
      "Write 4-5 short bullet points naming skills acquired. "
      "Each bullet MUST be 8 words or fewer. Output ONE bullet per line, no markers. "
      "Just the skill name plus one short qualifier. "
+     "FORBIDDEN: any challenge, obstacle, or condition-endured language. "
+     "FORBIDDEN: phrases like 'under pressure', 'despite high volumes', 'coping with workload'.\n"
      "Example line: 'Patient registration and LHIMS data entry'\n"
      "FORBIDDEN: more than 5 bullets. FORBIDDEN: bullets longer than 8 words. "
      "FORBIDDEN: em dash, en dash, hyphen as bullet separator, asterisks, markdown."),
@@ -285,11 +312,8 @@ PPTX_DRAFT_SECTIONS = [
 # Quality enforcement constants + helpers
 # ============================================================
 
-# A 7-word match against a raw log is a strong verbatim-copy signal.
-# Shorter windows (5-6) trigger false positives on common English phrasing.
 _VERBATIM_NGRAM_SIZE = 7
 
-# Words too common to be meaningful in a verbatim-copy check.
 _QUALITY_STOPWORDS = frozenset({
     'a','an','the','and','or','of','in','on','at','to','for','with','by','as',
     'is','was','were','be','been','being','have','has','had','do','does','did',
@@ -300,23 +324,53 @@ _QUALITY_STOPWORDS = frozenset({
     'should','may','might','must','not','no','yes','very','just','only','been',
 })
 
-# Placeholder tokens — if any appear, the section is considered invalid.
 _PLACEHOLDER_TOKENS = (
     '[insert', '[your name', '[facility name', '[date]', '[name]',
     'lorem ipsum', '<insert', 'todo:', 'placeholder:', 'xxxx', 'tbd',
 )
 
-# Retry budget: prevents retries from starving the time budget.
 _MAX_RETRIES_TOTAL = 3
 _MAX_RETRY_SECONDS = 30
 
 
+# ------------------------------------------------------------
+# NEW: obstacle / solution markers — used to strip these from
+# the Activities and Skills sections, where they must never appear.
+# ------------------------------------------------------------
+
+_OBSTACLE_MARKERS = (
+    'challeng', 'difficult', 'struggl', 'obstacle', 'barrier',
+    'hinder', 'disrupt', 'delay', 'congest', 'overcrowd', 'shortage',
+    'lack of', 'insufficient', 'bottleneck', 'downtime', 'slowdown',
+    'high patient volume', 'heavy patient volume', 'workload',
+    'extended working hours', 'extended hours', 'long hours',
+    'cope with', 'manage high', 'manage heavy', 'manage large',
+    'despite the', 'in spite of', 'under pressure',
+    'struggled with', 'forced to', 'had to contend',
+)
+
+_SOLUTION_MARKERS = (
+    'recommend', 'solution', 'should extend', 'should be extended',
+    'address the', 'resolve the', 'mitigate', 'streamlin',
+    'restructur', 'enhance the workflow', 'optimi', 'reduc the ',
+    'assisted with', 'helped manage',
+)
+
+# Filler phrases stripped from all output.
+_FILLER_PATTERNS = [
+    re.compile(r'It is worth noting that\s+', re.IGNORECASE),
+    re.compile(r'It can be observed that\s+', re.IGNORECASE),
+    re.compile(r'It is important to note that\s+', re.IGNORECASE),
+    re.compile(r'It should be noted that\s+', re.IGNORECASE),
+    re.compile(r'Through this experience,?\s+', re.IGNORECASE),
+    re.compile(r'In the context of this attachment,?\s+', re.IGNORECASE),
+    re.compile(r'As a matter of fact,?\s+', re.IGNORECASE),
+]
+
+
 # ============================================================
-# Source-of-truth rules (included in every prompt)
+# Source-of-truth rules — extended in v11 with H/I/J/K
 # ============================================================
-# These rules sit ABOVE the page-target/word-budget rules. They stop
-# the AI from inventing units, activities, workshops, dates, and
-# patient counts to fill space.
 
 _SOURCE_BOUND_RULES = (
     "\nSOURCE-OF-TRUTH RULES (highest priority, overrides page target):\n"
@@ -342,17 +396,103 @@ _SOURCE_BOUND_RULES = (
     "Do NOT list activities as lessons — list insights and principles.\n"
     "G. If no workshops were recorded, say exactly that: no formal workshops "
     "were attended; describe on-the-job training only.\n"
+    "H. STRICT SECTION ISOLATION — Obstacles, challenges, delays, shortages, "
+    "and workflow difficulties MUST NEVER appear in Activities Performed or "
+    "Skills Acquired. Those sections describe WHAT the student DID and WHAT "
+    "they LEARNED — not the CONDITIONS they endured or HOW they worked "
+    "around difficulties. Move all obstacle content to Challenges. Move all "
+    "solution content to Recommendations.\n"
+    "I. SPARSE-LOG ENRICHMENT — When the student has fewer than 5 daily "
+    "logs, do NOT pad with invented activities or units. Instead, EXPAND each "
+    "REAL activity with professional context (system used, data quality "
+    "check, professional standard followed, competency supported). Enrichment "
+    "stays truthful to the log — no new activities invented.\n"
+    "J. BULLET-FORMAT ENFORCEMENT — Activities Performed MUST be bullet-format "
+    "activity lines grouped under unit sub-headings. Skills Acquired MUST be "
+    "bullet-format skill lines. Do NOT return these sections as undifferentiated "
+    "paragraphs.\n"
+    "K. CONCISENESS — Remove filler phrases ('It is worth noting that', "
+    "'It can be observed that', 'Through this experience', 'In the context "
+    "of this attachment'). Prefer direct statements over elaborate constructions.\n"
 )
 
 
+# ============================================================
+# Post-processing — strip obstacle/solution content from
+# sections where they do not belong
+# ============================================================
+
+def _strip_obstacle_content(text, section_key):
+    """
+    Remove obstacle/solution content from a section that must describe
+    ONLY activities or skills.
+
+    Works at LINE granularity — any line containing an obstacle/solution
+    marker is dropped entirely. Because Activities Performed and Skills
+    Acquired use one-line-per-item formats, this preserves structure.
+
+    Returns (cleaned_text, removed_items) where removed_items is a list
+    of (kind, snippet) tuples for logging.
+    """
+    if section_key not in ('activities_performed', 'skills_acquired'):
+        return text, []
+    if not text:
+        return text, []
+
+    removed = []
+    kept_lines = []
+
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            kept_lines.append(line)
+            continue
+
+        lowered = stripped.lower()
+        hit = None
+        for marker in _OBSTACLE_MARKERS:
+            if marker in lowered:
+                hit = ('obstacle', marker)
+                break
+        if not hit:
+            for marker in _SOLUTION_MARKERS:
+                if marker in lowered:
+                    hit = ('solution', marker)
+                    break
+
+        if hit:
+            removed.append((hit[0], stripped[:100]))
+            continue
+
+        kept_lines.append(line)
+
+    return '\n'.join(kept_lines), removed
+
+
+def _strip_filler(text):
+    """
+    Remove filler phrases that add no content.
+    Applied to every AI-generated section after _clean_draft_text.
+    """
+    if not text:
+        return text
+    for pat in _FILLER_PATTERNS:
+        text = pat.sub('', text)
+    # Re-capitalize any sentence that now starts lowercase after a stripped
+    # phrase like "It is worth noting that the student..." → "The student..."
+    text = re.sub(r'^([a-z])', lambda m: m.group(1).upper(), text, flags=re.MULTILINE)
+    # Collapse double spaces
+    text = re.sub(r'  +', ' ', text)
+    return text
+
+
+# ============================================================
+# Existing helpers (unchanged)
+# ============================================================
+
 def source_fingerprint(session):
     """
-    Deterministic hash of everything that drives AI drafting:
-    logs, competencies, workshops, and attachment metadata.
-
-    views.py stores this in report.content['_source_hash'] and
-    report.pptx_content['_source_hash']. When the hash changes,
-    the saved AI draft is stale and must be re-drafted.
+    Deterministic hash of everything that drives AI drafting.
     """
     try:
         logs = list(session.daily_logs.filter(is_deleted=False).order_by('date'))
@@ -392,10 +532,6 @@ def source_fingerprint(session):
 
 
 def _build_log_ngrams(session, n=_VERBATIM_NGRAM_SIZE):
-    """
-    Precompute the set of n-word tuples appearing verbatim in the raw logs.
-    Returns an empty set on error (fail-safe: no copy detection, but no crash).
-    """
     ngrams = set()
     try:
         logs = session.daily_logs.filter(is_deleted=False)
@@ -410,8 +546,6 @@ def _build_log_ngrams(session, n=_VERBATIM_NGRAM_SIZE):
                     continue
                 for i in range(len(words) - n + 1):
                     window = words[i:i + n]
-                    # Skip windows that are mostly stopwords — "in the records
-                    # unit and the" shouldn't trigger a copy flag.
                     content_words = [w for w in window if w not in _QUALITY_STOPWORDS]
                     if len(content_words) < 3:
                         continue
@@ -422,7 +556,6 @@ def _build_log_ngrams(session, n=_VERBATIM_NGRAM_SIZE):
 
 
 def _find_verbatim_copy(text, log_ngrams, n=_VERBATIM_NGRAM_SIZE):
-    """Return the first n-word phrase in `text` that appears verbatim in logs, or None."""
     if not log_ngrams or not text:
         return None
     words = tuple(re.findall(r'\w+', text.lower()))
@@ -434,33 +567,21 @@ def _find_verbatim_copy(text, log_ngrams, n=_VERBATIM_NGRAM_SIZE):
 
 
 def _quality_issues(section_key, text, log_ngrams, min_word_floor=0, max_word=0):
-    """
-    Run every quality gate against a drafted section.
-
-    Returns list of (code, detail) tuples. Empty list = section passes.
-
-    Note: 'too_long' is a SOFT issue — callers must filter it out before
-    deciding to retry. Too-long drafts are NOT rewritten because doing so
-    usually costs a retry and rarely improves the section.
-    """
     if not text or not text.strip():
         return [('empty', 'AI returned empty text')]
 
     issues = []
 
-    # 1. Verbatim copy from raw logs
     copied = _find_verbatim_copy(text, log_ngrams)
     if copied:
         issues.append(('verbatim_copy', f'copied raw log phrase: "{copied}"'))
 
-    # 2. Placeholder text
     lowered = text.lower()
     for token in _PLACEHOLDER_TOKENS:
         if token in lowered:
             issues.append(('placeholder', f'contains placeholder: "{token}"'))
             break
 
-    # 3. Under-length drafts (only if we know the section's floor)
     if min_word_floor:
         actual_words = len(text.split())
         threshold = int(min_word_floor * 0.5)
@@ -470,7 +591,6 @@ def _quality_issues(section_key, text, log_ngrams, min_word_floor=0, max_word=0)
                 f'only {actual_words} words (minimum {threshold} expected)'
             ))
 
-    # 4. Over-length drafts (SOFT — does NOT trigger retry)
     if max_word:
         actual_words = len(text.split())
         if actual_words > max_word:
@@ -479,7 +599,6 @@ def _quality_issues(section_key, text, log_ngrams, min_word_floor=0, max_word=0)
                 f'{actual_words} words (target max {max_word})'
             ))
 
-    # 5. Markdown pollution that wasn't stripped
     if re.search(r'^[ \t]*#{1,6}[ \t]', text, re.MULTILINE):
         issues.append(('markdown_headers', 'contains raw markdown # headers'))
     if '**' in text or re.search(r'^\s*[*\-\u2022]\s+', text, re.MULTILINE):
@@ -491,37 +610,25 @@ def _quality_issues(section_key, text, log_ngrams, min_word_floor=0, max_word=0)
 def _clean_draft_text(text):
     """
     Universal cleanup applied to every AI reply before quality check.
-
-    v10: the markdown-heading strip now matches leading whitespace AND
-    missing spaces after #, so `##CHALLENGES` and ` ## CHALLENGES` are
-    both removed. The old regex (`^#+\s+.*$`) missed both of those cases,
-    which is why `## CHALLENGES` was leaking into the final PDF.
+    Extended in v11 to also strip filler phrases.
     """
     if not text:
         return ''
-    # 1. Strip markdown heading lines (leading whitespace + # + optional space)
     text = re.sub(r'^[ \t]*#+[ \t]*.*$', '', text, flags=re.MULTILINE)
-    # 2. Strip **bold** and __italic__ markdown
     text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
     text = re.sub(r'__(.+?)__', r'\1', text)
-    # 3. Strip single-asterisk emphasis *text* (careful: not bullet markers)
     text = re.sub(r'(?<!\w)\*(?!\s)([^*\n]+?)\*(?!\w)', r'\1', text)
-    # 4. Strip leading bullet / asterisk / hyphen / numbered markers
     text = re.sub(r'^\s*[*\-\u2022]\s+', '', text, flags=re.MULTILINE)
     text = re.sub(r'^\s*\d+[\.\)]\s+', '', text, flags=re.MULTILINE)
-    # 5. Strip a leading ALL-CAPS section title line (e.g. "INTRODUCTION\n\n")
     text = re.sub(r'^[A-Z][A-Z\s]{3,}\n+', '', text, count=1)
-    # 6. Em dash / en dash → colon (keeps prose clean, avoids slide dashes)
     text = re.sub(r'\s+[\u2013\u2014]\s+', ': ', text)
-    # 7. Collapse 3+ consecutive blank lines to a single paragraph break
     text = re.sub(r'\n{3,}', '\n\n', text)
+    # NEW in v11: strip filler phrases
+    text = _strip_filler(text)
     return text.strip()
 
 
 def _build_retry_prompt(original_prompt, section_title, issues):
-    """
-    Retry prompt that names the specific problem so the AI knows what to fix.
-    """
     problems = '\n'.join(f'  - {code}: {detail}' for code, detail in issues)
     return (
         f"⚠️ RETRY REQUIRED — YOUR PREVIOUS DRAFT OF '{section_title}' FAILED QUALITY CHECKS.\n\n"
@@ -547,20 +654,7 @@ def _build_retry_prompt(original_prompt, section_title, issues):
     )
 
 
-# ============================================================
-# Shared context builder + AI caller
-# ============================================================
-
 def _build_context(session):
-    """
-    Build the STUDENT DATA block passed to every prompt.
-
-    v10: each log field is EXPLICITLY LABELLED (ACTIVITY / SKILLS /
-    CHALLENGE / SOLUTION) so the AI can't confuse fields across
-    sections. This is what fixes "challenges appearing on the
-    Activities slide" — the AI now knows ACTIVITY is the only field
-    it should use for the Activities section.
-    """
     user = session.user
     lines = [
         f"STUDENT PROFILE:",
@@ -670,37 +764,28 @@ def get_ai_reply_with_image(prompt, image_bytes, mime='image/jpeg'):
         return None
 
 
-# ============================================================
-# Word budgets
-# ============================================================
-# v10: floors significantly reduced. Previous floors (Intro 300, Activities
-# 800, Skills/Lessons 350) forced the AI to pad even when logs were thin,
-# producing the wall-of-text the user complained about. New floors target
-# concise sections: ~150 for Intro, ~300 for Activities, ~180 for
-# Skills/Lessons. The AI is also told to stay within ±25% of target.
-
 _SECTION_FLOORS = {
     'abstract':              120,
     'acknowledgments':       80,
-    'introduction':          150,   # was 300
-    'activities_performed':  300,   # was 800 — biggest cut
-    'skills_acquired':       180,   # was 350
-    'workshops':             60,    # was 120
-    'lessons_learnt':        180,   # was 350
-    'observation':           150,   # was 250
-    'challenges':            180,   # was 250
-    'recommendations':       180,   # was 250
-    'conclusion':            120,   # was 180
+    'introduction':          150,
+    'activities_performed':  300,
+    'skills_acquired':       180,
+    'workshops':             60,
+    'lessons_learnt':        180,
+    'observation':           150,
+    'challenges':            180,
+    'recommendations':       180,
+    'conclusion':            120,
 }
 
 _BUDGET_DISTRIBUTION = {
     'abstract':              0.040,
     'acknowledgments':       0.030,
-    'introduction':          0.065,   # was 0.080
-    'activities_performed':  0.150,   # was 0.220 — biggest cut
-    'skills_acquired':       0.090,   # was 0.100
+    'introduction':          0.065,
+    'activities_performed':  0.150,
+    'skills_acquired':       0.090,
     'workshops':             0.030,
-    'lessons_learnt':        0.090,   # was 0.100
+    'lessons_learnt':        0.090,
     'observation':           0.080,
     'challenges':            0.075,
     'recommendations':       0.075,
@@ -709,17 +794,6 @@ _BUDGET_DISTRIBUTION = {
 
 
 def _compute_word_budget(target_pages, log_count=0, competency_count=0):
-    """
-    Return per-section word targets.
-
-    The ceiling is the MINIMUM of:
-      - the user's requested page count × 300 words, and
-      - the source capacity of the logs + competencies.
-    This stops the AI from inventing content just to hit a page target.
-
-    If the per-section FLOORS push the total well past the requested
-    capacity, we scale all budgets down proportionally.
-    """
     if target_pages and target_pages >= 5:
         effective_pages = target_pages
     else:
@@ -745,8 +819,6 @@ def _compute_word_budget(target_pages, log_count=0, competency_count=0):
         for section, pct in _BUDGET_DISTRIBUTION.items()
     }
 
-    # Proportional scaling — prevent floors from blowing the total past
-    # the requested capacity. Allow 20% headroom for natural over-write.
     budget_sum = sum(budgets.values())
     headroom_ceiling = int(total_prose_words * 1.2)
     if budget_sum > headroom_ceiling and headroom_ceiling > 0:
@@ -758,10 +830,6 @@ def _compute_word_budget(target_pages, log_count=0, competency_count=0):
 
     return budgets
 
-
-# ============================================================
-# Shared quality rules (included in every prompt)
-# ============================================================
 
 _QUALITY_RULES = (
     "\nQUALITY RULES (Apply to every section):\n"
@@ -785,23 +853,18 @@ _QUALITY_RULES = (
     "15. TARGET WORD COUNT IS A RANGE, NOT A FLOOR TO GAME. Under-writing "
     "fails; overwriting by more than 25% also fails. Sparse logs justify a "
     "shorter section — the page target is not a reason to invent.\n"
+    "16. CONCISENESS — write directly. Remove filler phrases. Prefer short "
+    "declarative sentences over elaborate constructions.\n"
 )
 
-
-# ============================================================
-# Entry point 1 — report prose drafting
-# ============================================================
 
 def draft_sections_with_ai(session, samples=None, target_pages=None):
     """
     Draft the prose sections with AI, with code-enforced quality gates.
 
-    Returns a dict {section_key: text}. Sections that fail quality after
-    retry return '' (so services.py fills defaults).
-
-    Always includes:
-      '_source_hash' : fingerprint of the inputs that drove drafting
-      '_ai_note'     : human-readable retry summary when useful
+    v11: adds obstacle-stripping pass for activities_performed and
+    skills_acquired after the standard cleaning step. Also strips filler
+    phrases from all sections.
     """
     if not getattr(settings, 'REPORT_AI_DRAFTING_ENABLED', True):
         return {}
@@ -851,16 +914,20 @@ def draft_sections_with_ai(session, samples=None, target_pages=None):
         expansion_rule = (
             "\nCRITICAL SOURCE LIMIT: The student has very few daily logs "
             f"({log_count}). Do NOT invent units, activities, workshops, dates, "
-            "or patient counts. For Activities Performed and Skills Acquired, "
-            "write ONLY what the logs support. For Lessons Learnt, Observation, "
-            "Recommendations, Conclusion, and Abstract, expand using the listed "
-            "competency areas and general HIM principles — present it as "
-            "reflection, not as a new log entry.\n"
+            "or patient counts. HOWEVER — enrich each REAL activity with "
+            "professional context (system used, data quality check applied, "
+            "professional standard followed, competency supported). For "
+            "Activities Performed and Skills Acquired, you MAY name sub-skills "
+            "within a single activity to reach the target count. For Lessons "
+            "Learnt, Observation, Recommendations, Conclusion, and Abstract, "
+            "expand using the listed competency areas and general HIM "
+            "principles — present it as reflection, not as new log entries.\n"
         )
     elif log_count < 15:
         expansion_rule = (
             f"\nNOTE: The student has {log_count} daily logs. Synthesize them. "
-            "Do not add units or activities that are not present in the logs.\n"
+            "Do not add units or activities that are not present in the logs. "
+            "Enrich real activities with professional context where useful.\n"
         )
     else:
         expansion_rule = ''
@@ -878,15 +945,17 @@ def draft_sections_with_ai(session, samples=None, target_pages=None):
         if target_pages:
             note = (
                 f"Note: You have very few logs ({log_count}). The AI stayed close "
-                f"to what you actually logged and used your competency areas for "
-                f"reflection. Adding more logs will strengthen depth and help reach "
-                f"your {target_pages}-page target."
+                f"to what you actually logged, and enriched each real activity with "
+                f"professional context using your competency areas. Adding more "
+                f"logs will strengthen depth and help reach your "
+                f"{target_pages}-page target."
             )
         else:
             note = (
                 f"Note: You have very few logs ({log_count}). The AI stayed close "
-                f"to what you actually logged and used your competency areas for "
-                f"reflection. Adding more logs will further improve depth."
+                f"to what you actually logged, and enriched each real activity with "
+                f"professional context using your competency areas. Adding more "
+                f"logs will further improve depth."
             )
     elif log_count < 15 and target_pages:
         note = (
@@ -985,13 +1054,22 @@ def draft_sections_with_ai(session, samples=None, target_pages=None):
 
         reply = _clean_draft_text(reply)
 
+        # NEW v11: strip obstacle/solution content from sections where it
+        # must never appear.
+        reply, removed_items = _strip_obstacle_content(reply, key)
+        if removed_items:
+            logger.info(
+                'AI drafting: stripped %d obstacle/solution line(s) from %r: %s',
+                len(removed_items), key,
+                '; '.join(f'{kind}:{snippet}' for kind, snippet in removed_items[:3]),
+            )
+
         issues = _quality_issues(
             key, reply, log_ngrams,
             min_word_floor=_SECTION_FLOORS.get(key, 0),
             max_word=max_word,
         )
 
-        # 'too_long' is informational only — do NOT fail the section for it.
         hard_issues = [i for i in issues if i[0] != 'too_long']
 
         if not hard_issues:
@@ -1042,6 +1120,13 @@ def draft_sections_with_ai(session, samples=None, target_pages=None):
             continue
 
         retry_reply = _clean_draft_text(retry_reply)
+        retry_reply, retry_removed = _strip_obstacle_content(retry_reply, key)
+        if retry_removed:
+            logger.info(
+                'AI drafting: retry stripped %d obstacle/solution line(s) from %r',
+                len(retry_removed), key,
+            )
+
         retry_issues = _quality_issues(
             key, retry_reply, log_ngrams,
             min_word_floor=_SECTION_FLOORS.get(key, 0),
@@ -1086,16 +1171,12 @@ def draft_sections_with_ai(session, samples=None, target_pages=None):
     return drafts
 
 
-# ============================================================
-# Entry point 2 — presentation bullets + speaker notes
-# ============================================================
-
 def draft_presentation_with_ai(session, target_slides=7):
     """
     Draft slide-specific bullets + speaker notes for the PPTX.
 
-    Returns a dict {pptx_key: text} plus '_source_hash'. Callers store this
-    in report.pptx_content and use the hash to detect stale drafts.
+    v11: obstacle content is stripped from pptx_activities_bullets and
+    pptx_skills_bullets after the standard cleanup step.
     """
     if not getattr(settings, 'REPORT_AI_DRAFTING_ENABLED', True):
         return {}
@@ -1173,6 +1254,24 @@ def draft_presentation_with_ai(session, target_slides=7):
             continue
 
         reply = _clean_pptx_text(reply)
+        # Strip obstacle content from the two bullet sections where it must never appear.
+        if key in ('pptx_activities_bullets', 'pptx_skills_bullets'):
+            kept_lines = []
+            dropped = 0
+            for line in reply.splitlines():
+                lowered = line.lower()
+                if any(m in lowered for m in _OBSTACLE_MARKERS) or \
+                   any(m in lowered for m in _SOLUTION_MARKERS):
+                    dropped += 1
+                    continue
+                kept_lines.append(line)
+            if dropped:
+                logger.info(
+                    'PPTX AI drafting: dropped %d obstacle/solution bullet(s) from %r',
+                    dropped, key,
+                )
+            reply = '\n'.join(kept_lines)
+
         drafts[key] = reply
         logger.debug('PPTX AI drafted %r (%d chars)', key, len(reply))
 
@@ -1190,37 +1289,21 @@ def draft_presentation_with_ai(session, target_slides=7):
 
 
 def _clean_pptx_text(text):
-    """
-    Light cleanup for slide bullets: strip markdown, convert em/en/hyphen
-    separators between words to a colon, collapse whitespace.
-    """
     if not text:
         return ''
-    # Strip bold / italic markdown
     text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
     text = re.sub(r'__(.+?)__', r'\1', text)
-    # Em dash / en dash used as a separator → colon
     text = re.sub(r'\s+[\u2013\u2014]\s+', ': ', text)
-    # Hyphen used as a separator between words → colon
     text = re.sub(r'\s+-\s+', ': ', text)
-    # Strip markdown heading lines
     text = re.sub(r'^[ \t]*#+[ \t]*.*$', '', text, flags=re.MULTILINE)
-    # Collapse 3+ blank lines
     text = re.sub(r'\n{3,}', '\n\n', text)
+    text = _strip_filler(text)
     return text.strip()
 
 
 # ============================================================
-# v9 — AI refinement of user-edited content
+# v9 — AI refinement of user-edited content (unchanged)
 # ============================================================
-# Used by the "Regenerate with AI" button on the edit page.
-# Unlike draft_sections_with_ai(), this does NOT redraft from logs.
-# It takes the user's actual text (from the edit page) and returns a
-# polished version that:
-#   - preserves every fact, number, unit, activity, workshop, skill
-#   - preserves paragraph / bullet structure
-#   - fixes grammar, sentence flow, and academic tone
-#   - never adds or removes substantive content
 
 _REFINE_INSTRUCTIONS = {
     'introduction':         'Polish into 2 academic paragraphs in first person. Preserve all facts, units, dates. Fix grammar, vary sentences, improve flow. Keep it SHORT — under 250 words.',
@@ -1241,21 +1324,6 @@ _REFINE_INSTRUCTIONS = {
 
 
 def refine_user_content(session, current_content):
-    """
-    Refine user-edited content with AI.
-
-    Takes the user's exact text (from the edit page) and returns a
-    polished version that:
-      - preserves every fact, number, unit, activity, and structure
-      - improves grammar, sentence flow, and academic tone
-      - does NOT add or remove substantive content
-
-    Safety net: if the AI returns content wildly different in length
-    from the input (<40% or >250% of input word count), we discard the
-    refined version and keep the user's original.
-
-    Never raises — on any error, returns the input unchanged.
-    """
     if not getattr(settings, 'REPORT_AI_DRAFTING_ENABLED', True):
         return dict(current_content or {})
 

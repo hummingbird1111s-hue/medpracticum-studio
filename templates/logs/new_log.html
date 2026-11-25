@@ -4,8 +4,10 @@
 
 {% block content %}
 {{ config|json_script:"config-data" }}
+{{ dept.units|default_if_none:''|json_script:"units-data" }}
 
 <style>
+  [x-cloak] { display: none !important; }
   .logbook-wrapper { max-width: 800px; margin: 0 auto; font-family: system-ui, -apple-system, sans-serif; }
   .logbook-card { background: #fff; border: 1px solid #d1d5db; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 24px; }
   .logbook-row { border-bottom: 1px solid #d1d5db; display: flex; flex-wrap: wrap; }
@@ -15,14 +17,14 @@
   .logbook-col-full { padding: 16px; width: 100%; border-bottom: 1px solid #d1d5db; position: relative; }
   .logbook-label { font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase; display: block; margin-bottom: 6px; letter-spacing: 0.05em; }
   .logbook-input { width: 100%; border: none; outline: none; font-size: 16px; color: #111827; background: transparent; padding: 0; font-family: inherit; }
-  
+
   .dictate-btn { position: absolute; top: 12px; right: 12px; background: #f3f4f6; border: 1px solid #d1d5db; padding: 4px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600; color: #374151; display: flex; align-items: center; gap: 6px; transition: all 0.2s; }
   .dictate-btn:hover { background: #e5e7eb; }
   .dictate-btn.recording { background: #fee2e2; border-color: #fca5a5; color: #b91c1c; }
   .dictate-btn.recording::before { content: "●"; color: red; margin-right: 4px; animation: pulse 1s infinite; }
-  
+
   @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
-  
+
   .live-preview { margin-top: 8px; font-size: 13px; color: #059669; background: #ecfdf5; padding: 8px 12px; border-radius: 6px; border: 1px solid #a7f3d0; font-style: italic; }
 
   /* Switcher Styling */
@@ -36,19 +38,18 @@
   <!-- Header with Title and Switcher -->
   <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 24px;">
     <div>
-      <h1 style="font-size: 24px; font-weight: bold; color: #111827; margin: 0 0 4px 0;" 
-          x-text="cfg.existing ? 'Edit Daily Log' : 'New Daily Log Entry'">
+      <h1 style="font-size: 24px; font-weight: bold; color: #111827; margin: 0 0 4px 0;"
+          x-text="cfg && cfg.existing ? 'Edit Daily Log' : 'New Daily Log Entry'">
           New Daily Log Entry
       </h1>
       <p style="font-size: 14px; color: #6b7280; margin: 0;">
         Week <span x-text="weekNumber"></span> · {{ session.facility.name }}
       </p>
     </div>
-    
+
     <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
       <a href="{% url 'dashboard' %}" style="font-size: 14px; color: #047857; font-weight: 500; text-decoration: underline;">Back to dashboard</a>
-      
-      <!-- NEW: Attachment Switcher -->
+
       {% if all_attachments %}
       <div class="switcher-wrapper" title="Switch the attachment you are logging for">
         <label class="switcher-label">Logging For</label>
@@ -71,7 +72,7 @@
        style="margin-bottom: 16px; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 500;" x-text="message"></div>
 
   <div class="logbook-card">
-    
+
     <div class="logbook-row" style="background: #f9fafb;">
       <div class="logbook-col" style="flex: 0 0 150px;">
         <label class="logbook-label">Date</label>
@@ -79,9 +80,17 @@
       </div>
       <div class="logbook-col">
         <label class="logbook-label">Unit / Sub-Department</label>
-        <input type="text" x-model="form.unit_sub_department" list="unit-suggestions" placeholder="e.g., OPD, Records Unit" class="logbook-input">
+        <input type="text"
+               x-model="form.unit_sub_department"
+               list="unit-suggestions"
+               placeholder="e.g., OPD, Records Unit"
+               class="logbook-input"
+               @blur="rememberUnit()"
+               @change="rememberUnit()">
         <datalist id="unit-suggestions">
-          {% for unit in dept.units %}<option value="{{ unit }}">{% endfor %}
+          <template x-for="u in unitSuggestions" :key="u">
+            <option :value="u"></option>
+          </template>
         </datalist>
       </div>
     </div>
@@ -92,7 +101,7 @@
         <span x-text="listening === 'activity_summary' ? 'Stop Recording' : 'Dictate'">Dictate</span>
       </button>
       <textarea x-model="form.activity_summary" rows="4" placeholder="Describe the tasks you performed..." class="logbook-input" style="padding-right: 110px;"></textarea>
-      
+
       <div x-show="listening === 'activity_summary' && interimText" x-cloak class="live-preview">
         Hearing: <span x-text="interimText"></span>...
       </div>
@@ -133,12 +142,11 @@
   <div style="margin-bottom: 40px; display: flex; gap: 12px;">
     <button type="button" @click="submit()" :disabled="saving"
             style="background: #059669; color: white; font-weight: 600; padding: 10px 24px; border-radius: 8px; border: none; cursor: pointer; font-size: 16px;">
-      <span x-show="!saving" x-text="cfg.existing ? 'Update Log Entry' : 'Save Log Entry'">Save Log Entry</span>
+      <span x-show="!saving" x-text="cfg && cfg.existing ? 'Update Log Entry' : 'Save Log Entry'">Save Log Entry</span>
       <span x-show="saving" x-cloak>Saving...</span>
     </button>
-    
-    <!-- Cancel button only shows when editing an existing log -->
-    <a x-show="cfg.existing" href="{% url 'logs_list' %}" 
+
+    <a x-show="cfg && cfg.existing" href="{% url 'logs_list' %}"
        style="background: #f3f4f6; color: #374151; font-weight: 600; padding: 10px 24px; border-radius: 8px; text-decoration: none; font-size: 16px; display: flex; align-items: center; transition: background 0.2s;">
       Cancel
     </a>
@@ -147,19 +155,20 @@
 </div>
 
 <script>
-  // Safety check: If user is editing a log and switches attachment, warn them
+  // Safety check: warn before discarding a draft when switching attachments
   function confirmSwitch() {
-      var hasExisting = document.querySelector('h1').textContent.includes('Edit');
-      var hasText = document.querySelector('textarea[x-model="form.activity_summary"]').value.trim().length > 0;
-      
-      if (hasText) {
-          return confirm("You have unsaved text in this log.\n\nSwitching attachments will discard this draft and start a new log for the selected facility. Continue?");
-      }
-      return true;
+    var h1 = document.querySelector('h1');
+    var hasExisting = h1 && h1.textContent.indexOf('Edit') !== -1;
+    var ta = document.querySelector('textarea[x-model="form.activity_summary"]');
+    var hasText = ta && ta.value.trim().length > 0;
+    if (hasText) {
+      return confirm("You have unsaved text in this log.\n\nSwitching attachments will discard this draft and start a new log for the selected facility. Continue?");
+    }
+    return true;
   }
 </script>
 {% endblock %}
 
 {% block scripts %}
-<script src="{% static 'js/log_form.js' %}"></script>
+  <script src="{% static 'js/log_form.js' %}"></script>
 {% endblock %}
