@@ -17,12 +17,85 @@
   .filter-bar .clear { background: #6b7280; color: #fff; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-size: 0.85rem; }
   .filter-bar .clear:hover { background: #4b5563; }
   .count-note    { color: #6b7280; font-size: 0.85rem; margin-bottom: 0.75rem; }
-  .admin-table   { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-  .admin-table th, .admin-table td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid #eef0f3; font-size: 0.9rem; vertical-align: top; }
-  .admin-table th { background: #f5f7fa; font-weight: 600; color: #4a5568; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
-  .admin-table tr:last-child td { border-bottom: none; }
+
+  /* ============================================================
+     TABLE SCROLL CONTAINER
+     ------------------------------------------------------------
+     Same wrapper pattern as admin_all_users.html so the two admin
+     pages feel consistent. The table is wider than the viewport on
+     mobile (min-width: 900px, driven by the 60-char user-agent
+     column) and taller than 65vh on long pages. This wrapper gives
+     it its own two-axis scroll.
+
+     The header row sticks to the top of this box, so scrolling a
+     hundred log entries down still shows the "When / User / Action /
+     IP address / User agent" labels.
+
+     There is no checkbox column here, so no sticky-left cell.
+     ============================================================ */
+  .table-wrapper {
+    overflow: auto;
+    max-height: 65vh;
+    min-height: 200px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: #d1d5db #f3f4f6;
+    position: relative;
+    isolation: isolate;
+  }
+  .table-wrapper::-webkit-scrollbar { width: 8px; height: 8px; }
+  .table-wrapper::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
+  .table-wrapper::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+  .table-wrapper::-webkit-scrollbar-track { background: #f3f4f6; }
+
+  .admin-table {
+    width: 100%;
+    min-width: 900px;
+    border-collapse: separate;     /* required for reliable sticky headers */
+    border-spacing: 0;
+    background: #fff;
+  }
+  .admin-table th,
+  .admin-table td {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid #eef0f3;
+    font-size: 0.9rem;
+    vertical-align: top;
+  }
+  .admin-table tbody tr:last-child td { border-bottom: none; }
+
+  /* ---- Sticky header row ---- */
+  .admin-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #f5f7fa;
+    font-weight: 600;
+    color: #4a5568;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid #e5e7eb;
+    white-space: nowrap;
+  }
+
+  /* ---- Hover state must repaint over the sticky header background ---- */
   .admin-table tr:hover td { background: #fafbfc; }
-  .badge { display: inline-block; padding: 0.2rem 0.65rem; border-radius: 999px; font-size: 0.74rem; font-weight: 600; }
+
+  /* ---- User-agent cell: UA strings have no spaces, so without
+         break-word the column would stretch to 300+px just for one row. ---- */
+  .admin-table td.ua-cell {
+    max-width: 340px;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+
+  .badge { display: inline-block; padding: 0.2rem 0.65rem; border-radius: 999px; font-size: 0.74rem; font-weight: 600; white-space: nowrap; }
   .badge-login   { background: #dcfce7; color: #166534; }
   .badge-logout  { background: #e0e7ff; color: #3730a3; }
   .badge-failed  { background: #fee2e2; color: #991b1b; }
@@ -32,6 +105,11 @@
   .pagination a, .pagination span { padding: 0.4rem 0.85rem; border: 1px solid #d1d5db; border-radius: 6px; text-decoration: none; color: #374151; background: #fff; }
   .pagination a:hover { background: #f3f4f6; }
   .pagination .current { background: #2563eb; color: #fff; border-color: #2563eb; font-weight: 600; }
+
+  @media (max-width: 767px) {
+    .table-wrapper { max-height: 60vh; }
+    .admin-wrap    { margin: 1rem auto; }
+  }
 </style>
 
 <div class="admin-wrap">
@@ -59,40 +137,42 @@
   </div>
 
   {% if logs %}
-    <table class="admin-table">
-      <thead>
-        <tr>
-          <th>When</th>
-          <th>User</th>
-          <th>Action</th>
-          <th>IP address</th>
-          <th>User agent</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for log in logs %}
+    <div class="table-wrapper">
+      <table class="admin-table">
+        <thead>
           <tr>
-            <td>{{ log.created_at|date:"d M Y, H:i" }}</td>
-            <td>
-              {% if log.user %}
-                <strong>{{ log.user.username }}</strong>
-                {% if log.user.get_full_name %}<br><span class="mono">{{ log.user.get_full_name }}</span>{% endif %}
-              {% else %}
-                <span class="mono">{{ log.username_attempted|default:"(unknown)" }}</span>
-              {% endif %}
-            </td>
-            <td>
-              {% if log.action == 'login' %}<span class="badge badge-login">Login</span>
-              {% elif log.action == 'logout' %}<span class="badge badge-logout">Logout</span>
-              {% elif log.action == 'failed_login' %}<span class="badge badge-failed">Failed login</span>
-              {% else %}<span class="badge">{{ log.action }}</span>{% endif %}
-            </td>
-            <td class="mono">{{ log.ip_address|default:"—" }}</td>
-            <td class="mono">{{ log.user_agent|truncatechars:60|default:"—" }}</td>
+            <th>When</th>
+            <th>User</th>
+            <th>Action</th>
+            <th>IP address</th>
+            <th>User agent</th>
           </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {% for log in logs %}
+            <tr>
+              <td class="mono" style="white-space: nowrap;">{{ log.created_at|date:"d M Y, H:i" }}</td>
+              <td>
+                {% if log.user %}
+                  <strong>{{ log.user.username }}</strong>
+                  {% if log.user.get_full_name %}<br><span class="mono">{{ log.user.get_full_name }}</span>{% endif %}
+                {% else %}
+                  <span class="mono">{{ log.username_attempted|default:"(unknown)" }}</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if log.action == 'login' %}<span class="badge badge-login">Login</span>
+                {% elif log.action == 'logout' %}<span class="badge badge-logout">Logout</span>
+                {% elif log.action == 'failed_login' %}<span class="badge badge-failed">Failed login</span>
+                {% else %}<span class="badge">{{ log.action }}</span>{% endif %}
+              </td>
+              <td class="mono" style="white-space: nowrap;">{{ log.ip_address|default:"—" }}</td>
+              <td class="mono ua-cell">{{ log.user_agent|truncatechars:60|default:"—" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
 
     {% if page.has_other_pages %}
       <div class="pagination">

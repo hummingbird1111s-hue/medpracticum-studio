@@ -467,7 +467,7 @@
     #mp-banner { display: none; background: #fef3c7; color: #92400e; text-align: center; padding: 8px 16px; font-size: 14px; flex-shrink: 0; }
     #mp-banner.show { display: block; }
 
-    /* ================= MESSAGE CLASSES (still available for pages) ================= */
+    /* ================= MESSAGE CLASSES ================= */
     .mp-messages { max-width: 1200px; width: 100%; margin: 0 auto; padding: 16px 16px 0; flex-shrink: 0; }
     .mp-message { padding: 8px 16px; border-radius: 8px; font-size: 14px; margin-bottom: 8px; }
     .mp-message--error   { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
@@ -480,7 +480,7 @@
     .mp-main { flex: 1 1 0; min-height: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
     .mp-main__inner { max-width: 1200px; width: 100%; margin: 0 auto; padding: 24px 16px; }
 
-    /* ================= WELCOME OVERLAY (modal, not embedded) ================= */
+    /* ================= WELCOME OVERLAY ================= */
     #mp-welcome-overlay {
       display: none;
       position: fixed;
@@ -1065,6 +1065,43 @@
     window.addEventListener('resize', function () {
       if (window.innerWidth >= 768) mpCloseSidebar();
     });
+
+    /* ============================================================
+       mpManualRefresh
+       ------------------------------------------------------------
+       Clears every Cache Storage entry and reloads the page.
+       Works with BOTH the OLD stale-while-revalidate SW and the
+       NEW network-first SW (once it activates).
+       ============================================================ */
+    window.mpManualRefresh = function () {
+      if (window.mpShowLoading) window.mpShowLoading('Refreshing');
+
+      // Ask any waiting SW to activate immediately
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function (regs) {
+          regs.forEach(function (r) {
+            try { r.update().catch(function () {}); } catch (e) {}
+            if (r.waiting) r.waiting.postMessage({ type: 'SKIP_WAITING' });
+          });
+        }).catch(function () {});
+      }
+
+      var go = function () {
+        // Small delay so the spinner paints first
+        setTimeout(function () { window.location.reload(); }, 180);
+      };
+
+      if ('caches' in window) {
+        caches.keys()
+          .then(function (keys) {
+            return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+          })
+          .then(go)
+          .catch(go);
+      } else {
+        go();
+      }
+    };
   </script>
 
   <script>
@@ -1278,7 +1315,7 @@
       <button type="button" id="mp-notif-clear" class="mp-notif-clear">Clear all</button>
     </div>
     <div id="mp-notif-list" class="mp-notif-list">
-      <p class="mp-notif-empty">No notifications yet</p>
+      <p class="mp-notif-empty">Loading…</p>
     </div>
   </div>
 
@@ -1305,13 +1342,8 @@
   </div>
 
   <!-- ============================================================
-       NOTIFICATION JS — bell shake + phone-style toasts + badge
-       ============================================================
-       On page load:  fetch /api/notifications/, seed `seen` set
-                      (no toasts — badge only)
-       On every 20s:  fetch again, toast any ID not in `seen`
-                      shake the bell on badge increase
-                      update panel if open
+       NOTIFICATION JS — preloads on page load, per-user localStorage
+       so PWA close/reopen and logout/login don't wipe seen-state.
        ============================================================ -->
   <script>
   (function () {
@@ -1325,25 +1357,30 @@
 
     var isOpen = false;
     var lastBadgeCount = -1;
-    var initialized = false;
-    var SEEN_KEY = 'mp_notif_seen_v1';
     var POLL_MS = 20000;
+
+    // Per-user key so different users on the same device keep separate state
+    var USER_ID = '{{ user.id }}';
+    var TOASTED_KEY = 'mp_notif_toasted_' + USER_ID;
 
     var csrfToken = (document.cookie.split('; ').find(function (r) {
       return r.indexOf('csrftoken=') === 0;
     }) || '').split('=')[1] || '';
 
-    function getSeenIds() {
-      try { return new Set(JSON.parse(sessionStorage.getItem(SEEN_KEY) || '[]')); }
-      catch (e) { return new Set(); }
-    }
-    function saveSeenIds(set) {
+    function getToastedIds() {
       try {
-        var arr = Array.from(set).slice(-300);
-        sessionStorage.setItem(SEEN_KEY, JSON.stringify(arr));
+        var raw = localStorage.getItem(TOASTED_KEY);
+        return new Set(raw ? JSON.parse(raw) : []);
+      } catch (e) { return new Set(); }
+    }
+    function saveToastedIds(set) {
+      try {
+        // cap at 500 most-recent to keep localStorage tidy
+        var arr = Array.from(set).slice(-500);
+        localStorage.setItem(TOASTED_KEY, JSON.stringify(arr));
       } catch (e) {}
     }
-    var seenIds = getSeenIds();
+    var toastedIds = getToastedIds();
 
     function escapeHtml(s) {
       return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -1440,38 +1477,42 @@
       var items = (data && data.notifications) || [];
       var unread = (data && typeof data.unread_count === 'number') ? data.unread_count : 0;
 
-      if (!initialized) {
-        items.forEach(function (n) { seenIds.add(n.id); });
-        saveSeenIds(seenIds);
-        initialized = true;
-      } else {
-        var newOnes = [];
-        items.forEach(function (n) {
-          if (!seenIds.has(n.id)) {
-            newOnes.push(n);
-            seenIds.add(n.id);
-          }
-        });
-        if (newOnes.length) {
-          saveSeenIds(seenIds);
-          newOnes.slice().reverse().forEach(function (n, i) {
-            setTimeout(function () { showToast(n); }, i * 220);
-          });
+      // Toast any unread notification we haven't toasted yet.
+      // This persists across PWA close/reopen because we use localStorage.
+      var newToasts = [];
+      items.forEach(function (n) {
+        if (!n.is_read && !toastedIds.has(n.id)) {
+          newToasts.push(n);
+          toastedIds.add(n.id);
         }
+      });
+
+      if (newToasts.length > 0) {
+        saveToastedIds(toastedIds);
+        // Cap visible stack to 5 to avoid a wall of toasts
+        var MAX_VISIBLE = 5;
+        var toShow = newToasts.slice(0, MAX_VISIBLE).reverse();
+        toShow.forEach(function (n, i) {
+          setTimeout(function () { showToast(n); }, i * 250);
+        });
+        shakeBell();
       }
 
       updateBadge(unread);
-      if (isOpen) renderNotifs(items);
+      // Always render the panel (hidden until user opens it)
+      renderNotifs(items);
     }
 
     function loadNotifs() {
-      fetch('/api/notifications/', { credentials: 'same-origin' })
+      fetch('/api/notifications/', {
+        credentials: 'same-origin',
+        cache: 'no-store'
+      })
         .then(function (r) { return r.json(); })
         .then(function (data) { processItems(data); })
         .catch(function () {
-          if (isOpen) {
-            list.innerHTML = '<p class="mp-notif-empty">Could not load notifications</p>';
-          }
+          // Silent on initial load — next poll retries.
+          // If panel is open, leave existing content.
         });
     }
 
@@ -1525,13 +1566,14 @@
       if (e.key === 'Escape' && isOpen) close();
     });
 
+    // PRELOAD immediately — badge + panel content ready before user opens
     loadNotifs();
     setInterval(loadNotifs, POLL_MS);
   })();
   </script>
 
   <!-- ============================================================
-       WELCOME OVERLAY — shown once on dashboard, then never again
+       WELCOME OVERLAY
        ============================================================ -->
   <script>
   (function () {
@@ -2302,19 +2344,37 @@
     var banner = document.getElementById('mp-pay-banner');
     if (!banner) return;
 
+    // ── Reappears every 8.5 s after dismiss (per user request) ──
     var KEY = 'mp_pay_banner_dismissed_at';
-    var ONE_DAY = 24 * 60 * 60 * 1000;
+    var RESHOW_MS = 8500;   // 8.5 seconds
+    var INITIAL_DELAY_MS = 4000;
+
     var last = 0;
     try { last = parseInt(localStorage.getItem(KEY) || '0', 10) || 0; } catch (e) {}
-    if (Date.now() - last < ONE_DAY) return;
+    var elapsed = Date.now() - last;
 
-    setTimeout(function () {
+    function showBanner() {
       banner.classList.add('show');
-    }, 4000);
+    }
 
+    // Schedule the first appearance
+    if (elapsed >= RESHOW_MS) {
+      setTimeout(showBanner, INITIAL_DELAY_MS);
+    } else {
+      setTimeout(showBanner, Math.max(INITIAL_DELAY_MS, RESHOW_MS - elapsed));
+    }
+
+    var reshowTimer = null;
     window.dismissPaymentBanner = function () {
       banner.classList.remove('show');
       try { localStorage.setItem(KEY, String(Date.now())); } catch (e) {}
+      if (reshowTimer) clearTimeout(reshowTimer);
+      reshowTimer = setTimeout(function () {
+        showBanner();
+        // Reset timer so the next dismiss starts a fresh 8.5s cycle
+        try { localStorage.setItem(KEY, String(Date.now())); } catch (e) {}
+        reshowTimer = null;
+      }, RESHOW_MS);
     };
   })();
   </script>

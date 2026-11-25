@@ -17,14 +17,99 @@
   .filter-bar .clear { background: #6b7280; color: #fff; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-size: 0.85rem; }
   .filter-bar .clear:hover { background: #4b5563; }
   .count-note    { color: #6b7280; font-size: 0.85rem; margin-bottom: 0.75rem; }
-  .admin-table   { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-  .admin-table th, .admin-table td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid #eef0f3; font-size: 0.9rem; vertical-align: top; }
-  .admin-table th { background: #f5f7fa; font-weight: 600; color: #4a5568; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
-  .admin-table tr:last-child td { border-bottom: none; }
+
+  /* ============================================================
+     TABLE SCROLL CONTAINER
+     ------------------------------------------------------------
+     The table is wider than the viewport on mobile (min-width:900px),
+     and taller than 65vh on long pages. This wrapper gives it its own
+     two-axis scroll. The table header sticks to the top of this box,
+     and the checkbox column sticks to the left edge. Result: on mobile
+     you can swipe horizontally through all 8 columns without losing
+     sight of the row's checkbox or the header labels.
+     ============================================================ */
+  .table-wrapper {
+    overflow: auto;
+    max-height: 65vh;
+    min-height: 200px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: #d1d5db #f3f4f6;
+    /* Contain sticky children within the rounded corners on iOS Safari */
+    position: relative;
+    isolation: isolate;
+  }
+  .table-wrapper::-webkit-scrollbar { width: 8px; height: 8px; }
+  .table-wrapper::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
+  .table-wrapper::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+  .table-wrapper::-webkit-scrollbar-track { background: #f3f4f6; }
+
+  .admin-table {
+    width: 100%;
+    min-width: 900px;              /* forces horizontal scroll on mobile */
+    border-collapse: separate;     /* required for reliable sticky headers */
+    border-spacing: 0;
+    background: #fff;
+  }
+  .admin-table th,
+  .admin-table td {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid #eef0f3;
+    font-size: 0.9rem;
+    vertical-align: top;
+  }
+  .admin-table tbody tr:last-child td { border-bottom: none; }
+
+  /* ---- Sticky header row ---- */
+  .admin-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #f5f7fa;
+    font-weight: 600;
+    color: #4a5568;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid #e5e7eb;
+    white-space: nowrap;
+  }
+
+  /* ---- Sticky first column (checkbox) ---- */
+  .admin-table td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: #fff;
+    border-right: 1px solid #eef0f3;
+    /* Subtle right-edge shadow so users see content continues to the right */
+    box-shadow: 1px 0 0 0 #eef0f3, 6px 0 8px -6px rgba(0,0,0,0.08);
+  }
+  .admin-table thead th:first-child {
+    left: 0;
+    z-index: 3;                    /* above both the header row and the sticky column */
+    background: #f5f7fa;
+    border-right: 1px solid #e5e7eb;
+    box-shadow: 1px 0 0 0 #e5e7eb, 6px 0 8px -6px rgba(0,0,0,0.08);
+  }
+
+  /* ---- Hover / selected states must repaint the sticky column too ---- */
   .admin-table tr:hover td { background: #fafbfc; }
+  .admin-table tr:hover td:first-child { background: #fafbfc; }
+
   .admin-table tr.selected td { background: #eff6ff; }
+  .admin-table tr.selected td:first-child { background: #eff6ff; }
+  /* Selected beats hover — always show the selection colour, even mid-hover */
+  .admin-table tr.selected:hover td,
+  .admin-table tr.selected:hover td:first-child { background: #eff6ff; }
+
   .admin-table input[type=checkbox] { cursor: pointer; width: 16px; height: 16px; accent-color: #2563eb; }
-  .badge { display: inline-block; padding: 0.2rem 0.65rem; border-radius: 999px; font-size: 0.74rem; font-weight: 600; margin-right: 0.25rem; }
+  .badge { display: inline-block; padding: 0.2rem 0.65rem; border-radius: 999px; font-size: 0.74rem; font-weight: 600; margin-right: 0.25rem; white-space: nowrap; }
   .badge-staff    { background: #fef3c7; color: #92400e; }
   .badge-active   { background: #dcfce7; color: #166534; }
   .badge-inactive { background: #f3f4f6; color: #4b5563; }
@@ -78,6 +163,13 @@
   .btn-primary:disabled { background: #93c5fd; cursor: not-allowed; }
   .btn-secondary { background: #f3f4f6; color: #374151; border: none; padding: 0.6rem 1.25rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
   .btn-secondary:hover { background: #e5e7eb; }
+
+  /* On mobile, allow the table wrapper to use a bit less vertical space
+     so the filter bar + table + pagination fit better in the viewport */
+  @media (max-width: 767px) {
+    .table-wrapper { max-height: 60vh; }
+    .admin-wrap    { margin: 1rem auto; }
+  }
 </style>
 
 <!-- Hidden form that actually submits the message. Checkboxes in the table
@@ -118,49 +210,51 @@
   </div>
 
   {% if users %}
-    <table class="admin-table">
-      <thead>
-        <tr>
-          <th style="width:36px;"><input type="checkbox" id="select-all" aria-label="Select all"></th>
-          <th>Username</th>
-          <th>Name</th>
-          <th>Email</th>
-          <th>Department</th>
-          <th>Level</th>
-          <th>Status</th>
-          <th>Last login</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for u in users %}
+    <div class="table-wrapper">
+      <table class="admin-table">
+        <thead>
           <tr>
-            <td>
-              {% if u.is_active %}
-                <input type="checkbox"
-                       class="user-checkbox"
-                       name="user_ids"
-                       value="{{ u.id }}"
-                       form="send-msg-form"
-                       aria-label="Select {{ u.username }}">
-              {% endif %}
-            </td>
-            <td><strong>{{ u.username }}</strong><br><span class="mono">{{ u.index_number }}</span></td>
-            <td>{{ u.get_full_name|default:"—" }}</td>
-            <td class="mono">{{ u.email }}</td>
-            <td>{{ u.get_department_display }}</td>
-            <td>{{ u.level }}</td>
-            <td>
-              {% if u.is_staff %}<span class="badge badge-staff">Staff</span>{% endif %}
-              {% if u.is_active %}<span class="badge badge-active">Active</span>
-              {% else %}<span class="badge badge-inactive">Inactive</span>{% endif %}
-            </td>
-            <td class="mono">
-              {% if u.last_login %}{{ u.last_login|date:"d M Y, H:i" }}{% else %}—{% endif %}
-            </td>
+            <th style="width:36px;"><input type="checkbox" id="select-all" aria-label="Select all"></th>
+            <th>Username</th>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Department</th>
+            <th>Level</th>
+            <th>Status</th>
+            <th>Last login</th>
           </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {% for u in users %}
+            <tr>
+              <td>
+                {% if u.is_active %}
+                  <input type="checkbox"
+                         class="user-checkbox"
+                         name="user_ids"
+                         value="{{ u.id }}"
+                         form="send-msg-form"
+                         aria-label="Select {{ u.username }}">
+                {% endif %}
+              </td>
+              <td><strong>{{ u.username }}</strong><br><span class="mono">{{ u.index_number }}</span></td>
+              <td>{{ u.get_full_name|default:"—" }}</td>
+              <td class="mono">{{ u.email }}</td>
+              <td>{{ u.get_department_display }}</td>
+              <td>{{ u.level }}</td>
+              <td>
+                {% if u.is_staff %}<span class="badge badge-staff">Staff</span>{% endif %}
+                {% if u.is_active %}<span class="badge badge-active">Active</span>
+                {% else %}<span class="badge badge-inactive">Inactive</span>{% endif %}
+              </td>
+              <td class="mono">
+                {% if u.last_login %}{{ u.last_login|date:"d M Y, H:i" }}{% else %}—{% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
 
     {% if page.has_other_pages %}
       <div class="pagination">
