@@ -8,7 +8,8 @@ from .models import Notification
 @login_required
 def list_notifications(request):
     qs = request.user.notifications.all()[:50]
-    request.user.notifications.filter(is_read=False).update(is_read=True)
+    # Read-only: fetching the list must NOT mutate read state.
+    # Badge count only decreases when the user deletes (single or clear-all).
     return JsonResponse({
         'notifications': [
             {
@@ -19,7 +20,7 @@ def list_notifications(request):
                 'created_at_display': n.created_at_display,
             } for n in qs
         ],
-        'unread_count': 0,
+        'unread_count': request.user.notifications.filter(is_read=False).count(),
     })
 
 
@@ -33,12 +34,16 @@ def count_notifications(request):
 @login_required
 @require_POST
 def delete_notification(request, pk):
-    Notification.objects.filter(user=request.user, id=pk).delete()
-    return JsonResponse({'ok': True})
+    deleted_count, _ = Notification.objects.filter(user=request.user, id=pk).delete()
+    return JsonResponse({
+        'ok': True,
+        'deleted': deleted_count > 0,
+        'unread_count': request.user.notifications.filter(is_read=False).count(),
+    })
 
 
 @login_required
 @require_POST
 def clear_all(request):
     request.user.notifications.all().delete()
-    return JsonResponse({'ok': True})
+    return JsonResponse({'ok': True, 'unread_count': 0})

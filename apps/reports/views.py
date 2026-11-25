@@ -26,6 +26,10 @@ from .pptx_templates import PPTX_TEMPLATES, template_list
 from .services import PracticumReportBuilder
 from .standards import MIN_PAGES_GUIDELINE, SCHOOL_STANDARD, normalize_options
 
+# ---- Phase 3 gate ----
+from apps.payments.gating import subscription_gate
+# ---- end ----
+
 logger = logging.getLogger(__name__)
 
 
@@ -267,6 +271,14 @@ def generate_report(request):
     session, bounce = _session_with_logs(request)
     if bounce:
         return bounce
+
+    # ---- Phase 3 gate ----
+    allowed, _status, gate_msg = subscription_gate(request.user)
+    if not allowed:
+        messages.error(request, gate_msg)
+        return _redirect_after_generation(request, 'report_options', session)
+    # ---- end gate ----
+
     _build(request, session, use_ai=True, force_ai=True)
     return _redirect_after_generation(request, 'report_options', session)
 
@@ -282,6 +294,17 @@ def report_options(request):
     form = None
 
     if request.method == 'POST':
+        # ---- Phase 3 gate ----
+        # Logo management is NOT subscription-gated (users can update cover art
+        # anytime). Every other POST on this page triggers AI generation and
+        # must be blocked for partial / pending / unsubscribed users.
+        if 'update_logo' not in request.POST and 'remove_logo' not in request.POST:
+            allowed, _status, gate_msg = subscription_gate(request.user)
+            if not allowed:
+                messages.error(request, gate_msg)
+                return _redirect_after_generation(request, 'report_options', session)
+        # ---- end gate ----
+
         if 'update_logo' in request.POST and request.FILES.get('custom_logo'):
             report.custom_logo = request.FILES['custom_logo']
             report.save(update_fields=['custom_logo'])
@@ -402,6 +425,19 @@ def report_content(request):
 
         if action == 'cancel':
             return redirect(f"{reverse('report_options')}?attachment_id={session.id}")
+
+        # ---- Phase 3 gate ----
+        # Both reset_ai and regenerate trigger AI work (reset wipes content and
+        # forces a fresh draft; regenerate calls refine_user_content()). The
+        # plain "save" path rebuilds the PDF from the user's own edits with no
+        # AI and stays ungated so a partial / pending / unsubscribed user can
+        # still update their already-generated report.
+        if action in ('reset_ai', 'regenerate'):
+            allowed, _status, gate_msg = subscription_gate(request.user)
+            if not allowed:
+                messages.error(request, gate_msg)
+                return redirect(f"{reverse('report_content')}?attachment_id={session.id}")
+        # ---- end gate ----
 
         if action == 'reset_ai':
             report.content = {}
@@ -769,6 +805,13 @@ def build_pptx(request):
     if bounce:
         return bounce
 
+    # ---- Phase 3 gate ----
+    allowed, _status, gate_msg = subscription_gate(request.user)
+    if not allowed:
+        messages.error(request, gate_msg)
+        return redirect(f"{reverse('pptx_options')}?attachment_id={session.id}")
+    # ---- end gate ----
+
     template_key = request.GET.get('template') or 'cohy_classic'
     if template_key not in PPTX_TEMPLATES:
         template_key = 'cohy_classic'
@@ -955,6 +998,14 @@ def pptx_options(request):
     if request.method == 'POST':
         action = request.POST.get('action')
 
+        # ---- Phase 3 gate ----
+        if action in ('build_official', 'build_custom', 'regenerate'):
+            allowed, _status, gate_msg = subscription_gate(request.user)
+            if not allowed:
+                messages.error(request, gate_msg)
+                return _redirect_after_generation(request, 'pptx_options', session)
+        # ---- end gate ----
+
         if action == 'build_official':
             existing = dict(report.pptx_options or {})
             existing['font_size'] = 18
@@ -1057,6 +1108,19 @@ def pptx_content(request):
 
         if action == 'cancel':
             return redirect(f"{reverse('pptx_options')}?attachment_id={session.id}")
+
+        # ---- Phase 3 gate ----
+        # Both reset_ai and regenerate trigger AI work (reset wipes slide
+        # content and forces a fresh draft; regenerate may call
+        # draft_presentation_with_ai() if the source fingerprint changed).
+        # The plain "save" path just persists the user's edited text with no
+        # rebuild and stays ungated.
+        if action in ('reset_ai', 'regenerate'):
+            allowed, _status, gate_msg = subscription_gate(request.user)
+            if not allowed:
+                messages.error(request, gate_msg)
+                return redirect(f"{reverse('pptx_content')}?attachment_id={session.id}")
+        # ---- end gate ----
 
         if action == 'reset_ai':
             report.pptx_content = {}

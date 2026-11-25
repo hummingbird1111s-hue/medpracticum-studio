@@ -180,6 +180,80 @@
     .mp-ai-summary-grid { grid-template-columns: 1fr 1fr; }
     .mp-section-card { padding: 14px; }
   }
+
+  /* ============================================================
+     PAGE-LEVEL MESSAGES (v9)
+     ============================================================ */
+  .mp-page-messages {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .mp-page-message {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    border: 1px solid;
+    font-size: 13.5px;
+    line-height: 1.55;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    animation: mpPageMessageIn 0.3s ease-out;
+    position: relative;
+  }
+  @keyframes mpPageMessageIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .mp-page-message.is-leaving {
+    opacity: 0;
+    transform: translateY(-6px);
+    transition: opacity 1.2s ease, transform 1.2s ease;
+  }
+  .mp-page-message--success { background: #ecfdf5; border-color: #a7f3d0; color: #065f46; }
+  .mp-page-message--error   { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+  .mp-page-message--warning { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
+  .mp-page-message--info    { background: #eff6ff; border-color: #bfdbfe; color: #1e40af; }
+  .mp-page-message__icon {
+    flex-shrink: 0;
+    font-size: 18px;
+    line-height: 1;
+    margin-top: 1px;
+  }
+  .mp-page-message__body { flex: 1; min-width: 0; word-break: break-word; }
+  .mp-page-message__body a { color: inherit; text-decoration: underline; font-weight: 600; }
+  .mp-page-message__body strong { font-weight: 700; }
+  .mp-page-message__close {
+    flex-shrink: 0;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    font-size: 20px;
+    line-height: 1;
+    color: currentColor;
+    opacity: 0.45;
+    padding: 0 2px;
+    transition: opacity 0.15s;
+    font-family: inherit;
+  }
+  .mp-page-message__close:hover { opacity: 1; }
+  .mp-page-message__progress {
+    position: absolute;
+    left: 0; bottom: 0;
+    height: 2px;
+    background: currentColor;
+    opacity: 0.25;
+    border-radius: 0 0 0 12px;
+    width: 100%;
+    transform-origin: left;
+    animation: mpPageMessageProgress 12s linear forwards;
+  }
+  @keyframes mpPageMessageProgress {
+    from { transform: scaleX(1); }
+    to   { transform: scaleX(0); }
+  }
 </style>
 
 <div class="max-w-3xl mx-auto">
@@ -199,6 +273,98 @@
       &larr; Back to settings
     </a>
   </div>
+
+  <!-- PHASE 3 GATE: page messages block (was missing on this template) -->
+  {% if messages %}
+  <div class="mp-page-messages" aria-live="polite" aria-atomic="false">
+    {% for message in messages %}
+      {% if 'success' in message.tags %}
+        <div class="mp-page-message mp-page-message--success" data-mp-message data-mp-auto-dismiss="1">
+          <div class="mp-page-message__icon">✅</div>
+          <div class="mp-page-message__body">{{ message }}</div>
+          <button type="button" class="mp-page-message__close" onclick="mpDismissMessage(this)" aria-label="Dismiss">×</button>
+          <span class="mp-page-message__progress" aria-hidden="true"></span>
+        </div>
+      {% elif 'error' in message.tags or 'danger' in message.tags %}
+        <div class="mp-page-message mp-page-message--error" data-mp-message>
+          <div class="mp-page-message__icon">❌</div>
+          <div class="mp-page-message__body">{{ message }}</div>
+          <button type="button" class="mp-page-message__close" onclick="mpDismissMessage(this)" aria-label="Dismiss">×</button>
+        </div>
+      {% elif 'warning' in message.tags %}
+        <div class="mp-page-message mp-page-message--warning" data-mp-message>
+          <div class="mp-page-message__icon">⚠️</div>
+          <div class="mp-page-message__body">{{ message }}</div>
+          <button type="button" class="mp-page-message__close" onclick="mpDismissMessage(this)" aria-label="Dismiss">×</button>
+        </div>
+      {% else %}
+        <div class="mp-page-message mp-page-message--info" data-mp-message data-mp-auto-dismiss="1">
+          <div class="mp-page-message__icon">ℹ️</div>
+          <div class="mp-page-message__body">{{ message }}</div>
+          <button type="button" class="mp-page-message__close" onclick="mpDismissMessage(this)" aria-label="Dismiss">×</button>
+          <span class="mp-page-message__progress" aria-hidden="true"></span>
+        </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
+  <!-- END PHASE 3 GATE -->
+
+  <!-- PHASE 3 GATE: subscription state banner -->
+  {% if user_subscription_status == 'partial' %}
+  <div class="bg-blue-50 border-2 border-blue-300 rounded-2xl p-4 mb-4 shadow-sm">
+    <div class="flex items-start gap-3">
+      <div class="text-2xl flex-shrink-0">🌱</div>
+      <div class="flex-1 min-w-0">
+        <p class="font-semibold text-blue-900 mb-1">Awaiting your next attachment</p>
+        <p class="text-sm text-blue-800">
+          You can still <strong>edit and save changes</strong> to this report.
+          AI regeneration (polish / reset) will resume once you start your next attachment and the admin reactivates your access.
+          <strong>No new payment is needed.</strong>
+        </p>
+        <a href="{% url 'start_attachment' %}"
+           class="inline-flex items-center gap-2 mt-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg px-4 py-2 text-sm shadow-sm transition-colors">
+          Start your next attachment →
+        </a>
+      </div>
+    </div>
+  </div>
+  {% elif user_subscription_status == 'pending' %}
+  <div class="bg-purple-50 border-2 border-purple-300 rounded-2xl p-4 mb-4 shadow-sm">
+    <div class="flex items-start gap-3">
+      <div class="text-2xl flex-shrink-0">⏳</div>
+      <div class="flex-1 min-w-0">
+        <p class="font-semibold text-purple-900 mb-1">Payment pending verification</p>
+        <p class="text-sm text-purple-800">
+          You can still <strong>edit and save changes</strong> to this report.
+          AI regeneration will be available once an admin verifies your payment reference.
+        </p>
+        <a href="{% url 'subscribe' %}"
+           class="inline-flex items-center gap-2 mt-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg px-4 py-2 text-sm shadow-sm transition-colors">
+          View pending payment →
+        </a>
+      </div>
+    </div>
+  </div>
+  {% elif user_subscription_status == 'unsubscribed' %}
+  <div class="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 mb-4 shadow-sm">
+    <div class="flex items-start gap-3">
+      <div class="text-2xl flex-shrink-0">🔒</div>
+      <div class="flex-1 min-w-0">
+        <p class="font-semibold text-amber-900 mb-1">AI regeneration locked</p>
+        <p class="text-sm text-amber-800">
+          You can still <strong>edit and save changes</strong> to this report — the PDF rebuild is free.
+          Only AI regeneration (polish / reset to fresh draft) requires an active subscription.
+        </p>
+        <a href="{% url 'subscribe' %}"
+           class="inline-flex items-center gap-2 mt-3 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg px-4 py-2 text-sm shadow-sm transition-colors">
+          Subscribe to unlock AI features →
+        </a>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  <!-- END PHASE 3 GATE -->
 
   <!-- Summary panel -->
   <div class="mp-ai-summary">
@@ -254,6 +420,11 @@
         <strong>🔄 Regenerate with AI</strong> — takes your edits, polishes the grammar and flow
         into academic English (keeping your structure and facts), then rebuilds the PDF.
         1–3 min. Uses AI credits.
+        {% if user_subscription_status != 'subscribed' %}
+          <!-- PHASE 3 GATE: inline lock note -->
+          <span class="inline-block ml-1 font-semibold text-amber-800">🔒 currently locked</span>
+          <!-- END PHASE 3 GATE -->
+        {% endif %}
       </li>
     </ul>
     <p class="text-xs text-emerald-700 mt-2">
@@ -265,8 +436,15 @@
   <div id="edit-warning-banner" class="hidden bg-red-50 border-2 border-red-300 rounded-2xl p-4 mb-4">
     <p class="text-sm text-red-900">
       <strong>⚠️ Some sections are blank or very short.</strong>
-      Sections under 15 words are marked red. Click
-      <strong>Regenerate with AI</strong> to fill them, or type your own content.
+      Sections under 15 words are marked red.
+      <!-- PHASE 3 GATE: conditional guidance -->
+      {% if user_subscription_status == 'subscribed' %}
+        Click <strong>Regenerate with AI</strong> to fill them, or type your own content.
+      {% else %}
+        Type your own content in the sections marked red to fill them.
+        <span class="font-semibold">(AI regeneration is currently locked.)</span>
+      {% endif %}
+      <!-- END PHASE 3 GATE -->
     </p>
   </div>
 
@@ -469,10 +647,23 @@
               class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg py-2.5 transition-colors shadow-sm disabled:opacity-70 disabled:cursor-wait">
         💾 Save &amp; rebuild PDF
       </button>
-      <button type="submit" name="action" value="regenerate" id="edit-regenerate-btn"
-              class="flex-1 bg-white border border-emerald-600 text-emerald-700 font-semibold rounded-lg py-2.5 hover:bg-emerald-50 transition-colors disabled:opacity-70 disabled:cursor-wait">
-        🔄 Regenerate with AI
-      </button>
+      <!-- PHASE 3 GATE: regenerate button (AI path) -->
+      {% if user_subscription_status == 'subscribed' %}
+        <button type="submit" name="action" value="regenerate" id="edit-regenerate-btn"
+                class="flex-1 bg-white border border-emerald-600 text-emerald-700 font-semibold rounded-lg py-2.5 hover:bg-emerald-50 transition-colors disabled:opacity-70 disabled:cursor-wait">
+          🔄 Regenerate with AI
+        </button>
+      {% else %}
+        <div class="flex-1 bg-gray-100 text-gray-500 font-semibold rounded-lg py-2.5 px-3 text-center text-sm border border-gray-300 cursor-not-allowed"
+             title="{% if user_subscription_status == 'partial' %}Resumes when your next attachment is activated{% elif user_subscription_status == 'pending' %}Awaiting payment verification{% else %}Subscribe to use AI regeneration{% endif %}">
+          🔒
+          {% if user_subscription_status == 'partial' %}Awaiting next attachment
+          {% elif user_subscription_status == 'pending' %}Payment pending
+          {% else %}Subscribe for AI regeneration
+          {% endif %}
+        </div>
+      {% endif %}
+      <!-- END PHASE 3 GATE -->
       <a href="{% url 'report_options' %}?attachment_id={{ session.id }}"
          class="flex-1 text-center bg-gray-100 text-gray-700 font-semibold rounded-lg py-2.5 hover:bg-gray-200 transition-colors">
         Cancel
@@ -487,11 +678,24 @@
   <form method="post" id="edit-reset-form" class="text-center mb-10">
     {% csrf_token %}
     <input type="hidden" name="attachment_id" value="{{ session.id }}">
-    <button type="submit" name="action" value="reset_ai" id="edit-reset-btn"
-            onclick="return confirm('This will discard every edit and re-draft all sections from scratch using AI. Continue?');"
-            class="text-xs text-red-600 hover:text-red-800 underline font-medium transition-colors">
-      Reset everything to a fresh AI draft
-    </button>
+    <!-- PHASE 3 GATE: reset_ai button (AI path) -->
+    {% if user_subscription_status == 'subscribed' %}
+      <button type="submit" name="action" value="reset_ai" id="edit-reset-btn"
+              onclick="return confirm('This will discard every edit and re-draft all sections from scratch using AI. Continue?');"
+              class="text-xs text-red-600 hover:text-red-800 underline font-medium transition-colors">
+        Reset everything to a fresh AI draft
+      </button>
+    {% else %}
+      <span class="text-xs text-gray-400 font-medium cursor-not-allowed"
+            title="{% if user_subscription_status == 'partial' %}Resumes when your next attachment is activated{% elif user_subscription_status == 'pending' %}Awaiting payment verification{% else %}Subscribe to use AI reset{% endif %}">
+        🔒 Reset everything to a fresh AI draft
+        {% if user_subscription_status == 'partial' %}(resumes next attachment)
+        {% elif user_subscription_status == 'pending' %}(payment pending)
+        {% else %}(subscriber only)
+        {% endif %}
+      </span>
+    {% endif %}
+    <!-- END PHASE 3 GATE -->
   </form>
 
 </div>
@@ -509,6 +713,26 @@
 <script>
 (function () {
   'use strict';
+
+  /* ============================================================
+     PHASE 3 GATE: message dismissal (matches options/pptx pages)
+     ============================================================ */
+  window.mpDismissMessage = function (btn) {
+    var el = btn.closest('[data-mp-message]');
+    if (!el) return;
+    el.classList.add('is-leaving');
+    setTimeout(function () { if (el.parentNode) el.remove(); }, 1300);
+  };
+  (function () {
+    document.querySelectorAll('[data-mp-message][data-mp-auto-dismiss="1"]').forEach(function (el) {
+      setTimeout(function () {
+        if (!document.body.contains(el)) return;
+        el.classList.add('is-leaving');
+        setTimeout(function () { if (el.parentNode) el.remove(); }, 1300);
+      }, 12000);
+    });
+  })();
+  /* END PHASE 3 GATE */
 
   /* ============================================================
      CONFIG

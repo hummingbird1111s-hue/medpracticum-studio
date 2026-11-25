@@ -364,6 +364,60 @@ after 12s with a slow 1.2s fade.
 </div>
 {% endif %}
 
+<!-- PHASE 3 GATE: subscription state banner -->
+{% if user_subscription_status == 'partial' %}
+<div class="bg-blue-50 border-2 border-blue-300 rounded-2xl p-4 mb-4 shadow-sm">
+  <div class="flex items-start gap-3">
+    <div class="text-2xl flex-shrink-0">🌱</div>
+    <div class="flex-1 min-w-0">
+      <p class="font-semibold text-blue-900 mb-1">Awaiting your next attachment</p>
+      <p class="text-sm text-blue-800">
+        Your first practicum period is complete and your second period is <strong>already paid for</strong>.
+        Presentation generation will resume automatically once you start your next attachment and the admin reactivates your access.
+        <strong>No new payment is needed.</strong> You can still download any presentation you already built.
+      </p>
+      <a href="{% url 'start_attachment' %}"
+         class="inline-flex items-center gap-2 mt-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg px-4 py-2 text-sm shadow-sm transition-colors">
+        Start your next attachment →
+      </a>
+    </div>
+  </div>
+</div>
+{% elif user_subscription_status == 'pending' %}
+<div class="bg-purple-50 border-2 border-purple-300 rounded-2xl p-4 mb-4 shadow-sm">
+  <div class="flex items-start gap-3">
+    <div class="text-2xl flex-shrink-0">⏳</div>
+    <div class="flex-1 min-w-0">
+      <p class="font-semibold text-purple-900 mb-1">Payment pending verification</p>
+      <p class="text-sm text-purple-800">
+        Once an admin verifies your payment reference, you'll be able to build and regenerate presentations.
+      </p>
+      <a href="{% url 'subscribe' %}"
+         class="inline-flex items-center gap-2 mt-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg px-4 py-2 text-sm shadow-sm transition-colors">
+        View pending payment →
+      </a>
+    </div>
+  </div>
+</div>
+{% elif user_subscription_status == 'unsubscribed' %}
+<div class="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 mb-4 shadow-sm">
+  <div class="flex items-start gap-3">
+    <div class="text-2xl flex-shrink-0">🔒</div>
+    <div class="flex-1 min-w-0">
+      <p class="font-semibold text-amber-900 mb-1">Generation locked</p>
+      <p class="text-sm text-amber-800">
+        You can browse templates and preview the layout — but building and regenerating presentations require an active subscription.
+      </p>
+      <a href="{% url 'subscribe' %}"
+         class="inline-flex items-center gap-2 mt-3 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg px-4 py-2 text-sm shadow-sm transition-colors">
+        Subscribe to unlock →
+      </a>
+    </div>
+  </div>
+</div>
+{% endif %}
+<!-- END PHASE 3 GATE -->
+
 {% if has_pptx %}
 <div class="bg-emerald-600 text-white rounded-2xl shadow-md p-5 mb-4">
   <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -515,10 +569,23 @@ after 12s with a slow 1.2s fade.
     <p class="text-sm text-emerald-100 mb-4">
       Uses COHY Classic (Times New Roman, maroon/gold bars) with the default settings — no choices needed.
     </p>
-    <button type="submit" id="gen-official-btn"
-            class="w-full bg-white text-emerald-800 font-semibold rounded-lg py-2.5 hover:bg-emerald-50 transition disabled:opacity-70 disabled:cursor-wait">
-      {% if has_pptx %}Rebuild Official Presentation{% else %}Build Official Presentation{% endif %}
-    </button>
+    <!-- PHASE 3 GATE: official build button -->
+    {% if user_subscription_status == 'subscribed' %}
+      <button type="submit" id="gen-official-btn"
+              class="w-full bg-white text-emerald-800 font-semibold rounded-lg py-2.5 hover:bg-emerald-50 transition disabled:opacity-70 disabled:cursor-wait">
+        {% if has_pptx %}Rebuild Official Presentation{% else %}Build Official Presentation{% endif %}
+      </button>
+    {% else %}
+      <div class="w-full bg-emerald-800 bg-opacity-50 text-emerald-50 font-semibold rounded-lg py-2.5 px-3 text-center text-sm border-2 border-emerald-400 border-dashed cursor-not-allowed"
+           title="{% if user_subscription_status == 'partial' %}Resumes when your next attachment is activated{% elif user_subscription_status == 'pending' %}Awaiting payment verification{% else %}Subscribe to build presentations{% endif %}">
+        🔒
+        {% if user_subscription_status == 'partial' %}Resumes when your next attachment is activated
+        {% elif user_subscription_status == 'pending' %}Awaiting payment verification
+        {% else %}Subscribe to build presentations
+        {% endif %}
+      </div>
+    {% endif %}
+    <!-- END PHASE 3 GATE -->
   </form>
 
   <form method="post" id="gen-custom-form" class="bg-white rounded-2xl p-5 shadow border border-gray-100">
@@ -613,10 +680,23 @@ after 12s with a slow 1.2s fade.
       </div>
     </fieldset>
 
-    <button type="submit" id="gen-custom-btn"
-            class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg py-2.5 transition-colors disabled:opacity-70 disabled:cursor-wait">
-      Build Custom Presentation
-    </button>
+    <!-- PHASE 3 GATE: custom build button -->
+    {% if user_subscription_status == 'subscribed' %}
+      <button type="submit" id="gen-custom-btn"
+              class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg py-2.5 transition-colors disabled:opacity-70 disabled:cursor-wait">
+        Build Custom Presentation
+      </button>
+    {% else %}
+      <div class="w-full bg-gray-100 text-gray-500 font-semibold rounded-lg py-2.5 px-3 text-center text-sm border border-gray-300 cursor-not-allowed"
+           title="{% if user_subscription_status == 'partial' %}Resumes when your next attachment is activated{% elif user_subscription_status == 'pending' %}Awaiting payment verification{% else %}Subscribe to build presentations{% endif %}">
+        🔒
+        {% if user_subscription_status == 'partial' %}Resumes when your next attachment is activated
+        {% elif user_subscription_status == 'pending' %}Awaiting payment verification
+        {% else %}Subscribe to build presentations
+        {% endif %}
+      </div>
+    {% endif %}
+    <!-- END PHASE 3 GATE -->
   </form>
 </div>
 
@@ -634,10 +714,23 @@ after 12s with a slow 1.2s fade.
       <input type="hidden" name="attachment_id" value="{{ session.id }}">
       <input type="hidden" name="action" value="regenerate">
       <input type="hidden" name="pptx_template" value="{{ report.pptx_template|default:'cohy_classic' }}">
-      <button type="submit" id="regen-btn"
-              class="bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg px-4 py-2 text-sm shadow-sm disabled:opacity-70 disabled:cursor-wait">
-        Reset AI &amp; Rebuild
-      </button>
+      <!-- PHASE 3 GATE: regenerate button -->
+      {% if user_subscription_status == 'subscribed' %}
+        <button type="submit" id="regen-btn"
+                class="bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg px-4 py-2 text-sm shadow-sm disabled:opacity-70 disabled:cursor-wait">
+          Reset AI &amp; Rebuild
+        </button>
+      {% else %}
+        <div class="bg-gray-100 text-gray-500 font-semibold rounded-lg px-4 py-2 text-sm text-center border border-gray-300 cursor-not-allowed"
+             title="{% if user_subscription_status == 'partial' %}Resumes when your next attachment is activated{% elif user_subscription_status == 'pending' %}Awaiting payment verification{% else %}Subscribe to regenerate{% endif %}">
+          🔒
+          {% if user_subscription_status == 'partial' %}Awaiting next attachment
+          {% elif user_subscription_status == 'pending' %}Payment pending
+          {% else %}Subscribe to regenerate
+          {% endif %}
+        </div>
+      {% endif %}
+      <!-- END PHASE 3 GATE -->
     </form>
   </div>
 </div>

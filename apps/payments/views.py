@@ -41,6 +41,39 @@ def _compute_expected_expiry(session):
     return (timezone.now() + timedelta(days=90)).date()
 
 
+def _is_expired_double_plan(sub):
+    """
+    True if the user paid for the DOUBLE plan, was activated, and period 1's
+    expires_at has now passed — but they have NOT yet been reactivated for
+    period 2 (or marked unsubscribed by admin).
+
+    Mirrors the auto-detect branch in context_processors.py so the sidebar
+    badge and the subscribe page always agree.
+    """
+    return bool(
+        sub
+        and sub.status == Subscription.STATUS_SUBSCRIBED
+        and sub.plan == Subscription.PLAN_DOUBLE
+        and not sub.is_currently_active
+    )
+
+
+def _is_partial_state(sub):
+    """
+    True if the user should be shown the 'partial' state ('You're covered for
+    your next practicum'). Covers both:
+      • explicit partial — admin ran the mark_partial action
+      • auto-detected expired-double — first period ended, second already paid for
+    """
+    return bool(
+        sub
+        and (
+            sub.status == Subscription.STATUS_PARTIAL
+            or _is_expired_double_plan(sub)
+        )
+    )
+
+
 @login_required
 def pwa_update(request):
     return render(request, 'pwa_update.html')
@@ -72,6 +105,12 @@ def subscribe(request):
             # Never downgrade an already-active subscription via this path.
             if existing and existing.is_currently_active:
                 return JsonResponse({'ok': False, 'error': 'already subscribed'}, status=400)
+
+            # Never let a partial user overwrite their paid period-2 privilege
+            # by re-submitting. The page hides the form in STATE B; this guard
+            # catches stale tabs and DevTools bypasses.
+            if _is_partial_state(existing):
+                return JsonResponse({'ok': False, 'error': 'already covered'}, status=400)
 
             old_ref = (
                 existing.pending_reference
@@ -110,8 +149,8 @@ def subscribe(request):
 
     sub = get_subscription(request.user)
     subscribed = bool(sub and sub.is_currently_active)
-    partially = bool(sub and sub.status == Subscription.STATUS_PARTIAL)
     pending = bool(sub and sub.status == Subscription.STATUS_PENDING)
+    partially = _is_partial_state(sub)  # ← the fix
 
     session = _get_active_session(request)
     session_end = getattr(session, 'end_date', None) if session else None

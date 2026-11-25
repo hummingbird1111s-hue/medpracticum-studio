@@ -373,6 +373,60 @@ auto-dismiss after 12s with a slow 1.2s fade.
 </div>
 {% endif %}
 
+<!-- PHASE 3 GATE: subscription state banner -->
+{% if user_subscription_status == 'partial' %}
+<div class="bg-blue-50 border-2 border-blue-300 rounded-2xl p-4 mb-4 shadow-sm">
+  <div class="flex items-start gap-3">
+    <div class="text-2xl flex-shrink-0">🌱</div>
+    <div class="flex-1 min-w-0">
+      <p class="font-semibold text-blue-900 mb-1">Awaiting your next attachment</p>
+      <p class="text-sm text-blue-800">
+        Your first practicum period is complete and your second period is <strong>already paid for</strong>.
+        Generation will resume automatically once you start your next attachment and the admin reactivates your access.
+        <strong>No new payment is needed.</strong>
+      </p>
+      <a href="{% url 'start_attachment' %}"
+         class="inline-flex items-center gap-2 mt-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg px-4 py-2 text-sm shadow-sm transition-colors">
+        Start your next attachment →
+      </a>
+    </div>
+  </div>
+</div>
+{% elif user_subscription_status == 'pending' %}
+<div class="bg-purple-50 border-2 border-purple-300 rounded-2xl p-4 mb-4 shadow-sm">
+  <div class="flex items-start gap-3">
+    <div class="text-2xl flex-shrink-0">⏳</div>
+    <div class="flex-1 min-w-0">
+      <p class="font-semibold text-purple-900 mb-1">Payment pending verification</p>
+      <p class="text-sm text-purple-800">
+        Your payment reference has been received. Once an admin verifies it, you'll be able to generate reports and presentations.
+      </p>
+      <a href="{% url 'subscribe' %}"
+         class="inline-flex items-center gap-2 mt-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg px-4 py-2 text-sm shadow-sm transition-colors">
+        View pending payment →
+      </a>
+    </div>
+  </div>
+</div>
+{% elif user_subscription_status == 'unsubscribed' %}
+<div class="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 mb-4 shadow-sm">
+  <div class="flex items-start gap-3">
+    <div class="text-2xl flex-shrink-0">🔒</div>
+    <div class="flex-1 min-w-0">
+      <p class="font-semibold text-amber-900 mb-1">Generation locked</p>
+      <p class="text-sm text-amber-800">
+        You can browse this page, upload a cover logo, and preview the report layout — but generating requires an active subscription.
+      </p>
+      <a href="{% url 'subscribe' %}"
+         class="inline-flex items-center gap-2 mt-3 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg px-4 py-2 text-sm shadow-sm transition-colors">
+        Subscribe to unlock →
+      </a>
+    </div>
+  </div>
+</div>
+{% endif %}
+<!-- END PHASE 3 GATE -->
+
 <!-- ===== EXISTING REPORT ACTIONS =====
      Info block auto-fades after 12s. Title and download buttons
      stay visible so the user never loses download access. -->
@@ -558,10 +612,38 @@ auto-dismiss after 12s with a slow 1.2s fade.
       {% endif %}
     </p>
 
-    <button type="submit" name="action" value="official" id="gen-official-btn"
-            class="w-full bg-white text-emerald-800 font-semibold rounded-lg py-2.5 hover:bg-emerald-50 transition disabled:opacity-70 disabled:cursor-wait">
-      {% if session.report.pdf_file %}Regenerate Official Report{% else %}Generate Official Report{% endif %}
-    </button>
+    <!-- PHASE 3 GATE: official generate button -->
+    {% if user_subscription_status == 'subscribed' %}
+      <button type="submit" name="action" value="official" id="gen-official-btn"
+              class="w-full bg-white text-emerald-800 font-semibold rounded-lg py-2.5 hover:bg-emerald-50 transition disabled:opacity-70 disabled:cursor-wait">
+        {% if session.report.pdf_file %}Regenerate Official Report{% else %}Generate Official Report{% endif %}
+      </button>
+    {% elif user_subscription_status == 'partial' %}
+      <button type="button" disabled
+              class="w-full bg-blue-100 text-blue-800 border border-blue-300 font-semibold rounded-lg py-2.5 cursor-not-allowed">
+        🌱 Awaiting next attachment
+      </button>
+      <p class="text-xs text-blue-100 mt-2 text-center">
+        Generation resumes when your next attachment is activated.
+      </p>
+    {% elif user_subscription_status == 'pending' %}
+      <button type="button" disabled
+              class="w-full bg-purple-100 text-purple-800 border border-purple-300 font-semibold rounded-lg py-2.5 cursor-not-allowed">
+        ⏳ Payment pending verification
+      </button>
+      <p class="text-xs text-purple-100 mt-2 text-center">
+        You'll be able to generate as soon as your reference is confirmed.
+      </p>
+    {% else %}
+      <a href="{% url 'subscribe' %}"
+         class="block text-center w-full bg-amber-400 hover:bg-amber-300 text-amber-900 font-bold rounded-lg py-2.5 shadow-sm transition-colors">
+        🔒 Subscribe to generate
+      </a>
+      <p class="text-xs text-emerald-100 mt-2 text-center">
+        Paid feature — unlocks reports, presentations, and daily unlimited logs.
+      </p>
+    {% endif %}
+    <!-- END PHASE 3 GATE -->
   </form>
 
   <div class="bg-white rounded-2xl p-5 shadow border border-gray-100 flex flex-col justify-between">
@@ -648,10 +730,21 @@ auto-dismiss after 12s with a slow 1.2s fade.
       </label>
     {% endfor %}
 
-    <button type="submit" name="action" value="generate" id="gen-custom-btn"
-            class="w-full mt-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg py-2.5 transition-colors disabled:opacity-70 disabled:cursor-wait">
-      Save custom settings and generate
-    </button>
+    <!-- PHASE 3 GATE: custom generate button -->
+    {% if user_subscription_status == 'subscribed' %}
+      <button type="submit" name="action" value="generate" id="gen-custom-btn"
+              class="w-full mt-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg py-2.5 transition-colors disabled:opacity-70 disabled:cursor-wait">
+        Save custom settings and generate
+      </button>
+    {% else %}
+      <div class="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-3 text-center text-sm text-gray-700">
+        🔒 Custom generation is disabled until your subscription is active.
+        <a href="{% url 'subscribe' %}" class="text-emerald-700 font-semibold underline ml-1">
+          {% if user_subscription_status == 'partial' %}View status →{% elif user_subscription_status == 'pending' %}View pending payment →{% else %}Subscribe →{% endif %}
+        </a>
+      </div>
+    {% endif %}
+    <!-- END PHASE 3 GATE -->
   </form>
 </details>
 {% endif %}

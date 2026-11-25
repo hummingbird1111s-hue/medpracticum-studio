@@ -190,6 +190,58 @@
     font-weight: 800;
   }
 
+  /* PHASE 3-ADJ: Copy button for MoMo numbers */
+  .mp-copy-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 8px;
+    padding: 3px 9px;
+    border: 1px solid #fcd34d;
+    background: rgba(255,255,255,0.75);
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #92400e;
+    cursor: pointer;
+    transition: all .15s ease;
+    font-family: inherit;
+    vertical-align: middle;
+    user-select: none;
+  }
+  .mp-copy-btn:hover {
+    background: #ffffff;
+    border-color: #f59e0b;
+    transform: translateY(-1px);
+  }
+  .mp-copy-btn:active { transform: translateY(0); }
+  .mp-copy-btn.is-copied {
+    background: #10b981;
+    border-color: #10b981;
+    color: #ffffff;
+  }
+
+  /* Two MoMo numbers, stacked */
+  .mp-momo-number-card {
+    background: rgba(255, 255, 255, 0.65);
+    border: 1px solid #fcd34d;
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+  }
+  .mp-momo-number-card:last-child { margin-bottom: 0; }
+  .mp-momo-number-card__network {
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: #92400e;
+    margin: 0 0 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
   /* ============================================================
      Reference input
      ============================================================ */
@@ -262,6 +314,43 @@
     word-break: break-word;
   }
 
+  /* PHASE 3-ADJ: Refund policy card */
+  .mp-refund-card {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    padding: 20px;
+  }
+  .mp-refund-card h3 {
+    font-size: 14px;
+    font-weight: 800;
+    color: #111827;
+    margin: 0 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mp-refund-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    font-size: 13px;
+    color: #4b5563;
+    line-height: 1.65;
+  }
+  .mp-refund-list li {
+    padding-left: 22px;
+    position: relative;
+    margin-bottom: 7px;
+  }
+  .mp-refund-list li::before {
+    content: '•';
+    position: absolute;
+    left: 8px;
+    color: #059669;
+    font-weight: 900;
+  }
+
   @media (max-width: 480px) {
     #subscribe-page .subscribe-page-title {
       font-size: 1.65rem;
@@ -272,9 +361,7 @@
 
 <div id="subscribe-page" class="max-w-3xl mx-auto space-y-6">
 
-  <!-- ============================================================
-       HEADER
-       ============================================================ -->
+  <!-- HEADER -->
   <div class="text-center mt-4">
     <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 mb-4 shadow-sm text-3xl">
       ✨
@@ -290,9 +377,7 @@
 
   {% if subscribed %}
 
-  {# ═══════════════════════════════════════════════════════════════
-     STATE A — ACTIVE SUBSCRIPTION
-     ═══════════════════════════════════════════════════════════════ #}
+  {# STATE A — ACTIVE SUBSCRIPTION #}
   <div class="subscribe-emerald-surface bg-emerald-50 border-2 border-emerald-300 rounded-2xl p-6 text-center shadow-sm">
     <div class="text-4xl mb-3">✅</div>
     <h2 class="text-xl font-bold text-emerald-900 mb-2">
@@ -347,11 +432,7 @@
 
   {% elif partially_subscribed %}
 
-  {# ═══════════════════════════════════════════════════════════════
-     STATE B — PARTIALLY SUBSCRIBED
-     (Paid ₵95, one period used, waiting for the next one to be
-      activated by admin.)
-     ═══════════════════════════════════════════════════════════════ #}
+  {# STATE B — PARTIALLY SUBSCRIBED (paid ₵95, waiting for next period) #}
   <div class="bg-blue-50 border-2 border-blue-300 rounded-2xl p-6 shadow-sm">
     <div class="flex items-start gap-4">
       <div class="text-4xl flex-shrink-0">🌱</div>
@@ -386,9 +467,7 @@
 
   {% elif not session %}
 
-  {# ═══════════════════════════════════════════════════════════════
-     STATE C — NO ACTIVE ATTACHMENT
-     ═══════════════════════════════════════════════════════════════ #}
+  {# STATE C — NO ACTIVE ATTACHMENT #}
   <div class="subscribe-amber-surface bg-amber-50 border-2 border-amber-300 rounded-2xl p-6 shadow-sm">
     <div class="flex items-start gap-4">
       <div class="text-4xl flex-shrink-0">📍</div>
@@ -411,11 +490,7 @@
 
   {% else %}
 
-  {# ═══════════════════════════════════════════════════════════════
-     STATE D/E — HAS ATTACHMENT, NOT SUBSCRIBED
-     Shows either the plans form OR the awaiting-verification card,
-     controlled by the `payment_pending` flag from the view.
-     ═══════════════════════════════════════════════════════════════ #}
+  {# STATE D/E — HAS ATTACHMENT, NOT SUBSCRIBED #}
 
   <!-- Session context bar -->
   <div class="bg-white rounded-2xl shadow-sm border border-emerald-100 p-4 flex items-center gap-3">
@@ -496,7 +571,7 @@
       </div>
     </div>
 
-    <!-- MoMo instructions -->
+    <!-- MoMo instructions: two receiving numbers -->
     <div class="mp-momo-card mt-4">
       <div class="flex items-center gap-2 mb-2">
         <span class="text-2xl">📱</span>
@@ -505,25 +580,51 @@
         </h2>
       </div>
       <p class="text-sm text-amber-900 mb-3">
-        Send the amount for your selected plan to the MoMo account below.
+        Send the amount for your selected plan to <strong>either</strong> number below.
         Use a reference you'll remember — it should be unique and easy to find later.
       </p>
 
-      <div class="mp-momo-row">
-        <div>
-          <p class="mp-momo-row__label">MoMo Number</p>
-          <p class="mp-momo-row__value"><code>0201404188</code></p>
-        </div>
-        <div class="text-right">
-          <p class="mp-momo-row__label">Network</p>
-          <p class="mp-momo-row__value">Telecel</p>
+      <!-- Option 1 — Telecel -->
+      <div class="mp-momo-number-card">
+        <p class="mp-momo-number-card__network">Option 1 · Telecel</p>
+        <div class="mp-momo-row">
+          <div>
+            <p class="mp-momo-row__label">Number</p>
+            <p class="mp-momo-row__value">
+              <code id="momo-num-telecel">0201404188</code>
+              <!-- PHASE 3-ADJ: copy button -->
+              <button type="button" class="mp-copy-btn" data-copy="0201404188"
+                      aria-label="Copy Telecel number 0201404188">
+                📋 Copy
+              </button>
+            </p>
+          </div>
+          <div class="text-right">
+            <p class="mp-momo-row__label">Account Name</p>
+            <p class="mp-momo-row__value">Agyei Osborn Frimpong</p>
+          </div>
         </div>
       </div>
 
-      <div class="mp-momo-row">
-        <div>
-          <p class="mp-momo-row__label">Account Name</p>
-          <p class="mp-momo-row__value">Agyei Osborn Frimpong</p>
+      <!-- Option 2 — MTN -->
+      <div class="mp-momo-number-card">
+        <p class="mp-momo-number-card__network">Option 2 · MTN</p>
+        <div class="mp-momo-row">
+          <div>
+            <p class="mp-momo-row__label">Number</p>
+            <p class="mp-momo-row__value">
+              <code id="momo-num-mtn">0556025786</code>
+              <!-- PHASE 3-ADJ: copy button -->
+              <button type="button" class="mp-copy-btn" data-copy="0556025786"
+                      aria-label="Copy MTN number 0556025786">
+                📋 Copy
+              </button>
+            </p>
+          </div>
+          <div class="text-right">
+            <p class="mp-momo-row__label">Account Name</p>
+            <p class="mp-momo-row__value">Abraham Divine Diame</p>
+          </div>
         </div>
       </div>
 
@@ -542,14 +643,31 @@
       </p>
     </div>
 
-    <!-- Reference + notify -->
+    <!-- PHASE 3-ADJ: notify-both recommendation banner -->
+    <div class="bg-blue-50 border-2 border-blue-300 rounded-xl p-4 mt-4">
+      <div class="flex items-start gap-3">
+        <div class="text-2xl flex-shrink-0">💡</div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-bold text-blue-900 mb-1">
+            Recommended for faster verification
+          </p>
+          <p class="text-sm text-blue-800 leading-relaxed">
+            After you send payment, share your reference with <strong>both admins</strong> below.
+            Whoever sees the message first will verify you — sending to both avoids delays.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reference + notify (two admins) -->
     <div class="bg-white rounded-2xl shadow-lg border border-emerald-100 p-6 md:p-8 mt-4">
       <h2 class="text-base font-bold text-gray-900 mb-1">
         After sending, enter your reference
       </h2>
       <p class="text-sm text-gray-600 mb-4">
-        Type the exact reference you used on the MoMo transfer. Then click the button
-        below — we'll open WhatsApp with your details ready to send to the admin.
+        Type the exact reference you used on the MoMo transfer. Then tap
+        <strong>both</strong> admin buttons below — we'll open WhatsApp with your
+        details pre-filled. Sending to both admins gets you verified faster.
       </p>
 
       <label for="mp-reference-input" class="block text-sm font-semibold text-gray-800 mb-1">
@@ -567,38 +685,29 @@
         You'll find this on the MoMo confirmation SMS.
       </p>
 
-      <button
-        type="button"
-        id="mp-notify-btn"
-        class="subscribe-primary-button w-full mt-5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg py-3 text-base shadow-md transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-      >
-        I've Paid · Notify Admin on WhatsApp
-      </button>
-
-      <p class="text-xs text-gray-500 text-center mt-3">
-        This opens WhatsApp with a pre-filled message to
-        <strong>0533052562</strong>. Just tap <em>Send</em>.
-      </p>
-
-      {# Staff test mode — kept for admin debugging #}
-      {% if user.is_staff %}
-      <div class="mt-6 rounded-xl p-4" style="background-color: #111827;">
-        <p class="text-sm font-bold mb-1" style="color: #ffffff;">🧪 Staff Test Mode</p>
-        <p class="text-xs leading-relaxed mb-3" style="color: #d1d5db;">
-          Simulate an active subscription for
-          <strong style="color:#ffffff;">{{ session.facility.name }}</strong>'s period
-          (until {{ expected_expires_at|date:"j M Y" }}).
-        </p>
-        <form method="post" action="{% url 'subscribe_activate_test' %}">
-          {% csrf_token %}
-          <button type="submit"
-                  class="w-full font-bold rounded-lg py-2.5 text-sm"
-                  style="background-color: #fbbf24; color: #111827;">
-            Activate for testing
-          </button>
-        </form>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5">
+        <button
+          type="button"
+          id="mp-notify-btn-primary"
+          class="subscribe-primary-button w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg py-3 text-sm shadow-md transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          ✅ Notify Admin 1<br>
+          <span class="font-normal text-xs opacity-90">Agyei · 0533052562</span>
+        </button>
+        <button
+          type="button"
+          id="mp-notify-btn-secondary"
+          class="subscribe-secondary-button w-full bg-white border border-emerald-300 hover:bg-emerald-50 text-emerald-800 font-bold rounded-lg py-3 text-sm shadow-md transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          ✅ Notify Admin 2<br>
+          <span class="font-normal text-xs opacity-90">Abraham · 0556025786</span>
+        </button>
       </div>
-      {% endif %}
+
+      <p class="text-xs text-gray-500 text-center mt-3 leading-relaxed">
+        Both admins are on WhatsApp — message <strong>both</strong> for fastest verification.
+        Your message will contain your plan, reference, and facility details automatically.
+      </p>
     </div>
   </div>
 
@@ -628,21 +737,60 @@
         <dd id="awaiting-reference-inline">—</dd>
       </dl>
 
-      <div class="mt-5 flex flex-wrap justify-center gap-3">
-        <a href="https://wa.me/233533052562" target="_blank" rel="noopener"
-           class="subscribe-secondary-button inline-flex items-center gap-2 bg-white border border-emerald-300 hover:bg-emerald-50 text-emerald-800 font-semibold rounded-lg px-4 py-2 text-sm shadow-sm transition-colors">
-          Message Admin on WhatsApp
-        </a>
+      <p class="text-xs text-emerald-700 max-w-md mx-auto mt-4 leading-relaxed">
+        <strong>No response yet?</strong> Send the message again to <strong>both</strong> admins below
+        to speed up verification.
+      </p>
+
+      <div class="mt-3 flex flex-wrap justify-center gap-3">
         <button type="button"
-                id="mp-resend-wa"
+                id="mp-resend-wa-primary"
+                class="subscribe-primary-button inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-4 py-2 text-sm shadow-sm transition-colors">
+          Send to Admin 1 (Agyei)
+        </button>
+        <button type="button"
+                id="mp-resend-wa-secondary"
                 class="subscribe-secondary-button inline-flex items-center gap-2 bg-white border border-emerald-300 hover:bg-emerald-50 text-emerald-800 font-semibold rounded-lg px-4 py-2 text-sm shadow-sm transition-colors">
-          Didn't work? Send again
+          Send to Admin 2 (Abraham)
         </button>
       </div>
     </div>
   </div>
 
+  <!-- PHASE 3-ADJ: Refund Policy — shown only in the subscription flow (states D/E) -->
+  <div class="mp-refund-card">
+    <h3>
+      <span>💰</span> Refund Policy
+    </h3>
+    <ul class="mp-refund-list">
+      <li>
+        <strong>Full refund</strong> if requested within <strong>7 days</strong> of payment
+        and before any report or presentation has been generated.
+      </li>
+      <li>
+        <strong>No refund</strong> once a report or presentation has been generated —
+        AI processing and file builds incur real costs at that point.
+      </li>
+      <li>
+        <strong>Partial refunds</strong> may be considered case-by-case for the unused
+        practicum period on the <em>Both Periods</em> plan — contact admin.
+      </li>
+      <li>
+        To request a refund, message either admin with your
+        <strong>MoMo reference</strong> and the reason for the request.
+      </li>
+    </ul>
+  </div>
+
   {% endif %}
+
+  <!-- PHASE 3-ADJ: Contact providers link (all states) -->
+  <div class="text-center pt-2">
+    <a href="{% url 'contact' %}"
+       class="inline-flex items-center gap-2 text-sm text-emerald-700 hover:text-emerald-900 font-semibold underline underline-offset-2 transition-colors">
+      📞 Contact a provider →
+    </a>
+  </div>
 
   <!-- Trust strip -->
   <div class="subscribe-emerald-surface bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-center text-sm text-emerald-900">
@@ -666,20 +814,62 @@
 (function () {
   'use strict';
 
-  // ============================================================
-  // Config — hardcoded admin WhatsApp number (international, no +)
-  // and plan prices. Adjust here if they change.
-  // ============================================================
-  var ADMIN_WHATSAPP = '233533052562';
+  // Admin WhatsApp numbers (international format, no + and no spaces)
+  var ADMIN_WHATSAPP_PRIMARY   = '233533052562';   // Agyei Osborn Frimpong
+  var ADMIN_WHATSAPP_SECONDARY = '233556025786';   // Abraham Divine Diame
 
   var PRICE_SINGLE = parseFloat('{{ price_single|default:"50" }}');
   var PRICE_DOUBLE = parseFloat('{{ price_double|default:"95" }}');
 
   var fmt = function (n) { return '₵' + n.toFixed(0); };
 
-  // ============================================================
-  // Plan card selection — radio + visual .is-selected state
-  // ============================================================
+  /* ============================================================
+     PHASE 3-ADJ: Copy buttons for MoMo numbers
+     ============================================================ */
+  function fallbackCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    ta.style.top = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+    return ok;
+  }
+
+  function flashCopied(btn, ok) {
+    var original = btn.innerHTML;
+    btn.innerHTML = ok ? '✓ Copied' : '⚠ Failed';
+    btn.classList.add('is-copied');
+    setTimeout(function () {
+      btn.innerHTML = original;
+      btn.classList.remove('is-copied');
+    }, 1600);
+  }
+
+  document.querySelectorAll('.mp-copy-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var text = btn.dataset.copy || '';
+      if (!text) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () {
+          flashCopied(btn, true);
+        }).catch(function () {
+          flashCopied(btn, fallbackCopy(text));
+        });
+      } else {
+        flashCopied(btn, fallbackCopy(text));
+      }
+    });
+  });
+
+  /* ============================================================
+     Plan card selection — radio + visual .is-selected state
+     ============================================================ */
   var planCards = document.querySelectorAll('[data-plan-card]');
   var currentPlan = 'single';
 
@@ -700,7 +890,6 @@
 
   planCards.forEach(function (card) {
     card.addEventListener('click', function (e) {
-      // Let the native radio click through, then override to sync styling
       selectPlan(card.dataset.planCard);
       if (e.target.tagName !== 'INPUT') {
         e.preventDefault();
@@ -708,10 +897,11 @@
     });
   });
 
-  // ============================================================
-  // Notify admin — build WhatsApp message + submit hidden form
-  // ============================================================
-  var notifyBtn = document.getElementById('mp-notify-btn');
+  /* ============================================================
+     Notify admin — build WhatsApp message + submit hidden form
+     ============================================================ */
+  var notifyBtnPrimary   = document.getElementById('mp-notify-btn-primary');
+  var notifyBtnSecondary = document.getElementById('mp-notify-btn-secondary');
   var refInput  = document.getElementById('mp-reference-input');
   var waForm    = document.getElementById('mp-wa-form');
   var waText    = document.getElementById('mp-wa-text');
@@ -743,8 +933,9 @@
     return lines.join('\n');
   }
 
-  function submitToWhatsapp(plan, ref) {
+  function openWhatsapp(phone, plan, ref) {
     waText.value = buildMessage(plan, ref);
+    waForm.action = 'https://wa.me/' + phone;
     waForm.submit();
   }
 
@@ -771,57 +962,91 @@
     }
   }
 
-  if (notifyBtn && refInput) {
-    notifyBtn.addEventListener('click', function () {
-      var ref = (refInput.value || '').trim();
-      if (!ref) {
-        refInput.focus();
-        refInput.style.borderColor = '#dc2626';
-        refInput.style.boxShadow = '0 0 0 3px rgba(220,38,38,0.15)';
-        setTimeout(function () {
-          refInput.style.borderColor = '';
-          refInput.style.boxShadow = '';
-        }, 1600);
-        alert('Please enter your MoMo transaction reference first.');
-        return;
-      }
+  // Best-effort server persistence so reload shows the awaiting card
+  function persistPending(plan, ref) {
+    try {
+      var csrf = (document.cookie.split('; ').find(function (r) {
+        return r.indexOf('csrftoken=') === 0;
+      }) || '').split('=')[1] || '';
+      fetch(window.location.pathname, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-CSRFToken': csrf
+        },
+        credentials: 'same-origin',
+        body: 'plan=' + encodeURIComponent(plan) +
+              '&reference=' + encodeURIComponent(ref) +
+              '&notify_only=1'
+      }).catch(function () {});
+    } catch (e) {}
+  }
 
-      // 1) Open WhatsApp in a new tab with the message pre-filled.
-      submitToWhatsapp(currentPlan, ref);
+  function handleNotifyClick(phone) {
+    var ref = (refInput.value || '').trim();
+    if (!ref) {
+      refInput.focus();
+      refInput.style.borderColor = '#dc2626';
+      refInput.style.boxShadow = '0 0 0 3px rgba(220,38,38,0.15)';
+      setTimeout(function () {
+        refInput.style.borderColor = '';
+        refInput.style.boxShadow = '';
+      }, 1600);
+      alert('Please enter your MoMo transaction reference first.');
+      return;
+    }
 
-      // 2) Swap the UI to the awaiting card.
-      showAwaitingCard(currentPlan, ref);
+    // 1) WhatsApp opens in a new tab with the message pre-filled
+    openWhatsapp(phone, currentPlan, ref);
 
-      // 3) Best-effort: persist pending state on the server so a reload
-      //    shows the same awaiting card. Silently ignored if the view
-      //    doesn't accept POST or the endpoint 404s.
-      try {
-        var csrf = (document.cookie.split('; ').find(function (r) {
-          return r.indexOf('csrftoken=') === 0;
-        }) || '').split('=')[1] || '';
-        fetch(window.location.pathname, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'X-CSRFToken': csrf
-          },
-          credentials: 'same-origin',
-          body: 'plan=' + encodeURIComponent(currentPlan) +
-                '&reference=' + encodeURIComponent(ref) +
-                '&notify_only=1'
-        }).catch(function () {});
-      } catch (e) {}
+    // 2) Swap the UI to the awaiting card
+    showAwaitingCard(currentPlan, ref);
+
+    // 3) Best-effort: persist pending state on the server (automation path)
+    persistPending(currentPlan, ref);
+  }
+
+  if (notifyBtnPrimary) {
+    notifyBtnPrimary.addEventListener('click', function () {
+      handleNotifyClick(ADMIN_WHATSAPP_PRIMARY);
+    });
+  }
+  if (notifyBtnSecondary) {
+    notifyBtnSecondary.addEventListener('click', function () {
+      handleNotifyClick(ADMIN_WHATSAPP_SECONDARY);
     });
   }
 
-  // "Send again" — re-opens WhatsApp with the current state
-  var resendBtn = document.getElementById('mp-resend-wa');
-  if (resendBtn) {
-    resendBtn.addEventListener('click', function () {
-      var refEl = document.getElementById('awaiting-reference-inline');
-      var ref = refEl ? refEl.textContent.trim() : '';
-      if (!ref) return;
-      submitToWhatsapp(currentPlan, ref);
+  // "Send again" — re-opens WhatsApp with the current reference
+  function readCurrentRef() {
+    if (refInput && refInput.value && refInput.offsetParent !== null) {
+      return (refInput.value || '').trim();
+    }
+    var refEl = document.getElementById('awaiting-reference-inline');
+    return refEl ? refEl.textContent.trim() : '';
+  }
+
+  var resendPrimary   = document.getElementById('mp-resend-wa-primary');
+  var resendSecondary = document.getElementById('mp-resend-wa-secondary');
+
+  if (resendPrimary) {
+    resendPrimary.addEventListener('click', function () {
+      var ref = readCurrentRef();
+      if (!ref || ref === '—') {
+        alert('Please go back and enter your reference first.');
+        return;
+      }
+      openWhatsapp(ADMIN_WHATSAPP_PRIMARY, currentPlan, ref);
+    });
+  }
+  if (resendSecondary) {
+    resendSecondary.addEventListener('click', function () {
+      var ref = readCurrentRef();
+      if (!ref || ref === '—') {
+        alert('Please go back and enter your reference first.');
+        return;
+      }
+      openWhatsapp(ADMIN_WHATSAPP_SECONDARY, currentPlan, ref);
     });
   }
 })();
