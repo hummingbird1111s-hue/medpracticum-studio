@@ -86,7 +86,7 @@ document.addEventListener('alpine:init', () => {
         try { localStorage.setItem(UNITS_KEY, JSON.stringify(this.unitSuggestions)); } catch (e) {}
       },
 
-      // ---- Recording (fixed: fresh instance, synchronous reset, stale-event guards) ----
+      // ---- Recording (fresh instance, synchronous reset, stale-event guards) ----
       dictate(field) {
         if (!this.speechSupported) {
           this.setMessage('Voice dictation is not supported in this browser. Use Chrome or Edge.', 'error');
@@ -184,7 +184,6 @@ document.addEventListener('alpine:init', () => {
         }
       },
 
-      // ---- Unchanged from your file ----
       validate() {
         if (!this.form.date) return 'Pick a date.';
         if (!this.form.unit_sub_department.trim()) return 'Choose or type the unit you worked in.';
@@ -209,6 +208,11 @@ document.addEventListener('alpine:init', () => {
       },
 
       async queueOffline(payload, authProblem) {
+        // Guard: offline-sync.js must be loaded before we can queue
+        if (!window.MPOffline || typeof window.MPOffline.queueLog !== 'function') {
+          this.setMessage('Offline sync not available. Please reload the page and try again.', 'error');
+          return;
+        }
         await window.MPOffline.queueLog(payload);
         this.setMessage(
           authProblem ? 'Session expired. Saved on this device; log in to sync.' : 'Saved offline. Will sync when online.',
@@ -219,6 +223,13 @@ document.addEventListener('alpine:init', () => {
       async submit() {
         const problem = this.validate();
         if (problem) { this.setMessage(problem, 'error'); return; }
+
+        // Guard: sync module must be loaded. Turns a cryptic "queueLog of undefined"
+        // into a clear message if offline-sync.js ever fails to load again.
+        if (!window.MPOffline || typeof window.MPOffline.sendLogs !== 'function') {
+          this.setMessage('Sync module not loaded. Reload the page and try again.', 'error');
+          return;
+        }
 
         const payload = this.buildPayload();
         this.saving = true;
