@@ -120,10 +120,10 @@
           </div>
           <div style="flex: 1; min-width: 0;">
             <p style="font-size: 14px; font-weight: 600; color: #111827; margin: 0;">
-              Clears the app cache
+              Replaces old cached files
             </p>
             <p style="font-size: 13px; color: #374151; margin: 2px 0 0;">
-              Old cached files are removed so the new version loads cleanly.
+              Outdated files are removed automatically once the new version takes over.
             </p>
           </div>
         </div>
@@ -137,10 +137,10 @@
           </div>
           <div style="flex: 1; min-width: 0;">
             <p style="font-size: 14px; font-weight: 600; color: #111827; margin: 0;">
-              Refreshes the service worker
+              Activates the latest service worker
             </p>
             <p style="font-size: 13px; color: #374151; margin: 2px 0 0;">
-              The background worker is replaced with the latest version.
+              The new background worker is switched on in place of the old one.
             </p>
           </div>
         </div>
@@ -167,18 +167,18 @@
 
     <!-- Progress steps (hidden until update starts) -->
     <div id="update-progress" style="display: none; margin-bottom: 20px;">
-      <div id="step-caches" class="mp-update-step">
+      <div id="step-install" class="mp-update-step">
         <div class="mp-update-step-icon">1</div>
         <div style="flex: 1; min-width: 0;">
-          <p class="mp-update-step-title">Clearing caches</p>
-          <p class="mp-update-step-sub">Removing old cached files…</p>
+          <p class="mp-update-step-title">Preparing new version</p>
+          <p class="mp-update-step-sub">Making sure the update is fully downloaded…</p>
         </div>
       </div>
-      <div id="step-sw" class="mp-update-step" style="margin-top: 8px;">
+      <div id="step-activate" class="mp-update-step" style="margin-top: 8px;">
         <div class="mp-update-step-icon">2</div>
         <div style="flex: 1; min-width: 0;">
-          <p class="mp-update-step-title">Removing old service worker</p>
-          <p class="mp-update-step-sub">Unregistering the outdated worker…</p>
+          <p class="mp-update-step-title">Activating new version</p>
+          <p class="mp-update-step-sub">Switching to the updated worker…</p>
         </div>
       </div>
       <div id="step-reload" class="mp-update-step" style="margin-top: 8px;">
@@ -244,6 +244,34 @@
 
 <script>
   // ============================================================
+  // HELPERS
+  // ============================================================
+  function mpSleep(ms) {
+    return new Promise(function (r) { setTimeout(r, ms); });
+  }
+
+  // Resolves when `worker` reaches one of `states`, or after `ms`.
+  function mpWaitForWorkerState(worker, states, ms) {
+    return new Promise(function (resolve) {
+      if (!worker || states.indexOf(worker.state) !== -1) { resolve(); return; }
+      var done = false;
+      function finish() {
+        if (done) return;
+        done = true;
+        worker.removeEventListener('statechange', onChange);
+        resolve();
+      }
+      function onChange() {
+        if (states.indexOf(worker.state) !== -1) finish();
+      }
+      worker.addEventListener('statechange', onChange);
+      setTimeout(finish, ms);
+    });
+  }
+
+  var mpUpdating = false;
+
+  // ============================================================
   // 1. CHECK FOR UPDATES
   // ============================================================
   async function checkForUpdates() {
@@ -252,12 +280,14 @@
     var btn = document.getElementById('update-now-btn');
     var hint = document.getElementById('update-hint');
     var featuresWrapper = document.getElementById('update-features-wrapper');
-    var heroIcon = document.getElementById('update-hero-icon');
 
     // Default "checking" state
     title.textContent = "Checking for updates…";
     desc.textContent = "Please wait while we check if a newer version is available.";
-    
+    btn.disabled = true;
+    btn.textContent = "Checking…";
+    btn.onclick = null;
+
     if (!('serviceWorker' in navigator)) {
       title.textContent = "Updates not supported";
       desc.textContent = "Your browser does not support service workers, which are required for the update system.";
@@ -277,27 +307,23 @@
         return;
       }
 
-      // Check if there's an update waiting
+      // Ask the browser to look for a newer worker right now
+      try { await reg.update(); } catch (e) { /* offline or transient: fall through */ }
+
+      // A new worker may still be downloading/installing
+      if (reg.installing) {
+        title.textContent = "Downloading update…";
+        desc.textContent = "A new version is being downloaded. Please wait.";
+        btn.textContent = "Downloading…";
+        await mpWaitForWorkerState(reg.installing, ['installed', 'activated', 'redundant'], 20000);
+      }
+
+      // Update waiting (only counts if an older worker is currently in control)
       if (reg.waiting) {
         showUpdateAvailable();
         return;
       }
 
-      // Check if an update is currently downloading
-      if (reg.installing) {
-        title.textContent = "Downloading update…";
-        desc.textContent = "A new version is being downloaded. Please wait.";
-        btn.textContent = "Downloading…";
-        
-        reg.installing.addEventListener('statechange', function() {
-          if (reg.installing.state === 'installed') {
-            showUpdateAvailable();
-          }
-        });
-        return;
-      }
-
-      // No update waiting
       showUpToDate();
 
     } catch (err) {
@@ -319,7 +345,7 @@
   function showUpdateAvailable() {
     document.getElementById('update-title').textContent = "Update available";
     document.getElementById('update-desc').textContent = "A newer version of MedPracticum Studio is ready to install. Your data is safe.";
-    
+
     var btn = document.getElementById('update-now-btn');
     btn.textContent = "⚡ Update to latest version";
     btn.disabled = false;
@@ -337,7 +363,7 @@
   function showUpToDate() {
     document.getElementById('update-title').textContent = "You're up to date";
     document.getElementById('update-desc').textContent = "MedPracticum Studio is running the latest version available on this device. You will be notified when a new update is available.";
-    
+
     var btn = document.getElementById('update-now-btn');
     btn.textContent = "No updates available";
     btn.disabled = true;
@@ -348,7 +374,7 @@
 
     document.getElementById('update-features-wrapper').style.display = 'none';
     document.getElementById('update-hint').style.display = 'none';
-    
+
     // Change hero icon to a checkmark to indicate it's up to date
     document.getElementById('update-hero-icon').innerHTML = '✅';
     document.getElementById('update-hero-icon').style.background = 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)';
@@ -356,16 +382,24 @@
 
   // ============================================================
   // 3. EXECUTE UPDATE
+  //    Proper handshake: tell the WAITING worker to SKIP_WAITING,
+  //    wait until it actually takes control, then reload.
+  //    We do NOT unregister or wipe caches: the SW's own `activate`
+  //    handler already deletes old mp-* caches, and wiping them
+  //    here would also delete the new version's precache.
   // ============================================================
   async function mpPerformUpdate() {
+    if (mpUpdating) return;
+    mpUpdating = true;
+
     var btn      = document.getElementById('update-now-btn');
     var progress = document.getElementById('update-progress');
     var success  = document.getElementById('update-success');
     var hint     = document.getElementById('update-hint');
 
-    var stepCaches = document.getElementById('step-caches');
-    var stepSw     = document.getElementById('step-sw');
-    var stepReload = document.getElementById('step-reload');
+    var stepInstall  = document.getElementById('step-install');
+    var stepActivate = document.getElementById('step-activate');
+    var stepReload   = document.getElementById('step-reload');
 
     // Disable button, show progress
     btn.disabled = true;
@@ -388,36 +422,54 @@
     }
 
     try {
-      // Step 1 — clear caches
-      markStep(stepCaches, 'active');
-      await new Promise(function (r) { setTimeout(r, 300); });
-      if ('caches' in window) {
-        var names = await caches.keys();
-        await Promise.all(names.map(function (n) { return caches.delete(n); }));
-      }
-      markStep(stepCaches, 'done');
+      var reg = await navigator.serviceWorker.getRegistration();
 
-      // Step 2 — unregister service workers
-      await new Promise(function (r) { setTimeout(r, 200); });
-      markStep(stepSw, 'active');
-      if ('serviceWorker' in navigator) {
-        var regs = await navigator.serviceWorker.getRegistrations();
-        await Promise.all(regs.map(function (r) { return r.unregister(); }));
+      // Step 1: make sure the new worker is fully installed (waiting)
+      markStep(stepInstall, 'active');
+      await mpSleep(250);
+      if (reg && !reg.waiting && reg.installing) {
+        await mpWaitForWorkerState(reg.installing, ['installed', 'activated', 'redundant'], 15000);
       }
-      markStep(stepSw, 'done');
+      markStep(stepInstall, 'done');
 
-      // Step 3 — reload fresh
-      await new Promise(function (r) { setTimeout(r, 200); });
+      // Step 2: activate it and wait for the hand-over
+      await mpSleep(150);
+      markStep(stepActivate, 'active');
+
+      var waiting = reg && reg.waiting;
+      if (waiting) {
+        await new Promise(function (resolve) {
+          var finished = false;
+          function finish() {
+            if (finished) return;
+            finished = true;
+            navigator.serviceWorker.removeEventListener('controllerchange', finish);
+            resolve();
+          }
+          // Either signal means the swap happened
+          navigator.serviceWorker.addEventListener('controllerchange', finish);
+          waiting.addEventListener('statechange', function () {
+            if (waiting.state === 'activated') finish();
+          });
+          setTimeout(finish, 6000); // safety net
+
+          // Listeners are attached BEFORE posting the message to avoid a race
+          waiting.postMessage({ type: 'SKIP_WAITING' });
+        });
+      }
+      markStep(stepActivate, 'done');
+
+      // Step 3: reload into the new version
+      await mpSleep(150);
       markStep(stepReload, 'active');
 
       success.style.display = 'block';
       progress.style.display = 'none';
-      await new Promise(function (r) { setTimeout(r, 800); });
+      await mpSleep(800);
       window.location.replace('/?updated=' + Date.now());
     } catch (err) {
       console.error('Update failed:', err);
-      // Fallback: hard reload so browser fetches fresh
-      await new Promise(function (r) { setTimeout(r, 800); });
+      await mpSleep(800);
       window.location.reload();
     }
   }

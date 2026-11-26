@@ -86,6 +86,28 @@ def _clean_list_lines(text):
     return cleaned
 
 
+def _clean_unit_heading(heading: str) -> str:
+    """
+    Strip stray '<' / '>' / '[' / ']' wrappers and trailing colons from a
+    unit heading, e.g. '<Records Unit>:' -> 'Records Unit'.
+    """
+    cleaned = re.sub(r'^[<\[]+|[>\]]+$', '', (heading or '')).strip()
+    return cleaned.rstrip(':').strip()
+
+
+def _clean_workshop_text(text: str) -> str:
+    """
+    Normalise a workshop activity string before rendering:
+      - drops a leading "on " (so "on malaria control" -> "malaria control")
+      - collapses repeated phrases such as "tutorial on Tutorial on X"
+        into "tutorial on X"
+    """
+    t = (text or '').strip()
+    t = re.sub(r'^(?:on\s+)+', '', t, flags=re.IGNORECASE)
+    t = re.sub(r'\b(\w+(?:\s+\w+){0,2}?\s+on)\s+\1\b', r'\1', t, flags=re.IGNORECASE)
+    return t.strip()
+
+
 # ============================================================
 # v11: hardened activities parser
 # ============================================================
@@ -149,14 +171,14 @@ def _parse_activities_blocks(text):
         if (len(lines) >= 2
                 and len(lines[0]) < 80
                 and not lines[0].rstrip().endswith('.')):
-            heading = lines[0].rstrip(':').strip()
+            heading = _clean_unit_heading(lines[0])
             activities = []
             for line in lines[1:]:
                 # Strip any leading bullet / asterisk / numbered markers
                 cleaned = re.sub(r'^[\-\*\u2022\d\.\)]+\s*', '', line).strip()
                 if cleaned:
                     activities.append(cleaned)
-            if activities:
+            if heading and activities:
                 blocks.append({
                     'type': 'unit',
                     'heading': heading,
@@ -226,7 +248,7 @@ def _try_parse_paragraph_as_units(block_text):
                     'heading': current_unit,
                     'activities': current_activities,
                 })
-            current_unit = m.group(1).strip()
+            current_unit = _clean_unit_heading(m.group(1))
             first_activity = m.group(2).strip()
             current_activities = [first_activity] if first_activity else []
         else:
@@ -342,25 +364,24 @@ def _build_activities_narrative(unit_activities):
     Build the activities_performed default text from unit_activities.
     Used as fallback when the AI didn't draft this section.
 
-    v11: emits unit-heading + activity-lines format so the fallback path
-    also renders as bullets instead of one wall of paragraph text.
+    Emits ONLY unit blocks (heading line followed by its activity lines,
+    with a blank line between units). There is no introductory sentence,
+    so the section starts directly with the first unit heading.
+
+    Each unit is one block (heading + activities joined by single newlines)
+    so _parse_activities_blocks() recognises it as Format A and renders the
+    heading with bullets underneath.
     """
     if not unit_activities:
         return ''
-    parts = [
-        "During the practicum period, I was involved in the following activities "
-        "as recorded in my logbook:"
-    ]
+    unit_blocks = []
     for group in unit_activities:
-        heading = group['unit'].rstrip(':').strip()
+        heading = _clean_unit_heading(group['unit'])
         activity_lines = [a['summary'] for a in group['activities'] if a.get('summary')]
-        if not activity_lines:
+        if not heading or not activity_lines:
             continue
-        parts.append(heading)
-        for line in activity_lines:
-            parts.append(line)
-        parts.append('')  # blank line between units
-    return '\n\n'.join(p for p in parts if p is not None).strip()
+        unit_blocks.append('\n'.join([heading] + activity_lines))
+    return '\n\n'.join(unit_blocks).strip()
 
 
 def _build_recommendations_text(dynamic_facility_recs, recs):
@@ -621,6 +642,17 @@ class PracticumReportBuilder:
         if self._data is not None:
             return self._data
 
+        # Imported here (not at module level) to avoid a circular import
+        # between service.py and ai_drafting.py. If it cannot be imported,
+        # fall back to returning the text unchanged so reports still build.
+        try:
+            from .ai_drafting import _polish_english
+        except ImportError:
+            logger.warning('ai_drafting._polish_english unavailable — skills/lessons will not be polished')
+
+            def _polish_english(text):
+                return text
+
         s = self.attachment
         user = self.user
         dept_name = user.get_department_display()
@@ -648,10 +680,13 @@ class PracticumReportBuilder:
             if not summaries:
                 continue
 
-            if re.search(r'\b(unit|department|ward|center|centre|clinic|division|section)\b', unit, re.IGNORECASE):
-                unit_label = unit
+            # Strip stray < > [ ] wrappers from the unit name before building the label
+            unit_clean = _clean_unit_heading(unit) or unit
+
+            if re.search(r'\b(unit|department|ward|center|centre|clinic|division|section)\b', unit_clean, re.IGNORECASE):
+                unit_label = unit_clean
             else:
-                unit_label = f"{unit} unit"
+                unit_label = f"{unit_clean} unit"
 
             if len(summaries) == 1:
                 narrative = f"In the {unit_label}, I was involved in {summaries[0]}."
@@ -668,7 +703,13 @@ class PracticumReportBuilder:
                                for (log, summary) in deduped],
             })
 
+        # ---- Workshops: normalise activity text for display ----
+        # (in-memory only; the model instances are never saved here)
         all_workshops = list(self.attachment.workshops.all().order_by('date'))
+        for w in all_workshops:
+            activity = getattr(w, 'activity', None)
+            if activity:
+                w.activity = _clean_workshop_text(activity)
 
         unit_rows = [{'unit': unit, 'days': days, 'pct': round(100 * days / total_days, 1)}
                      for unit, days in unit_counter.most_common()] if total_days else []
@@ -716,14 +757,6 @@ class PracticumReportBuilder:
                     rec += '.'
                 dynamic_facility_recs.append(rec)
 
-        dynamic_lessons = []
-        seen_lessons = set()
-        for _, skill in skills:
-            s_text = skill.strip()
-            if s_text and s_text.lower() not in seen_lessons:
-                seen_lessons.add(s_text.lower())
-                dynamic_lessons.append(s_text)
-
         recs = T.RECOMMENDATIONS.get(user.department, T.DEFAULT_RECS)
 
         conclusion = [
@@ -756,7 +789,24 @@ class PracticumReportBuilder:
         keywords = f"practicum, clinical attachment, {dept_name.lower()}, {facility_type}"
 
         default_challenges = self._synthesize_challenges_prose(challenges)
-        default_skills = '\n'.join(text for _, text in skills)
+
+        # ---- Skills + Lessons fallbacks (polished English) ----
+        cleaned_skills = [_polish_english(text) for _, text in skills if text and text.strip()]
+        default_skills = '\n'.join(cleaned_skills)
+
+        # Lessons: same polished text, de-duplicated (case-insensitive), as paragraphs
+        seen_lessons = set()
+        unique_lessons = []
+        for text in cleaned_skills:
+            key = text.strip().lower()
+            if key and key not in seen_lessons:
+                seen_lessons.add(key)
+                unique_lessons.append(text.strip())
+        default_lessons = (
+            '\n\n'.join(unique_lessons)
+            if unique_lessons
+            else '\n\n'.join(getattr(T, 'LESSONS_LEARNT', []))
+        )
 
         facility_profile_text = self._build_facility_profile()
 
@@ -774,7 +824,7 @@ class PracticumReportBuilder:
             'references': '',
             'introduction': '\n\n'.join(getattr(T, 'INTRODUCTION_EXTRA', [])),
             'workshops': '\n\n'.join(getattr(T, 'WORKSHOPS', [])),
-            'lessons_learnt': '\n'.join(dynamic_lessons) if dynamic_lessons else '\n'.join(getattr(T, 'LESSONS_LEARNT', [])),
+            'lessons_learnt': default_lessons,
             'observation': '\n\n'.join(getattr(T, 'OBSERVATION', [])),
             'challenges': default_challenges,
             'skills_acquired': default_skills,
@@ -1028,6 +1078,7 @@ class PracticumReportBuilder:
 
             'content_skills_acquired': _clean_list_lines(content.get('skills_acquired', '')),
             'content_lessons_learnt': _lines(content.get('lessons_learnt', '')),
+            'lessons_learnt_paras': _paragraphs(content.get('lessons_learnt', '')),
             'activities_blocks': activities_blocks,
 
             'introduction_paras': _paragraphs(content.get('introduction', '')),
@@ -1285,9 +1336,9 @@ class PracticumReportBuilder:
                     if block['type'] == 'paragraph':
                         self._add_rich_paragraph(doc, block['text'])
                     elif block['type'] == 'unit':
-                        # Bold unit sub-heading
+                        # Bold unit sub-heading (stray < > stripped)
                         p = doc.add_paragraph()
-                        run = p.add_run(block['heading'])
+                        run = p.add_run(_clean_unit_heading(block['heading']))
                         run.bold = True
                         run.font.name = 'Times New Roman'
                         run.font.size = Pt(12)
@@ -1299,13 +1350,15 @@ class PracticumReportBuilder:
                 for para in _paragraphs(content['activities_performed']):
                     self._add_rich_paragraph(doc, para)
         else:
-            self._add_rich_paragraph(
-                doc,
-                "During the practicum period, I was involved in the following activities as recorded in my logbook:",
-            )
+            # Only show the generic intro line when there are no unit groups to list
+            if not d['unit_activities']:
+                self._add_rich_paragraph(
+                    doc,
+                    "During the practicum period, I was involved in the following activities as recorded in my logbook:",
+                )
             for group in d['unit_activities']:
                 p = doc.add_paragraph()
-                run = p.add_run(group['unit'])
+                run = p.add_run(_clean_unit_heading(group['unit']))
                 run.bold = True
                 run.font.name = 'Times New Roman'
                 run.font.size = Pt(12)
@@ -1329,12 +1382,8 @@ class PracticumReportBuilder:
             self._add_rich_paragraph(doc, "No formal workshop was attended during the practicum period.")
 
         add_heading('LESSONS LEARNT')
-        if content.get('lessons_learnt'):
-            for line in _lines(content['lessons_learnt']):
-                self._add_rich_paragraph(doc, line)
-        else:
-            for l in _lines(content.get('lessons_learnt', '')):
-                self._add_rich_paragraph(doc, l)
+        for para in _paragraphs(content.get('lessons_learnt', '')):
+            self._add_rich_paragraph(doc, para)
 
         add_heading('OBSERVATIONS')
         if content.get('observation'):

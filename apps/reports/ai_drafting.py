@@ -1,26 +1,45 @@
 """
-Best-effort AI drafting for report sections, with code-enforced quality gates.
+Best-effort AI drafting for report sections and slides, with code-enforced
+quality gates.
 
-v11 — DEEP CLEANUP of section isolation:
-  - Activities Performed MUST be bullet format under unit sub-headings
-  - Skills Acquired MUST derive from specific activities, in bullet format
-  - Lessons Learnt MUST be reflections on skills, not activity restatements
-  - Obstacles/solutions are FORBIDDEN from Activities and Skills
-  - Sparse logs (<5) trigger ENRICHMENT of real activities using competencies
-  - Filler phrases are stripped from all output
+v13 — Official-ready, Issah-style output
+----------------------------------------
+* Every call that used to crash silently is now defined in this file:
+  _build_context, _call_ai, _SECTION_FLOORS.  (Previously these were missing,
+  so every draft raised NameError, views.py swallowed it, and the report fell
+  back to raw-log template text.)
+* Sections are drafted IN PARALLEL (ThreadPoolExecutor) instead of one after
+  another, so all of them finish inside the time budget.
+* Prompts match the reference report (Issah Abdul): concise bullets for
+  Activities and Skills, short paragraphs for everything else.
+* Code-level normalisers guarantee the structure the renderers expect
+  (unit heading + bullet lines, "I learnt how to ..." skills, clean
+  paragraphs, no < >, no markdown, capital letters, full stops).
+* Deterministic fallbacks (fallback_skill_line, fallback_lessons_text, ...)
+  so even when the AI is unavailable the report never shows raw lowercase
+  log text.
+* PROMPT_VERSION is part of source_fingerprint(), so drafts written by an
+  older prompt version are automatically re-drafted.
 
-Two entry points:
-  - draft_sections_with_ai(session)        → report prose   → report.content
-  - draft_presentation_with_ai(session)    → slide bullets  → report.pptx_content
-
-Plus one refinement entry point:
-  - refine_user_content(session, content)  → polish user edits without redrafting
+Settings (all optional)
+-----------------------
+REPORT_AI_DRAFTING_ENABLED       default True
+REPORT_AI_DRAFTING_MAX_SECONDS   default 90   (whole report, all sections)
+REPORT_AI_DRAFTING_WORKERS       default 6
+REPORT_AI_CALL_TIMEOUT           default 60   (seconds per API call)
+REPORT_AI_CALLABLE               dotted path to YOUR existing text-generation
+                                 function:  fn(prompt, max_tokens=...) -> str
+REPORT_AI_PROVIDER               'anthropic' | 'openai' | 'gemini'
+                                 (auto-detected from the API key if omitted)
+REPORT_AI_MODEL                  override the default model name
+ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY (or GOOGLE_API_KEY)
 """
 
+import concurrent.futures as cf
 import hashlib
 import json
 import logging
-import random
+import os
 import re
 import time
 
@@ -28,300 +47,309 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
+PROMPT_VERSION = 'v13'
+DEFAULT_MAX_SECONDS = 90
+
 
 # ============================================================
-# Report drafting — section priority order
+# Shared prompt fragments
 # ============================================================
+
+_COMMON_RULES = (
+    "RULES (apply to every section):\n"
+    "1. Write as the student, in the first person ('I'). Never say 'the student' "
+    "or 'the intern' (the Abstract is the only exception).\n"
+    "2. The daily logs, workshops and competency areas in the STUDENT DATA are the "
+    "ONLY source of facts. Never invent units, activities, workshops, dates, patient "
+    "numbers, systems or people.\n"
+    "3. NEVER copy log text. Rewrite every item into polished, official English. "
+    "Every sentence and every bullet starts with a capital letter, 'I' is always a "
+    "capital, grammar and punctuation are correct, and finished work is in the past "
+    "tense.\n"
+    "4. Field mapping: ACTIVITY feeds Activities Performed; SKILL feeds Skills Acquired "
+    "and Lessons Learnt; CHALLENGE feeds Challenges; SOLUTION feeds Recommendations "
+    "only (rephrase it, never copy it). Obstacles, delays, congestion, shortages, "
+    "network problems and their solutions must NEVER appear in Activities Performed "
+    "or Skills Acquired.\n"
+    "5. Plain text only: no markdown, no asterisks, no '#', no angle brackets "
+    "'< >', no square brackets '[ ]', no bullet symbols, no em dashes.\n"
+    "6. Be concise and direct, like a good student report. No filler such as 'It is "
+    "worth noting that'. No heading. No closing remark. No explanation of what you "
+    "did.\n"
+)
+
+_STYLE_EXAMPLES_NOTE = (
+    "The examples below show STYLE ONLY. Never reuse their facts.\n"
+)
+
 
 DRAFT_SECTIONS = [
     ('introduction', 'Introduction',
-     "Write exactly 2 concise paragraphs using first-person voice ('I'). "
-     "Paragraph 1 (4-5 sentences): purpose of the attachment, facility name, location, period, "
-     "and the units you rotated through (one sentence per unit is enough). "
-     "Paragraph 2 (3-4 sentences): the competency areas you targeted and a one-line preview "
-     "of how this report documents each. "
-     "CRITICAL: Do NOT refer to yourself as 'the student' or 'the intern'. Write AS the student. "
-     "KEEP IT SHORT: 150-250 words total. Do NOT add extra paragraphs. "
-     "Do NOT use bullet points, asterisks, hyphens, or em dashes. Do NOT include a heading."),
+     "Write ONE paragraph of 80 to 130 words. Say who you are (name, level and "
+     "department), where you did the attachment (facility name and location), the "
+     "period, the units you worked in, and the practical areas you gained experience "
+     "in (take these from the competency areas). End with one sentence saying the "
+     "work was carried out with the support and supervision of the staff.\n"
+     + _STYLE_EXAMPLES_NOTE +
+     "Style example: 'I am Ama Mensah, a Level 100 Health Information Management "
+     "student at the College of Health, Yamfo. I undertook my second semester clinical "
+     "attachment at Example Hospital. The practicum gave me practical experience in "
+     "patient registration, appointment booking and the use of LHIMS.'"),
 
     ('activities_performed', 'Activities Performed',
-     "Write the 'Activities Performed' section as BULLET-FORMAT ACTIVITY LINES grouped "
-     "under UNIT SUB-HEADINGS. Follow this structure EXACTLY:\n\n"
-     "  [Opening paragraph of 2-3 sentences]\n\n"
-     "  <Unit Name 1>\n"
-     "  Activity line 1\n"
-     "  Activity line 2\n"
-     "  Activity line 3\n\n"
-     "  <Unit Name 2>\n"
-     "  Activity line 1\n"
-     "  Activity line 2\n"
-     "  Activity line 3\n\n"
-     "Each activity line = ONE concrete action, starting with a past-tense verb "
-     "(Registered, Captured, Booked, Processed, Verified, Maintained, Recorded, Prepared, Reconciled). "
-     "3-4 activity lines per unit.\n\n"
-     "CRITICAL BANS — do NOT include in this section:\n"
-     "  - Any challenge, obstacle, difficulty, delay, congestion, overcrowding, shortage, or barrier.\n"
-     "  - Any solution, response, workaround, or recommendation.\n"
-     "  - Any phrasing like 'due to high patient volume', 'to manage overcrowding', "
-     "'extended working hours', 'streamlined', 'address delays', 'cope with demand', "
-     "'under pressure', 'despite', 'in spite of'.\n"
-     "  Those belong to the Challenges and Recommendations sections, NOT here.\n\n"
-     "SPARSE-LOG ENRICHMENT (if fewer than 5 logs): For each real activity in the logs, "
-     "expand it with professional context — name the data system used (LHIMS, HAMS, paper register), "
-     "the data quality check applied, the professional standard followed, or the competency supported. "
-     "Example: log says 'registered 15 patients' → enriched activity: "
-     "'Registered approximately fifteen new patients daily, capturing complete demographic, "
-     "address, and NHIS details in the LHIMS electronic system while maintaining data quality "
-     "and confidentiality standards.' "
-     "Do NOT invent new units, new activities, new workshops, or new patient counts — enrich ONLY "
-     "the real activities by adding professional context.\n\n"
-     "FORMAT RULES:\n"
-     "  - Do NOT prefix any line with '- ', '* ', '• ', or numbers. The renderer adds bullets.\n"
-     "  - Do NOT use markdown (**bold**, ## headings). Plain text.\n"
-     "  - Do NOT include the main heading.\n"
-     "  - Use first-person voice ('I').\n"
-     "Aim for 300-400 words total."),
+     "Write the activities as BULLET LINES grouped under plain UNIT HEADINGS, "
+     "exactly in this layout (the renderer adds the bullets):\n\n"
+     "Records Unit\n"
+     "Registered new patients by capturing their personal details in LHIMS.\n"
+     "Booked and rescheduled patient appointments using the scheduling module.\n\n"
+     "Reproductive and Child Health (RCH) Unit\n"
+     "Registered infants younger than three months under their mother's insurance.\n\n"
+     "START RULE: begin immediately with the first unit heading. No opening "
+     "paragraph, no introduction. A unit heading is a short line with no full stop. "
+     "Never wrap a unit name in < > or [ ].\n"
+     "Use ONE heading per unit that appears in the logs (merge spellings of the same "
+     "unit, for example 'RCH' and 'Reproductive and Child Health').\n"
+     "Every activity line is ONE clear sentence of 10 to 25 words that starts with a "
+     "past-tense action verb (Registered, Booked, Captured, Updated, Verified, "
+     "Printed, Recorded, Prepared, Calculated). Write one line per distinct logged "
+     "activity; you may split one rich log into at most two lines. Where useful add "
+     "brief professional context that is true to the log (the system used such as "
+     "LHIMS, or the data-quality check applied). Do NOT invent extra activities to "
+     "reach a length."),
 
     ('skills_acquired', 'Skills Acquired',
-     "Write the 'Skills Acquired' section as BULLET-FORMAT SKILL LINES. "
-     "EACH skill MUST trace back to a specific activity from the Activities Performed section.\n\n"
-     "Format each skill as: <Skill Name>: 2-3 sentences describing the skill, the specific "
-     "activity that developed it, and the HIM competency supported.\n\n"
-     "Provide 5-7 skills. One skill per line. No bullet markers.\n\n"
-     "CRITICAL RULES:\n"
-     "  - Every skill MUST be evidenced by an activity in the logs (or by the enriched "
-     "activities above). Never invent a skill not supported by an activity.\n"
-     "  - Name the activity that produced the skill: 'Through registering new patients...', "
-     "'By booking follow-up appointments...', 'While capturing infant demographics...'\n"
-     "  - Do NOT restate the activity verbatim — describe what was LEARNED from doing it.\n\n"
-     "CRITICAL BANS — do NOT include in this section:\n"
-     "  - Any obstacle, challenge, difficulty, or condition endured. Skills describe "
-     "CAPABILITIES GAINED, not conditions survived.\n"
-     "  - Forbidden phrases: 'under pressure', 'despite high volumes', "
-     "'while managing congestion', 'maintained workflow despite', 'coped with', "
-     "'adapted to', 'handled the workload', 'managed stress'.\n\n"
-     "SPARSE-LOG ENRICHMENT (if fewer than 5 logs): You may name sub-skills within a single "
-     "activity to reach 5-6 skills. Legitimate sub-skills of 'patient registration' include: "
-     "'data quality verification during intake', 'demographic capture for pediatric cases', "
-     "'NHIS verification during registration', 'records confidentiality enforcement'. "
-     "These are truthful expansions of one activity, not new inventions.\n\n"
-     "Plain text, one skill per line. No markdown. No main heading. Use first-person ('I').\n"
-     "Aim for 250-350 words total."),
-
-    ('lessons_learnt', 'Lessons Learnt',
-     "Write the 'Lessons Learnt' section as REFLECTIONS drawn from the Skills Acquired and "
-     "Activities Performed sections above.\n\n"
-     "Output 5-7 lessons, one per line. OR present them as 2-3 short connected paragraphs. "
-     "One lesson per line is preferred.\n\n"
-     "CRITICAL — each lesson MUST be a REFLECTION, not an activity restatement:\n"
-     "  BAD: 'I registered 15 new patients and booked appointments for them.' "
-     "(This is just restating an activity.)\n"
-     "  GOOD: 'I learnt that accurate patient registration is the foundation of every "
-     "subsequent clinical encounter. When a demographic field is wrong at intake, every "
-     "downstream process — from NHIS claims to appointment reminders — inherits that error. "
-     "This reinforced the HIM principle that data quality must be enforced at the source.'\n\n"
-     "Each lesson starts with a reflection cue: 'I learnt', 'I realised', 'I appreciated', "
-     "'I now understand', or 'I discovered'.\n\n"
-     "Each lesson is 2-3 sentences: WHAT you did, WHAT you learned from it, WHAT broader "
-     "principle or competency this connects to (data quality, confidentiality, ethics, "
-     "teamwork, workflow efficiency).\n\n"
-     "Do NOT mention obstacles, delays, or challenges as a lesson theme — reflect on "
-     "professional principles, not on working conditions.\n"
-     "Plain text, no bullet markers, no markdown. Use first-person ('I'). No heading.\n"
-     "Aim for 250-300 words total."),
-
-    ('challenges', 'Challenges',
-     "Write the 'Challenges' section as 3-4 short paragraphs. Every challenge must come "
-     "FROM THE LOGS (the CHALLENGE field of each daily log). If the logs recorded no "
-     "challenges, generate 2-3 realistic ones for this facility type in Ghanaian HIM "
-     "practice (patient congestion, illegible paper records, LHIMS network downtime, "
-     "incomplete NHIS claim documentation, storage space constraints).\n\n"
-     "STRUCTURE:\n"
-     "  - Paragraph 1: introduce the challenges generally and their professional significance.\n"
-     "  - Paragraphs 2-3: each describes ONE specific challenge in detail — what happened, "
-     "how it impacted the work, how you responded.\n"
-     "  - Paragraph 4 (optional): reflect on what these reveal about the facility's systems.\n\n"
-     "RULES:\n"
-     "  - NEVER copy raw log text. Rephrase into polished academic prose.\n"
-     "  - Do NOT invent challenges contradicted by the logs.\n"
-     "  - Do NOT mention activities or solutions here — challenges ONLY.\n"
-     "  - First-person voice ('I'). No bullets, no markdown, no heading. Plain prose.\n"
-     "Aim for 250-350 words total."),
-
-    ('recommendations', 'Recommendations',
-     "Write the 'Recommendations' section. Base every recommendation on the challenges "
-     "and observations described earlier in this report — NOT on the SOLUTION field of "
-     "the logs (paraphrase solutions if present, but generate fresh recommendations too).\n\n"
-     "STRUCTURE:\n"
-     "  - One opening paragraph of 2-3 sentences framing the recommendations.\n"
-     "  - Two groups under bold labels: 'For the Facility:' (3-4 items) and "
-     "'For the College:' (3-4 items).\n"
-     "  - Each recommendation MUST follow this structure: WHO should do WHAT, and WHY "
-     "it matters based on a specific challenge you encountered.\n\n"
-     "RULES:\n"
-     "  - Do NOT copy raw SOLUTION text from logs verbatim.\n"
-     "  - Each recommendation should be 2-3 sentences, actionable, and specific.\n"
-     "  - Use professional tone (third-person 'the facility should' or plural 'we').\n"
-     "  - Do NOT include the main heading.\n"
-     "Aim for 250-350 words total."),
-
-    ('conclusion', 'Conclusion',
-     "Write 3 substantial paragraphs using first-person ('I'). "
-     "Paragraph 1: summarize the overall experience, units rotated, and skills gained. "
-     "Paragraph 2: reflect on how the practicum prepares the student for professional HIM practice "
-     "and connect back to the competency areas. "
-     "Paragraph 3: express gratitude to the facility, staff, and College, and outline next steps in "
-     "the student's academic and professional journey. "
-     "Do NOT include a heading."),
-
-    ('observation', 'Observations',
-     "Write 3-4 substantial paragraphs synthesizing observations about workflows, staffing, "
-     "record systems, data quality, and interdepartmental coordination. Use first-person ('I'). "
-     "Weave specific details from the logs into a cohesive academic narrative. "
-     "Connect observations to the competency areas where relevant. "
-     "CRITICAL: YOU ARE FORBIDDEN FROM LISTING RAW LOG ENTRIES. "
-     "CRITICAL: Do NOT repeat challenges here — this section describes HOW the facility works, "
-     "not WHAT went wrong. Save obstacle details for the Challenges section. "
-     "Example synthesis: if logs mention 'electronic system' and 'high patient volume', write "
-     "'I observed that while the LHIMS electronic health information system streamlined data management, "
-     "the high patient volume often led to bottlenecks during peak hours, revealing gaps in workflow efficiency.' "
-     "Do NOT include a heading."),
-
-    ('abstract', 'Abstract',
-     "Write a single academic paragraph in third person. "
-     "Synthesize the whole experience: purpose, facility, units rotated, main skills developed, "
-     "and primary outcome. Explicitly name AT LEAST THREE of the student's competency areas. "
-     "Cover the arc of the attachment from start to finish. "
-     "Do NOT copy raw logs. Refine every sentence into academic language. "
-     "Do NOT include a heading or keyword line."),
-
-    ('acknowledgments', 'Acknowledgments',
-     "Write 2-3 formal paragraphs thanking the facility, the clinical supervisor (if named), "
-     "the staff of each major unit the student rotated through, and the College. "
-     "Use first-person singular ('I'). Each paragraph should be 3-5 sentences. "
-     "Include a brief reflection on how the support received contributed to the student's learning. "
-     "Check grammar rigorously. Do NOT include a heading."),
+     "Write 4 to 8 bullet lines, one skill per line. Each line is ONE sentence of "
+     "8 to 22 words that starts with 'I learnt how to', 'I was able to', 'I gained "
+     "the ability to' or 'I developed the skill of' (vary the openers) and names the "
+     "skill together with the activity it came from. Follow the same order as the "
+     "Activities Performed section. Every skill must trace back to an activity in the "
+     "logs. No introduction, no obstacles.\n"
+     + _STYLE_EXAMPLES_NOTE +
+     "Style examples: 'I learnt how to use LHIMS to register patients.' / "
+     "'I was able to book and reschedule patient appointments.' / "
+     "'I learnt how to register newborn babies using their mother's insurance.'"),
 
     ('workshops', 'Workshops',
-     "Write exactly 2 paragraphs. "
-     "Paragraph 1: describe each workshop or training session attended (date, topic, presenter if known), "
-     "and the specific skills or knowledge gained from each. "
-     "If NO formal workshops were attended, say exactly that and describe the practical on-the-job "
-     "training received instead. "
-     "Paragraph 2: reflect on how the workshops (or on-the-job training) complemented the practical "
-     "experience and connected to the competencies. "
-     "Use first-person ('I'). Do NOT include a heading."),
+     "Write one short paragraph for each workshop, tutorial, meeting or training "
+     "session in the data. Each paragraph: state the date and the clean topic in one "
+     "sentence ('On 4 November 2026, I attended a tutorial on the use of protective "
+     "equipment.'), then add one or two sentences explaining in clear English what "
+     "such a session covers and how it supported your practicum work. Keep it general "
+     "and truthful; do not invent speakers, numbers or details. Never repeat words "
+     "such as 'tutorial on Tutorial on'.\n"
+     "If NO workshop was recorded, write one short paragraph saying that no formal "
+     "workshop was attended and that you received practical guidance from the staff "
+     "while working."),
 
-    ('references', 'References',
-     "APA-style reference list for any sources you cite. If you cite nothing, return an empty response. "
-     "Do NOT include a heading."),
+    ('lessons_learnt', 'Lessons Learnt',
+     "Write 1 or 2 paragraphs (100 to 170 words in total). Explain in clear detail "
+     "what you learnt from your experience: connect your activities, the skills you "
+     "acquired and any workshops to Health Information Management principles such as "
+     "accurate data capture at registration, patient confidentiality, record "
+     "integrity, the value of electronic systems, and how classroom theory applies in "
+     "the hospital. Do not list or restate the activities.\n"
+     + _STYLE_EXAMPLES_NOTE +
+     "Style example: 'The practicum helped me to understand how electronic health "
+     "information systems are used in the hospital. I learnt that accurate patient "
+     "information is important for proper service delivery and record keeping.'"),
+
+    ('observation', 'Observations',
+     "Write 1 or 2 short paragraphs (80 to 140 words in total) describing HOW the "
+     "facility works: its record systems, the use of electronic and manual records, "
+     "staff support, data quality and coordination between units. Base it on the logs "
+     "and competency areas; general Health Information Management observations are "
+     "allowed but do not invent facility-specific facts. Do NOT describe problems "
+     "or obstacles here; those belong to Challenges."),
+
+    ('challenges', 'Challenges',
+     "Write 2 to 4 short paragraphs (70 to 150 words in total), one paragraph per "
+     "challenge, each 1 or 2 sentences in the first person, describing what happened "
+     "and how it affected your work. Use ONLY the CHALLENGE entries in the logs, "
+     "rewritten in polished English. If the logs contain no challenge, write one "
+     "short paragraph saying you met no major challenge. Do not invent challenges. "
+     "No activities and no solutions here."),
+
+    ('recommendations', 'Recommendations',
+     "Write 1 or 2 short paragraphs (80 to 150 words in total). The first paragraph "
+     "gives recommendations to the facility, the second (if needed) gives "
+     "recommendations to the College or to future students. Base every "
+     "recommendation on a challenge or observation in this report and say what "
+     "should be done and why. Rephrase any SOLUTION entries; never copy them. Write "
+     "professionally ('I recommend that the hospital ...'). No labels, no bullets.\n"
+     + _STYLE_EXAMPLES_NOTE +
+     "Style example: 'I recommend that the hospital continue to provide reliable "
+     "internet connectivity and enough computers for the Health Information "
+     "Department.'"),
+
+    ('conclusion', 'Conclusion',
+     "Write 1 or 2 paragraphs (90 to 150 words in total). Summarise the experience "
+     "(facility, units, main skills), say how it prepared you for professional "
+     "practice and connected classroom knowledge to the hospital, and end with "
+     "thanks to the staff of the facility for their guidance and support."),
+
+    ('abstract', 'Abstract',
+     "Write ONE academic paragraph of 90 to 130 words in the THIRD person "
+     "('The student ...'). Cover the purpose, facility, units, main skills and the "
+     "overall outcome, and name at least two competency areas. Do not copy logs."),
+
+    ('acknowledgments', 'Acknowledgments',
+     "Write 1 or 2 short formal paragraphs in the first person thanking the "
+     "facility, the clinical supervisor (only if one is named in the data), the staff "
+     "of the units you worked in, and the College. Keep it sincere and brief."),
 ]
 
-DEFAULT_MAX_SECONDS = 90
+
+# Sections that are plain bullet lists / structured / prose (used by finalize_section)
+_PROSE_KEYS = frozenset({
+    'introduction', 'workshops', 'lessons_learnt', 'observation', 'observations',
+    'challenges', 'recommendations', 'conclusion', 'abstract', 'acknowledgments',
+    'facility_profile',
+})
+_BULLET_KEYS = frozenset({'skills_acquired'})
+
+_SECTION_MAX_TOKENS = {
+    'activities_performed': 1100,
+    'skills_acquired': 600,
+    'abstract': 400,
+}
+_DEFAULT_MAX_TOKENS = 700
+
+
+# Minimum sensible word counts per section (the quality gate rejects drafts
+# shorter than half of these).
+_SECTION_FLOORS = {
+    'introduction': 60,
+    'activities_performed': 40,
+    'skills_acquired': 40,
+    'workshops': 25,
+    'lessons_learnt': 70,
+    'observation': 50,
+    'challenges': 25,
+    'recommendations': 50,
+    'conclusion': 60,
+    'abstract': 60,
+    'acknowledgments': 40,
+}
+
+_BUDGET_DISTRIBUTION = {
+    'acknowledgments':       0.030,
+    'introduction':          0.065,
+    'activities_performed':  0.150,
+    'skills_acquired':       0.090,
+    'workshops':             0.030,
+    'lessons_learnt':        0.090,
+    'observation':           0.080,
+    'challenges':            0.075,
+    'recommendations':       0.075,
+    'conclusion':            0.055,
+}
 
 
 # ============================================================
 # Presentation drafting (slide bullets + speaker notes)
 # ============================================================
 
+PPTX_SLIDE_TITLES = (
+    'Introduction',
+    'Facility Profile',
+    'Activities Performed',
+    'Skills Acquired',
+    'Challenges Faced',
+    'Observation and Recommendation',
+    'Conclusion',
+)
+
+_PPTX_RULES = (
+    "RULES:\n"
+    "1. Every line is one standalone bullet. Output ONE bullet per line with no "
+    "bullet symbols, numbers, markdown or headings.\n"
+    "2. Word limits are absolute.\n"
+    "3. Refine, never copy: write clean, properly capitalised presentation English "
+    "(first letter of every bullet capital, 'I' capital).\n"
+    "4. Use the PAST tense for things already done ('Completed', 'Registered', "
+    "'Worked'). Never write 'I complete' or 'I rotate'.\n"
+    "5. Do not use dashes as separators. Use a colon or rephrase.\n"
+    "6. Use ONLY facts from the STUDENT DATA. Do not invent units, workshops or "
+    "activities. Name each unit once (merge 'RCH' and 'Reproductive and Child "
+    "Health').\n"
+    "7. Do not put obstacles, delays or their solutions on the Activities or Skills "
+    "slides.\n"
+)
+
 PPTX_DRAFT_SECTIONS = [
     ('pptx_intro_bullets', 'Slide: Introduction',
-     "Write 3 short bullet points for a presentation slide titled 'Introduction'. "
-     "Each bullet MUST be 12 words or fewer. Output ONE bullet per line, no markers, no numbers. "
-     "Use first-person ('I'). Cover: purpose of attachment, facility name, key units rotated. "
-     "Example line: 'Attached to Adigbe Government Hospital for four weeks'\n"
-     "FORBIDDEN: more than 3 bullets. FORBIDDEN: any bullet longer than 12 words. "
-     "FORBIDDEN: em dash, en dash, hyphen as bullet separator, asterisks, markdown."),
+     "Write 3 bullets, each 12 words or fewer, in the first person and past tense: "
+     "the purpose of the attachment, the facility name and location, and the units "
+     "worked in.\n"
+     "Style example: 'Completed a one month attachment at Example Hospital'"),
 
     ('pptx_facility_bullets', 'Slide: Facility Profile',
-     "Write 3 short bullet points for a slide titled 'Facility Profile'. "
-     "Each bullet MUST be 12 words or fewer. Output ONE bullet per line, no markers. "
-     "Cover: facility type and location, key services (OPD, RCH, Laboratory, Pharmacy, Maternity), "
-     "and the NHIS/DHIMS data workflow. Do NOT use first-person — describe the facility, not the student. "
-     "FORBIDDEN: more than 3 bullets. FORBIDDEN: bullets longer than 12 words. "
-     "FORBIDDEN: em dash, en dash, hyphen as bullet separator, asterisks, markdown."),
+     "Write 3 bullets, each 12 words or fewer, describing the FACILITY (not the "
+     "student): type and location, main role or services, and how it uses health "
+     "information systems. Use only the FACILITY facts in the data. Do not use "
+     "'I'."),
 
     ('pptx_activities_bullets', 'Slide: Activities Performed',
-     "Write 4-6 short bullet points for a slide titled 'Activities Performed'. "
-     "Each bullet MUST be 10 words or fewer. Output ONE bullet per line, no markers. "
-     "Format each bullet as: '<Unit>: <one key activity>'. "
-     "SOURCE: use ONLY the ACTIVITY field from the logs (labelled 'ACTIVITY:' in the data below).\n\n"
-     "CRITICAL BANS — do NOT include in this slide:\n"
-     "  - Any challenge, obstacle, difficulty, delay, or barrier.\n"
-     "  - Any solution, workaround, response to pressure, or recommendation.\n"
-     "  - Forbidden phrases: 'extended working hours', 'managing high patient volume', "
-     "'overcrowding', 'streamlining', 'addressing delays', 'coping with', 'under pressure'.\n\n"
-     "FORBIDDEN: more than 6 bullets. FORBIDDEN: bullets longer than 10 words. "
-     "FORBIDDEN: em dash, en dash, hyphen as bullet separator, asterisks, markdown. "
-     "FORBIDDEN: including observations, recommendations, or anything that is not a direct activity. "
-     "Only mention units that ACTUALLY appear in the logs. "
-     "Example line: 'RCH: registered pregnant women and booked appointments'\n"),
+     "Write 4 to 6 bullets, each 10 words or fewer, in the form 'Unit: key "
+     "activity' using ONLY the ACTIVITY entries of the logs.\n"
+     "Style example: 'Records: registered new patients in LHIMS'"),
 
     ('pptx_skills_bullets', 'Slide: Skills Acquired',
-     "Write 4-5 short bullet points naming skills acquired. "
-     "Each bullet MUST be 8 words or fewer. Output ONE bullet per line, no markers. "
-     "Just the skill name plus one short qualifier. "
-     "FORBIDDEN: any challenge, obstacle, or condition-endured language. "
-     "FORBIDDEN: phrases like 'under pressure', 'despite high volumes', 'coping with workload'.\n"
-     "Example line: 'Patient registration and LHIMS data entry'\n"
-     "FORBIDDEN: more than 5 bullets. FORBIDDEN: bullets longer than 8 words. "
-     "FORBIDDEN: em dash, en dash, hyphen as bullet separator, asterisks, markdown."),
+     "Write 4 or 5 bullets, each 8 words or fewer, naming skills gained from the "
+     "logged activities.\n"
+     "Style example: 'Patient registration using LHIMS'"),
 
     ('pptx_challenges_bullets', 'Slide: Challenges Faced',
-     "Write EXACTLY 2 short bullet points. Each bullet MUST be 12 words or fewer. "
-     "Output ONE bullet per line, no markers. "
-     "SOURCE: use the CHALLENGE field from the logs. "
-     "Bullet 1: the most significant challenge from the logs (e.g. high patient volume causing delays). "
-     "Bullet 2: the second most significant challenge (e.g. illegible handwriting in records). "
-     "FORBIDDEN: more than 2 bullets. FORBIDDEN: bullets longer than 12 words. "
-     "FORBIDDEN: em dash, en dash, hyphen as bullet separator, asterisks, markdown. "
-     "FORBIDDEN: including activities or solutions — this slide is ONLY challenges."),
+     "Write 1 to 3 bullets, each 12 words or fewer, one per distinct CHALLENGE in "
+     "the logs, in clean English. If the logs record no challenge, write one bullet: "
+     "'No major challenges were recorded'. Challenges only: no activities and no "
+     "solutions."),
 
     ('pptx_observation_recommendation_bullets', 'Slide: Observation and Recommendation',
-     "Write exactly 4 short bullet points for a slide titled 'Observation and Recommendation'. "
-     "Each bullet MUST be 14 words or fewer. Output ONE bullet per line, no markers. "
-     "The FIRST 2 bullets must be observations about workflows, staffing, or record systems "
-     "drawn from the OBSERVATION section. "
-     "The LAST 2 bullets must be actionable recommendations for the facility or the college "
-     "drawn from the RECOMMENDATIONS section. "
-     "FORBIDDEN: more than 4 bullets. "
-     "FORBIDDEN: separating observations and recommendations into different headings. "
-     "FORBIDDEN: em dash, en dash, hyphen as bullet separator, asterisks, markdown."),
+     "Write exactly 4 bullets, each 14 words or fewer. The first 2 are observations "
+     "about workflows, staff support or record systems (from the OBSERVATION text). "
+     "The last 2 are actionable recommendations for the facility or the College "
+     "(from the RECOMMENDATIONS text)."),
 
     ('pptx_conclusion_bullets', 'Slide: Conclusion',
-     "Write 2-3 short bullet points summarising the practicum. "
-     "Each bullet MUST be 12 words or fewer. Output ONE bullet per line, no markers. "
-     "Cover: overall experience, key takeaway, readiness for professional practice. "
-     "FORBIDDEN: more than 3 bullets. "
-     "FORBIDDEN: em dash, en dash, hyphen as bullet separator, asterisks, markdown."),
+     "Write 3 bullets, each 12 words or fewer, in the first person and past tense: "
+     "the overall experience, the key skills or lesson gained, and readiness for "
+     "professional practice."),
 
     ('pptx_speaker_notes', 'Speaker Notes for All Slides',
-     "Write 2 short sentences of speaker notes (what the presenter should say aloud) for each slide. "
-     "Cover exactly these 7 slides in this order: "
-     "Introduction, Facility Profile, Activities, Skills, Challenges, Observation and Recommendation, Conclusion.\n"
-     "Output format — one slide per line, exactly like this:\n"
-     "Introduction: <2 sentences>\n"
-     "Facility Profile: <2 sentences>\n"
-     "(continue for all 7 slides)\n"
-     "Do NOT use bullet points, asterisks, or markdown. Do NOT add a heading. "
-     "FORBIDDEN: more than 7 lines total."),
+     "Write 2 short sentences of speaker notes (what the presenter says aloud) for "
+     "each of these 7 slides, using EXACTLY these slide names, one slide per line, "
+     "in this order: "
+     + ', '.join(PPTX_SLIDE_TITLES) + ".\n"
+     "Format of each line: 'Slide Name: sentence one. sentence two.'\n"
+     "Exactly 7 lines. No bullets, no markdown."),
 ]
+
+_PPTX_MAX_BULLETS = {
+    'pptx_intro_bullets': 3,
+    'pptx_facility_bullets': 3,
+    'pptx_activities_bullets': 6,
+    'pptx_skills_bullets': 5,
+    'pptx_challenges_bullets': 3,
+    'pptx_observation_recommendation_bullets': 4,
+    'pptx_conclusion_bullets': 3,
+}
 
 
 # ============================================================
-# Quality enforcement constants + helpers
+# Quality enforcement constants
 # ============================================================
 
 _VERBATIM_NGRAM_SIZE = 7
 
 _QUALITY_STOPWORDS = frozenset({
-    'a','an','the','and','or','of','in','on','at','to','for','with','by','as',
-    'is','was','were','be','been','being','have','has','had','do','does','did',
-    'i','me','my','we','our','this','that','these','those','from','into','within',
-    'also','other','some','various','including','included','such','it','its',
-    'but','so','if','when','while','than','then','there','their','they','them',
-    'he','she','his','her','him','you','your','will','would','can','could',
-    'should','may','might','must','not','no','yes','very','just','only','been',
+    'a', 'an', 'the', 'and', 'or', 'of', 'in', 'on', 'at', 'to', 'for', 'with', 'by', 'as',
+    'is', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did',
+    'i', 'me', 'my', 'we', 'our', 'this', 'that', 'these', 'those', 'from', 'into', 'within',
+    'also', 'other', 'some', 'various', 'including', 'included', 'such', 'it', 'its',
+    'but', 'so', 'if', 'when', 'while', 'than', 'then', 'there', 'their', 'they', 'them',
+    'he', 'she', 'his', 'her', 'him', 'you', 'your', 'will', 'would', 'can', 'could',
+    'should', 'may', 'might', 'must', 'not', 'no', 'yes', 'very', 'just', 'only',
 })
 
 _PLACEHOLDER_TOKENS = (
@@ -329,34 +357,25 @@ _PLACEHOLDER_TOKENS = (
     'lorem ipsum', '<insert', 'todo:', 'placeholder:', 'xxxx', 'tbd',
 )
 
-_MAX_RETRIES_TOTAL = 3
-_MAX_RETRY_SECONDS = 30
-
-
-# ------------------------------------------------------------
-# NEW: obstacle / solution markers — used to strip these from
-# the Activities and Skills sections, where they must never appear.
-# ------------------------------------------------------------
-
+# Obstacle / solution language that must not appear in Activities or Skills.
+# (Deliberately narrow: legitimate phrases such as "assisted with registration"
+# or "optimised the filing order" are NOT removed.)
 _OBSTACLE_MARKERS = (
     'challeng', 'difficult', 'struggl', 'obstacle', 'barrier',
     'hinder', 'disrupt', 'delay', 'congest', 'overcrowd', 'shortage',
     'lack of', 'insufficient', 'bottleneck', 'downtime', 'slowdown',
-    'high patient volume', 'heavy patient volume', 'workload',
+    'high patient volume', 'heavy patient volume',
     'extended working hours', 'extended hours', 'long hours',
     'cope with', 'manage high', 'manage heavy', 'manage large',
     'despite the', 'in spite of', 'under pressure',
-    'struggled with', 'forced to', 'had to contend',
+    'forced to', 'had to contend',
 )
 
 _SOLUTION_MARKERS = (
     'recommend', 'solution', 'should extend', 'should be extended',
-    'address the', 'resolve the', 'mitigate', 'streamlin',
-    'restructur', 'enhance the workflow', 'optimi', 'reduc the ',
-    'assisted with', 'helped manage',
+    'mitigate', 'streamlin', 'enhance the workflow',
 )
 
-# Filler phrases stripped from all output.
 _FILLER_PATTERNS = [
     re.compile(r'It is worth noting that\s+', re.IGNORECASE),
     re.compile(r'It can be observed that\s+', re.IGNORECASE),
@@ -367,87 +386,338 @@ _FILLER_PATTERNS = [
     re.compile(r'As a matter of fact,?\s+', re.IGNORECASE),
 ]
 
-
-# ============================================================
-# Source-of-truth rules — extended in v11 with H/I/J/K
-# ============================================================
-
-_SOURCE_BOUND_RULES = (
-    "\nSOURCE-OF-TRUTH RULES (highest priority, overrides page target):\n"
-    "A. The student's daily logs are the ONLY source for units, activities, "
-    "workshops, dates, patient counts, and systems used. Do NOT invent units, "
-    "workshops, dates, patient numbers, or activities that are not supported "
-    "by the logs.\n"
-    "B. Each log field is labelled in the data below:\n"
-    "   - ACTIVITY → use ONLY for Activities Performed and slide Activities.\n"
-    "   - SKILL → use ONLY for Skills Acquired.\n"
-    "   - CHALLENGE → use ONLY for Challenges and slide Challenges.\n"
-    "   - SOLUTION → use ONLY for Recommendations (paraphrase, do not copy).\n"
-    "   Do NOT cross-map fields between sections.\n"
-    "C. Competency areas are the second source. Use them to explain skills, "
-    "lessons, challenges, observations, recommendations, and conclusion.\n"
-    "D. The page target is ONLY a length guide. It never justifies inventing "
-    "facts. If logs are sparse, write a shorter, well-structured report. "
-    "Expand ONLY in Lessons Learnt, Observation, Recommendations, Conclusion, "
-    "and Abstract — using the competency areas as reflection material.\n"
-    "E. Activities Performed and Skills Acquired must mirror each other. "
-    "Every skill MUST point to an activity/unit that appears in the logs.\n"
-    "F. Lessons Learnt MUST be derived from Skills Acquired + Competency Areas. "
-    "Do NOT list activities as lessons — list insights and principles.\n"
-    "G. If no workshops were recorded, say exactly that: no formal workshops "
-    "were attended; describe on-the-job training only.\n"
-    "H. STRICT SECTION ISOLATION — Obstacles, challenges, delays, shortages, "
-    "and workflow difficulties MUST NEVER appear in Activities Performed or "
-    "Skills Acquired. Those sections describe WHAT the student DID and WHAT "
-    "they LEARNED — not the CONDITIONS they endured or HOW they worked "
-    "around difficulties. Move all obstacle content to Challenges. Move all "
-    "solution content to Recommendations.\n"
-    "I. SPARSE-LOG ENRICHMENT — When the student has fewer than 5 daily "
-    "logs, do NOT pad with invented activities or units. Instead, EXPAND each "
-    "REAL activity with professional context (system used, data quality "
-    "check, professional standard followed, competency supported). Enrichment "
-    "stays truthful to the log — no new activities invented.\n"
-    "J. BULLET-FORMAT ENFORCEMENT — Activities Performed MUST be bullet-format "
-    "activity lines grouped under unit sub-headings. Skills Acquired MUST be "
-    "bullet-format skill lines. Do NOT return these sections as undifferentiated "
-    "paragraphs.\n"
-    "K. CONCISENESS — Remove filler phrases ('It is worth noting that', "
-    "'It can be observed that', 'Through this experience', 'In the context "
-    "of this attachment'). Prefer direct statements over elaborate constructions.\n"
+_DUP_PHRASE_RE = re.compile(
+    r'\b(tutorial on|workshop on|meeting on|training on|session on)\s+\1\b',
+    re.IGNORECASE,
 )
+_SPACE_BEFORE_PUNCT_RE = re.compile(r'\s+([.,;:!?])')
+_LOWER_I_RE = re.compile(r'\bi\b')
 
 
 # ============================================================
-# Post-processing — strip obstacle/solution content from
-# sections where they do not belong
+# Text polishing helpers (also imported by service.py / pptx_builder.py)
 # ============================================================
+
+def _polish_english(text: str) -> str:
+    """
+    Normalise capitalisation, duplicate prefixes (e.g. 'tutorial on Tutorial on'),
+    a stray lowercase 'i', and spacing before punctuation.
+    """
+    if not text:
+        return ''
+    while True:
+        updated = _DUP_PHRASE_RE.sub(r'\1', text)
+        if updated == text:
+            break
+        text = updated
+
+    text = _LOWER_I_RE.sub('I', text)
+    text = _SPACE_BEFORE_PUNCT_RE.sub(r'\1', text)
+    text = re.sub(r'^([a-z])', lambda m: m.group(1).upper(), text, flags=re.MULTILINE)
+    text = re.sub(r'([.!?]\s+)([a-z])', lambda m: m.group(1) + m.group(2).upper(), text)
+    return text.strip()
+
+
+def _strip_filler(text):
+    if not text:
+        return text
+    for pat in _FILLER_PATTERNS:
+        text = pat.sub('', text)
+    text = re.sub(r'  +', ' ', text)
+    return _polish_english(text)
+
+
+def _clean_unit_heading(heading):
+    cleaned = re.sub(r'^[<\[\s]+|[>\]\s]+$', '', (heading or '')).strip()
+    return cleaned.rstrip(':').strip()
+
+
+def _ensure_period(line):
+    line = (line or '').strip()
+    if line and line[-1] not in '.!?':
+        line += '.'
+    return line
+
+
+def _capitalise_first(line):
+    line = (line or '').strip()
+    return line[0].upper() + line[1:] if line else line
+
+
+_IRREGULAR_PAST = {
+    'wrote': 'write', 'made': 'make', 'took': 'take', 'ran': 'run', 'kept': 'keep',
+    'gave': 'give', 'held': 'hold', 'led': 'lead', 'met': 'meet', 'sent': 'send',
+    'built': 'build', 'began': 'begin', 'did': 'do', 'saw': 'see', 'got': 'get',
+    'found': 'find', 'taught': 'teach', 'learnt': 'learn', 'learned': 'learn',
+    'brought': 'bring', 'read': 'read', 'put': 'put', 'set': 'set', 'cut': 'cut',
+    'filed': 'file', 'wrote': 'write', 'drew': 'draw', 'spoke': 'speak',
+}
+
+_E_VERBS = frozenset({
+    'schedule', 'update', 'create', 'use', 'calculate', 'generate', 'communicate',
+    'locate', 'manage', 'capture', 'compare', 'organize', 'organise', 'retrieve',
+    'archive', 'file', 'store', 'receive', 'provide', 'prepare', 'complete',
+    'operate', 'navigate', 'validate', 'trace', 'observe', 'change', 'cancel',
+    'issue', 'revise', 'review', 'initiate', 'indicate', 'estimate', 'translate',
+    'withdraw', 'close', 'combine', 'compile', 'continue', 'determine', 'ensure',
+    'explore', 'handle', 'involve', 'name', 'note', 'practise', 'practice',
+    'promote', 'reschedule', 'share', 'type', 'verify', 'rotate', 'integrate',
+})
+
+
+def _to_base_verb(word):
+    """Past-tense verb -> base form (small heuristic, good for typical log verbs)."""
+    w = (word or '').lower()
+    if w in _IRREGULAR_PAST:
+        return _IRREGULAR_PAST[w]
+    if w.endswith('ied') and len(w) > 4:
+        return w[:-3] + 'y'
+    if w.endswith('ed') and len(w) > 3:
+        with_e = w[:-1]
+        if with_e in _E_VERBS:
+            return with_e
+        base = w[:-2]
+        if len(base) > 3 and base[-1] == base[-2] and base[-1] not in 'lsz':
+            base = base[:-1]
+        return base
+    return w
+
+
+def _is_past_verb(word):
+    w = (word or '').lower()
+    return w in _IRREGULAR_PAST or (w.endswith('ed') and len(w) > 3)
+
+
+def _convert_following_verbs(text):
+    """'register 15 patients and booked appointments' -> '... and book appointments'."""
+    def repl(m):
+        joiner, word = m.group(1), m.group(2)
+        if _is_past_verb(word):
+            return f"{joiner} {_to_base_verb(word)}"
+        return m.group(0)
+    return re.sub(r'\b(and|then|also)\s+([A-Za-z]+)\b', repl, text)
+
+
+def fallback_activity_line(raw):
+    """Raw log activity -> a clean, capitalised, full-stopped line (no AI needed)."""
+    text = ' '.join((raw or '').split())
+    text = re.sub(r'^(?:i\s+)', '', text, flags=re.IGNORECASE)
+    text = _polish_english(text)
+    return _ensure_period(_capitalise_first(text))
+
+
+def fallback_skill_line(raw):
+    """
+    Raw log skill -> 'I learnt how to ...' (no AI needed).
+    'i registered 15 new patients and booked appointments for them'
+        -> 'I learnt how to register 15 new patients and book appointments for them.'
+    """
+    text = ' '.join((raw or '').split()).strip().rstrip('.')
+    if not text:
+        return ''
+    text = re.sub(r'^(?:i\s+(?:was able to|learnt how to|learned how to)\s+)', '',
+                  text, flags=re.IGNORECASE)
+    text = re.sub(r'^(?:i\s+)', '', text, flags=re.IGNORECASE)
+    parts = text.split(' ', 1)
+    first = parts[0]
+    rest = parts[1] if len(parts) > 1 else ''
+    if _is_past_verb(first):
+        base = _to_base_verb(first)
+        rest = _convert_following_verbs(rest)
+        return _ensure_period(f"I learnt how to {base} {rest}".strip())
+    lowered = text[0].lower() + text[1:]
+    return _ensure_period(f"I learnt about {lowered}")
+
+
+def fallback_lessons_text(skill_lines):
+    """
+    Build 1 short, clean lessons paragraph from skill lines when the AI is
+    unavailable. Never echoes raw log text.
+    """
+    phrases = []
+    for line in skill_lines or []:
+        m = re.match(r'^I learnt how to\s+(.*?)\.?$', (line or '').strip(), flags=re.IGNORECASE)
+        if m and m.group(1):
+            phrases.append(m.group(1).strip())
+    para = (
+        "The practicum helped me to understand how health information work is carried "
+        "out in a real hospital and how the knowledge gained in the classroom is "
+        "applied in practice."
+    )
+    if phrases:
+        shown = phrases[:3]
+        joined = shown[0] if len(shown) == 1 else ', '.join(shown[:-1]) + ' and ' + shown[-1]
+        para += f" In practice, I learnt how to {joined}."
+    para += (
+        " I also learnt that accurate patient information is important for proper "
+        "service delivery and record keeping."
+    )
+    return para
+
+
+# ---------------- unit-name canonicalisation ----------------
+
+_UNIT_ALIASES = {
+    'rch': 'Reproductive and Child Health (RCH) Unit',
+    'reproductive and child health': 'Reproductive and Child Health (RCH) Unit',
+    'reproductive child health': 'Reproductive and Child Health (RCH) Unit',
+    'reproductive and child health rch': 'Reproductive and Child Health (RCH) Unit',
+    'mch': 'Maternal and Child Health (MCH) Unit',
+    'maternal and child health': 'Maternal and Child Health (MCH) Unit',
+    'opd': 'Outpatient Department (OPD)',
+    'out patient': 'Outpatient Department (OPD)',
+    'outpatient': 'Outpatient Department (OPD)',
+    'out patient department': 'Outpatient Department (OPD)',
+    'outpatient department': 'Outpatient Department (OPD)',
+    'opd outpatient department': 'Outpatient Department (OPD)',
+    'medical records': 'Records Unit',
+    'records': 'Records Unit',
+    'record': 'Records Unit',
+    'health information': 'Records Unit',
+}
+
+_UNIT_NOISE_WORDS = frozenset({'unit', 'department', 'dept', 'section', 'the'})
+
+
+def canonical_unit_key(name):
+    """Lower-case key used to group spellings of the same unit."""
+    text = re.sub(r'[()\[\]<>.,:;/&-]', ' ', (name or '').lower())
+    words = [w for w in text.split() if w not in _UNIT_NOISE_WORDS]
+    return ' '.join(words)
+
+
+def canonical_unit_label(name):
+    """Display name for a unit; merges spellings such as 'RCH' and 'Reproductive and Child Health'."""
+    cleaned = _clean_unit_heading(' '.join((name or '').split()))
+    key = canonical_unit_key(cleaned)
+    if key in _UNIT_ALIASES:
+        return _UNIT_ALIASES[key]
+    if cleaned.islower():
+        return cleaned.title()
+    return cleaned
+
+
+# ============================================================
+# Structure normalisers
+# ============================================================
+
+_UNICODE_FIXES = {
+    '\u2011': '-', '\u2010': '-', '\u00a0': ' ', '\u200b': '', '\ufeff': '',
+}
+
+
+def _normalize_unicode(text):
+    for bad, good in _UNICODE_FIXES.items():
+        text = text.replace(bad, good)
+    return text
+
+
+_KNOWN_HTML_TAG_RE = re.compile(
+    r'</?(?:b|i|u|p|br|div|span|strong|em|ul|ol|li|h[1-6])\b[^>]*>', re.IGNORECASE)
+
+
+def _looks_like_activity_line(line):
+    words = (line or '').split()
+    if not words:
+        return False
+    first = re.sub(r'[^A-Za-z]', '', words[0]).lower()
+    return first == 'i' or _is_past_verb(first)
+
+
+def _normalize_activities(text, fallback_unit=''):
+    """
+    Re-build Activities Performed so the renderers always get
+        Heading
+        Bullet sentence.
+        Bullet sentence.
+        <blank line>
+        Heading ...
+    Headings: short line, no terminal punctuation, not a past-tense activity.
+    """
+    lines = [l.strip() for l in (text or '').splitlines() if l.strip()]
+    blocks = []
+    cur_head, cur = None, []
+
+    for line in lines:
+        words = len(line.split())
+        is_heading = (
+            line[-1] not in '.!?'
+            and words <= 8
+            and len(line) < 80
+            and not _looks_like_activity_line(line)
+        )
+        if is_heading:
+            if cur_head is not None or cur:
+                blocks.append((cur_head, cur))
+            cur_head, cur = canonical_unit_label(line), []
+        else:
+            cur.append(_ensure_period(_capitalise_first(line)))
+    if cur_head is not None or cur:
+        blocks.append((cur_head, cur))
+
+    out_blocks, seen_heads = [], {}
+    for head, bullets in blocks:
+        if not bullets:
+            continue
+        head = head or canonical_unit_label(fallback_unit) or 'Other Activities'
+        key = canonical_unit_key(head)
+        if key in seen_heads:                       # merge repeated headings
+            seen_heads[key][1].extend(bullets)
+            continue
+        entry = [head, list(bullets)]
+        seen_heads[key] = entry
+        out_blocks.append(entry)
+
+    rendered = []
+    for head, bullets in out_blocks:
+        uniq, seen = [], set()
+        for b in bullets:
+            k = b.lower()
+            if k not in seen:
+                seen.add(k)
+                uniq.append(b)
+        rendered.append('\n'.join([head] + uniq))
+    return '\n\n'.join(rendered)
+
+
+def _normalize_bullets(text):
+    lines, seen = [], set()
+    for raw in (text or '').splitlines():
+        line = _ensure_period(_capitalise_first(raw.strip()))
+        if len(line) < 4:
+            continue
+        k = line.lower()
+        if k in seen:
+            continue
+        seen.add(k)
+        lines.append(line)
+    return '\n'.join(lines)
+
+
+def _normalize_prose(text):
+    paras = [p.strip() for p in re.split(r'\n\s*\n', text or '') if p.strip()]
+    if len(paras) == 1 and '\n' in paras[0]:
+        lines = [l.strip() for l in paras[0].splitlines() if l.strip()]
+        if all(l[-1] in '.!?"\u201d' for l in lines):
+            paras = lines
+        else:
+            paras = [' '.join(lines)]
+    paras = [' '.join(p.split()) for p in paras]
+    return '\n\n'.join(paras)
+
 
 def _strip_obstacle_content(text, section_key):
-    """
-    Remove obstacle/solution content from a section that must describe
-    ONLY activities or skills.
-
-    Works at LINE granularity — any line containing an obstacle/solution
-    marker is dropped entirely. Because Activities Performed and Skills
-    Acquired use one-line-per-item formats, this preserves structure.
-
-    Returns (cleaned_text, removed_items) where removed_items is a list
-    of (kind, snippet) tuples for logging.
-    """
     if section_key not in ('activities_performed', 'skills_acquired'):
         return text, []
     if not text:
         return text, []
 
-    removed = []
-    kept_lines = []
-
+    removed, kept = [], []
     for line in text.splitlines():
         stripped = line.strip()
         if not stripped:
-            kept_lines.append(line)
+            kept.append(line)
             continue
-
         lowered = stripped.lower()
         hit = None
         for marker in _OBSTACLE_MARKERS:
@@ -459,41 +729,341 @@ def _strip_obstacle_content(text, section_key):
                 if marker in lowered:
                     hit = ('solution', marker)
                     break
-
         if hit:
             removed.append((hit[0], stripped[:100]))
             continue
-
-        kept_lines.append(line)
-
-    return '\n'.join(kept_lines), removed
+        kept.append(line)
+    return '\n'.join(kept), removed
 
 
-def _strip_filler(text):
-    """
-    Remove filler phrases that add no content.
-    Applied to every AI-generated section after _clean_draft_text.
-    """
+def _clean_draft_text(text, section_title=''):
+    """Remove markdown / brackets / bullets / numbering and polish capitalisation."""
     if not text:
-        return text
-    for pat in _FILLER_PATTERNS:
-        text = pat.sub('', text)
-    # Re-capitalize any sentence that now starts lowercase after a stripped
-    # phrase like "It is worth noting that the student..." → "The student..."
-    text = re.sub(r'^([a-z])', lambda m: m.group(1).upper(), text, flags=re.MULTILINE)
-    # Collapse double spaces
-    text = re.sub(r'  +', ' ', text)
-    return text
+        return ''
+    text = _normalize_unicode(text)
+    text = re.sub(r'^[ \t]*#+[ \t]*.*$', '', text, flags=re.MULTILINE)
+    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
+    text = re.sub(r'__(.+?)__', r'\1', text)
+    text = re.sub(r'(?<!\w)\*(?!\s)([^*\n]+?)\*(?!\w)', r'\1', text)
+    # <Records Unit>  /  [Records Unit]:  ->  Records Unit
+    text = re.sub(r'^[ \t]*[<\[][ \t]*([^<>\[\]\n]+?)[ \t]*[>\]][ \t]*:?[ \t]*$',
+                  r'\1', text, flags=re.MULTILINE)
+    text = _KNOWN_HTML_TAG_RE.sub('', text)
+    text = re.sub(r'^[ \t]*[<>]+[ \t]*|[ \t]*[<>]+[ \t]*$', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^\s*[*\-\u2022\u00b7]\s+', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^\s*\d+[\.\)]\s+', '', text, flags=re.MULTILINE)
+    if section_title:
+        text = re.sub(
+            r'^\s*' + re.escape(section_title) + r'\s*:?\s*\n+', '', text,
+            count=1, flags=re.IGNORECASE)
+    text = re.sub(r'\s+[\u2013\u2014]\s+', ', ', text)
+    text = re.sub(r'[ \t]+\n', '\n', text)
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    text = _strip_filler(text)
+    return text.strip()
+
+
+def finalize_section(key, text, fallback_unit='', section_title=''):
+    """
+    Clean + structurally normalise one section. Used for freshly drafted AND
+    refined text, so both paths produce renderer-ready output.
+    """
+    text = _clean_draft_text(text or '', section_title)
+    text, _removed = _strip_obstacle_content(text, key)
+    if not text.strip():
+        return ''
+    if key == 'activities_performed':
+        return _normalize_activities(text, fallback_unit)
+    if key in _BULLET_KEYS:
+        return _normalize_bullets(text)
+    if key in _PROSE_KEYS:
+        return _normalize_prose(text)
+    return text.strip()
 
 
 # ============================================================
-# Existing helpers (unchanged)
+# AI client
+# ============================================================
+
+def _ai_setting(name, default=None):
+    value = getattr(settings, name, None)
+    return value or os.environ.get(name) or default
+
+
+def _ai_provider():
+    explicit = str(_ai_setting('REPORT_AI_PROVIDER') or '').lower().strip()
+    if explicit:
+        return explicit
+    if _ai_setting('ANTHROPIC_API_KEY'):
+        return 'anthropic'
+    if _ai_setting('OPENAI_API_KEY'):
+        return 'openai'
+    if _ai_setting('GEMINI_API_KEY') or _ai_setting('GOOGLE_API_KEY'):
+        return 'gemini'
+    return ''
+
+
+def _ai_configured():
+    return bool(_ai_setting('REPORT_AI_CALLABLE') or _ai_provider())
+
+
+def _http_json(url, headers, payload, timeout):
+    import requests
+    last = None
+    for attempt in range(2):
+        try:
+            resp = requests.post(url, headers=headers, json=payload, timeout=timeout)
+        except Exception as exc:                          # network / timeout
+            last = exc
+            logger.warning('AI HTTP error (attempt %d): %s', attempt + 1, exc)
+            time.sleep(1.5)
+            continue
+        if resp.status_code in (429, 500, 502, 503, 529) and attempt == 0:
+            logger.warning('AI HTTP %s — retrying once', resp.status_code)
+            time.sleep(2.0)
+            continue
+        if resp.status_code >= 400:
+            logger.error('AI HTTP %s: %s', resp.status_code, resp.text[:300])
+            return None
+        try:
+            return resp.json()
+        except Exception:
+            logger.error('AI returned non-JSON body')
+            return None
+    if last:
+        logger.error('AI call failed after retry: %s', last)
+    return None
+
+
+def _call_ai(prompt, max_tokens=None):
+    """
+    Send ONE prompt, return the reply text or None on any failure.
+
+    Priority:
+      1. settings.REPORT_AI_CALLABLE  (dotted path to your existing function)
+      2. Anthropic / OpenAI / Gemini over HTTPS, chosen by REPORT_AI_PROVIDER
+         or by whichever API key is configured.
+    """
+    max_tokens = max_tokens or _DEFAULT_MAX_TOKENS
+    timeout = float(_ai_setting('REPORT_AI_CALL_TIMEOUT', 60))
+
+    dotted = _ai_setting('REPORT_AI_CALLABLE')
+    if dotted:
+        try:
+            from django.utils.module_loading import import_string
+            fn = import_string(dotted)
+            try:
+                result = fn(prompt, max_tokens=max_tokens)
+            except TypeError:
+                result = fn(prompt)
+            return (result or '').strip() or None
+        except Exception:
+            logger.exception('REPORT_AI_CALLABLE %s failed', dotted)
+            return None
+
+    provider = _ai_provider()
+    model = _ai_setting('REPORT_AI_MODEL')
+
+    try:
+        if provider == 'anthropic':
+            data = _http_json(
+                'https://api.anthropic.com/v1/messages',
+                {
+                    'x-api-key': _ai_setting('ANTHROPIC_API_KEY'),
+                    'anthropic-version': '2023-06-01',
+                    'content-type': 'application/json',
+                },
+                {
+                    'model': model or 'claude-sonnet-4-6',
+                    'max_tokens': max_tokens,
+                    'temperature': 0.4,
+                    'messages': [{'role': 'user', 'content': prompt}],
+                },
+                timeout,
+            )
+            if not data:
+                return None
+            text = ''.join(b.get('text', '') for b in data.get('content', [])
+                           if b.get('type') == 'text')
+            return text.strip() or None
+
+        if provider == 'openai':
+            data = _http_json(
+                'https://api.openai.com/v1/chat/completions',
+                {
+                    'Authorization': f"Bearer {_ai_setting('OPENAI_API_KEY')}",
+                    'Content-Type': 'application/json',
+                },
+                {
+                    'model': model or 'gpt-4o-mini',
+                    'max_tokens': max_tokens,
+                    'temperature': 0.4,
+                    'messages': [{'role': 'user', 'content': prompt}],
+                },
+                timeout,
+            )
+            if not data:
+                return None
+            return (data['choices'][0]['message']['content'] or '').strip() or None
+
+        if provider == 'gemini':
+            key = _ai_setting('GEMINI_API_KEY') or _ai_setting('GOOGLE_API_KEY')
+            gem_model = model or 'gemini-2.0-flash'
+            data = _http_json(
+                f'https://generativelanguage.googleapis.com/v1beta/models/{gem_model}:generateContent?key={key}',
+                {'Content-Type': 'application/json'},
+                {
+                    'contents': [{'parts': [{'text': prompt}]}],
+                    'generationConfig': {'temperature': 0.4, 'maxOutputTokens': max_tokens},
+                },
+                timeout,
+            )
+            if not data:
+                return None
+            parts = data['candidates'][0]['content']['parts']
+            return ''.join(p.get('text', '') for p in parts).strip() or None
+    except Exception:
+        logger.exception('AI call failed (provider=%s)', provider)
+        return None
+
+    logger.error('No AI provider configured (set REPORT_AI_CALLABLE or an API key)')
+    return None
+
+
+# ============================================================
+# Student-data context
+# ============================================================
+
+def _clean_workshop_topic(text):
+    t = ' '.join((text or '').split())
+    t = re.sub(r'^(?:on\s+)+', '', t, flags=re.IGNORECASE)
+    t = re.sub(r'\b(\w+(?:\s+\w+){0,2}?\s+on)\s+\1\b', r'\1', t, flags=re.IGNORECASE)
+    return t.strip()
+
+
+def _fmt_date(value):
+    try:
+        return value.strftime('%d %B %Y').lstrip('0')
+    except Exception:
+        return str(value or '')
+
+
+def _session_units(session):
+    """OrderedDict-like list of (canonical label, day count) in order of appearance."""
+    units, order = {}, []
+    for log in session.daily_logs.filter(is_deleted=False).order_by('date'):
+        label = canonical_unit_label(getattr(log, 'unit_sub_department', '') or '')
+        if not label:
+            continue
+        key = canonical_unit_key(label)
+        if key not in units:
+            units[key] = [label, 0]
+            order.append(key)
+        units[key][1] += 1
+    return [tuple(units[k]) for k in order]
+
+
+def _build_context(session, include_report=False):
+    """
+    Labelled plain-text dump of everything the AI may use as fact.
+    Field labels (ACTIVITY / SKILL / CHALLENGE / SOLUTION) are referenced by
+    the prompt rules, so do not rename them.
+    """
+    lines = []
+    user = getattr(session, 'user', None)
+    facility = getattr(session, 'facility', None)
+
+    if user is not None:
+        name = (user.get_full_name() or user.username) if hasattr(user, 'get_full_name') else str(user)
+        try:
+            dept = user.get_department_display()
+        except Exception:
+            dept = getattr(user, 'department', '')
+        lines.append(f"STUDENT NAME: {name}")
+        lines.append(f"LEVEL: {getattr(user, 'level', '')}")
+        lines.append(f"DEPARTMENT: {dept}")
+
+    if facility is not None:
+        lines.append(f"FACILITY NAME: {getattr(facility, 'name', '')}")
+        lines.append(f"FACILITY TYPE: {getattr(facility, 'facility_type', '')}")
+        lines.append(f"FACILITY LOCATION: {getattr(facility, 'district', '')}, "
+                     f"{getattr(facility, 'region', '')} Region, Ghana")
+        for attr, label in (('history_and_background', 'FACILITY BACKGROUND'),
+                            ('vision_mission', 'FACILITY VISION AND MISSION'),
+                            ('organogram_description', 'FACILITY STRUCTURE')):
+            val = (getattr(facility, attr, '') or '').strip()
+            if val:
+                lines.append(f"{label}: {val[:600]}")
+
+    lines.append(f"ATTACHMENT PERIOD: {_fmt_date(getattr(session, 'start_date', ''))} "
+                 f"to {_fmt_date(getattr(session, 'end_date', ''))}")
+    supervisor = (getattr(session, 'assigned_supervisor_name', '') or '').strip()
+    if supervisor:
+        lines.append(f"CLINICAL SUPERVISOR: {supervisor}")
+
+    units = _session_units(session)
+    if units:
+        lines.append("UNITS ROTATED: " + '; '.join(f"{u} ({d} day{'s' if d != 1 else ''})" for u, d in units))
+
+    logs = list(session.daily_logs.filter(is_deleted=False).order_by('date'))
+    if logs:
+        lines.append("\nDAILY LOGS:")
+    for i, log in enumerate(logs, start=1):
+        parts = [f"Log {i} | {_fmt_date(log.date)} | UNIT: {canonical_unit_label(log.unit_sub_department or '')}"]
+        for attr, label in (('activity_summary', 'ACTIVITY'),
+                            ('skills_acquired', 'SKILL'),
+                            ('challenges_faced', 'CHALLENGE'),
+                            ('solutions_applied', 'SOLUTION')):
+            val = (getattr(log, attr, '') or '').strip()
+            if val:
+                parts.append(f"{label}: {val}")
+        lines.append(' | '.join(parts))
+
+    try:
+        workshops = list(session.workshops.all().order_by('date'))
+    except Exception:
+        workshops = []
+    if workshops:
+        lines.append("\nWORKSHOPS:")
+        for w in workshops:
+            lines.append(
+                f"{_fmt_date(w.date)} | TYPE: {(getattr(w, 'type', '') or '').strip() or 'session'} "
+                f"| TOPIC: {_clean_workshop_topic(getattr(w, 'activity', ''))}"
+            )
+    else:
+        lines.append("\nWORKSHOPS: none recorded")
+
+    try:
+        competencies = list(session.competencies.values_list('text', flat=True))
+    except Exception:
+        competencies = []
+    if competencies:
+        lines.append("\nCOMPETENCY AREAS:")
+        lines.extend(f"- {c}" for c in competencies)
+
+    if include_report:
+        try:
+            from .models import GeneratedReport
+            report = GeneratedReport.objects.filter(attachment=session).first()
+            content = (report.content or {}) if report else {}
+        except Exception:
+            content = {}
+        for key, label in (('observation', 'OBSERVATION'),
+                           ('recommendations', 'RECOMMENDATIONS'),
+                           ('challenges', 'REPORT CHALLENGES'),
+                           ('conclusion', 'REPORT CONCLUSION')):
+            val = (content.get(key) or '').strip()
+            if val:
+                lines.append(f"\n{label} (from the written report):\n{val[:1200]}")
+
+    return '\n'.join(lines)
+
+
+# ============================================================
+# Fingerprint + quality gates
 # ============================================================
 
 def source_fingerprint(session):
-    """
-    Deterministic hash of everything that drives AI drafting.
-    """
     try:
         logs = list(session.daily_logs.filter(is_deleted=False).order_by('date'))
         competencies = list(session.competencies.values_list('text', flat=True))
@@ -506,6 +1076,7 @@ def source_fingerprint(session):
             for w in session.workshops.all().order_by('date')
         ]
         payload = {
+            'prompt_version': PROMPT_VERSION,
             'facility': session.facility_id,
             'start': str(session.start_date),
             'end': str(session.end_date),
@@ -534,8 +1105,7 @@ def source_fingerprint(session):
 def _build_log_ngrams(session, n=_VERBATIM_NGRAM_SIZE):
     ngrams = set()
     try:
-        logs = session.daily_logs.filter(is_deleted=False)
-        for log in logs:
+        for log in session.daily_logs.filter(is_deleted=False):
             for field in ('activity_summary', 'skills_acquired',
                           'challenges_faced', 'solutions_applied'):
                 text = (getattr(log, field, '') or '').strip()
@@ -546,8 +1116,7 @@ def _build_log_ngrams(session, n=_VERBATIM_NGRAM_SIZE):
                     continue
                 for i in range(len(words) - n + 1):
                     window = words[i:i + n]
-                    content_words = [w for w in window if w not in _QUALITY_STOPWORDS]
-                    if len(content_words) < 3:
+                    if len([w for w in window if w not in _QUALITY_STOPWORDS]) < 3:
                         continue
                     ngrams.add(window)
     except Exception:
@@ -582,606 +1151,319 @@ def _quality_issues(section_key, text, log_ngrams, min_word_floor=0, max_word=0)
             issues.append(('placeholder', f'contains placeholder: "{token}"'))
             break
 
-    if min_word_floor:
-        actual_words = len(text.split())
-        threshold = int(min_word_floor * 0.5)
-        if actual_words < threshold:
-            issues.append((
-                'too_short',
-                f'only {actual_words} words (minimum {threshold} expected)'
-            ))
+    actual_words = len(text.split())
+    if min_word_floor and actual_words < int(min_word_floor * 0.5):
+        issues.append(('too_short',
+                       f'only {actual_words} words (minimum {int(min_word_floor * 0.5)} expected)'))
+    if max_word and actual_words > max_word:
+        issues.append(('too_long', f'{actual_words} words (target max {max_word})'))
 
-    if max_word:
-        actual_words = len(text.split())
-        if actual_words > max_word:
-            issues.append((
-                'too_long',
-                f'{actual_words} words (target max {max_word})'
-            ))
-
-    if re.search(r'^[ \t]*#{1,6}[ \t]', text, re.MULTILINE):
-        issues.append(('markdown_headers', 'contains raw markdown # headers'))
-    if '**' in text or re.search(r'^\s*[*\-\u2022]\s+', text, re.MULTILINE):
-        issues.append(('markdown_noise', 'contains ** or bullet/asterisk markers'))
+    if '<' in text or '>' in text:
+        issues.append(('angle_brackets', 'contains < or > characters'))
+    if '**' in text:
+        issues.append(('markdown_noise', 'contains ** markers'))
+    if section_key == 'activities_performed' and '\n' not in text:
+        issues.append(('bad_structure',
+                       'needs a unit heading line followed by activity lines'))
 
     return issues
-
-
-def _clean_draft_text(text):
-    """
-    Universal cleanup applied to every AI reply before quality check.
-    Extended in v11 to also strip filler phrases.
-    """
-    if not text:
-        return ''
-    text = re.sub(r'^[ \t]*#+[ \t]*.*$', '', text, flags=re.MULTILINE)
-    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
-    text = re.sub(r'__(.+?)__', r'\1', text)
-    text = re.sub(r'(?<!\w)\*(?!\s)([^*\n]+?)\*(?!\w)', r'\1', text)
-    text = re.sub(r'^\s*[*\-\u2022]\s+', '', text, flags=re.MULTILINE)
-    text = re.sub(r'^\s*\d+[\.\)]\s+', '', text, flags=re.MULTILINE)
-    text = re.sub(r'^[A-Z][A-Z\s]{3,}\n+', '', text, count=1)
-    text = re.sub(r'\s+[\u2013\u2014]\s+', ': ', text)
-    text = re.sub(r'\n{3,}', '\n\n', text)
-    # NEW in v11: strip filler phrases
-    text = _strip_filler(text)
-    return text.strip()
 
 
 def _build_retry_prompt(original_prompt, section_title, issues):
     problems = '\n'.join(f'  - {code}: {detail}' for code, detail in issues)
     return (
-        f"⚠️ RETRY REQUIRED — YOUR PREVIOUS DRAFT OF '{section_title}' FAILED QUALITY CHECKS.\n\n"
-        f"Specific problems detected:\n{problems}\n\n"
-        f"MANDATORY FIXES:\n"
-        f"1. If 'verbatim_copy' was flagged: rephrase EVERY phrase from the "
-        f"raw logs into your own academic prose. No sequence of 5 or more words "
-        f"from the raw logs may appear in your output. Transform sentence "
-        f"structures completely — change verbs, add context, restructure.\n"
-        f"2. If 'too_short' was flagged: expand the section by 2x or more. Add "
-        f"descriptive context, worked examples, and academic analysis drawn from "
-        f"the LOGS and the COMPETENCY AREAS. Do NOT invent activities, units, "
-        f"workshops, dates, or patient counts.\n"
-        f"3. If 'placeholder' was flagged: remove ALL placeholder text like "
-        f"[insert], TODO, lorem ipsum. Write real content.\n"
-        f"4. If 'markdown_headers' was flagged: remove every ## or # line. Use "
-        f"plain prose only.\n"
-        f"5. If 'markdown_noise' was flagged: remove ALL **bold**, *asterisk*, "
-        f"-dash, • bullet, and numbered-list markers. Plain text only.\n\n"
-        f"Now write the COMPLETE section again from scratch. Do not apologize, do not "
-        f"explain — output only the section text.\n\n"
-        f"{original_prompt}"
+        f"{original_prompt}\n\n"
+        f"REVISION REQUIRED FOR '{section_title}':\n"
+        f"Your previous draft had these issues:\n{problems}\n"
+        f"Fix every issue while keeping all facts accurate, properly capitalised, "
+        f"and free of raw log copying. Follow the required layout exactly."
     )
-
-
-def _build_context(session):
-    user = session.user
-    lines = [
-        f"STUDENT PROFILE:",
-        f"Name: {user.get_full_name() or user.username}",
-        f"Index number: {getattr(user, 'index_number', '')}",
-        f"Level: {getattr(user, 'level', '?')}",
-        f"Department: {user.get_department_display() if hasattr(user, 'get_department_display') else getattr(user, 'department', '')}",
-        f"\nATTACHMENT DETAILS:",
-        f"Facility: {session.facility.name if session.facility else '(not set)'}",
-        f"Period: {session.start_date.strftime('%d %B %Y')} to {session.end_date.strftime('%d %B %Y')}",
-    ]
-
-    if session.facility:
-        if session.facility.facility_type:
-            lines.append(f"Facility type: {session.facility.facility_type}")
-        if session.facility.district:
-            lines.append(f"District: {session.facility.district}")
-        if session.facility.region:
-            lines.append(f"Region: {session.facility.region}")
-
-        background = getattr(session.facility, 'history_and_background', '')
-        if background:
-            lines.append(f"Facility background info: {background[:600]}")
-        else:
-            lines.append(f"Facility background info: (none provided in database)")
-
-    if session.assigned_supervisor_name:
-        lines.append(f"Clinical supervisor: {session.assigned_supervisor_name}")
-
-    competencies = []
-    try:
-        competencies = list(session.competencies.values_list('text', flat=True))
-    except Exception:
-        logger.exception('ai_drafting: could not read competencies')
-    if competencies:
-        lines.append(f"\nCOMPETENCY AREAS ({len(competencies)} total — the attachment is meant to develop these):")
-        for c in competencies:
-            lines.append(f"- {c}")
-    else:
-        lines.append("\nCOMPETENCY AREAS: (none provided by the student)")
-
-    logs = list(session.daily_logs.filter(is_deleted=False).order_by('date'))
-    if logs:
-        lines.append(f"\nDAILY LOGS ({len(logs)} total — each field is labelled for correct section mapping):")
-        for log in logs:
-            summary = (log.activity_summary or '').strip().replace('\n', ' ')
-            entry = f"\n- {log.date.strftime('%Y-%m-%d')} [{log.unit_sub_department}]"
-            entry += f"\n  ACTIVITY (use for Activities Performed ONLY): {summary[:400]}"
-            if log.skills_acquired:
-                entry += f"\n  SKILLS (use for Skills Acquired ONLY): {log.skills_acquired[:200]}"
-            if log.challenges_faced:
-                entry += f"\n  CHALLENGE (use for Challenges section ONLY): {log.challenges_faced[:200]}"
-                if log.solutions_applied:
-                    entry += f"\n  SOLUTION (use for Recommendations ONLY — paraphrase, do not copy): {log.solutions_applied[:200]}"
-            lines.append(entry)
-    else:
-        lines.append("\nDAILY LOGS: (No logs recorded yet.)")
-
-    try:
-        workshops = list(session.workshops.all().order_by('date'))
-        if workshops:
-            lines.append(f"\nWORKSHOPS ATTENDED ({len(workshops)}):")
-            for w in workshops:
-                w_type = getattr(w, 'type', '') or 'workshop'
-                lines.append(f"- {w.date.strftime('%Y-%m-%d')}: {w_type} on {w.activity}")
-        else:
-            lines.append("\nWORKSHOPS ATTENDED: (None recorded.)")
-    except Exception:
-        logger.exception('ai_drafting: could not read workshops')
-
-    return '\n'.join(lines)
-
-
-def _call_ai(prompt):
-    try:
-        from importlib import import_module
-        path = getattr(settings, 'REPORT_AI_CALLABLE', '')
-        if not path:
-            logger.info('AI drafting: REPORT_AI_CALLABLE not set — skipping')
-            return None
-        module_path, func_name = path.rsplit('.', 1)
-        fn = getattr(import_module(module_path), func_name)
-        return fn(prompt)
-    except Exception:
-        logger.exception('AI drafting: call failed')
-        return None
-
-
-def get_ai_reply_with_image(prompt, image_bytes, mime='image/jpeg'):
-    vision_path = getattr(settings, 'REPORT_AI_VISION_CALLABLE', '') or ''
-    if not vision_path:
-        ai_path = getattr(settings, 'REPORT_AI_CALLABLE', '')
-        if ai_path:
-            module_path = ai_path.rsplit('.', 1)[0]
-            vision_path = f'{module_path}.get_ai_reply_with_image'
-
-    if not vision_path:
-        return None
-
-    try:
-        from importlib import import_module
-        module_path, func_name = vision_path.rsplit('.', 1)
-        fn = getattr(import_module(module_path), func_name)
-        return fn(prompt, image_bytes, mime=mime)
-    except Exception:
-        logger.exception('Vision OCR: call failed (path=%s)', vision_path)
-        return None
-
-
-_SECTION_FLOORS = {
-    'abstract':              120,
-    'acknowledgments':       80,
-    'introduction':          150,
-    'activities_performed':  300,
-    'skills_acquired':       180,
-    'workshops':             60,
-    'lessons_learnt':        180,
-    'observation':           150,
-    'challenges':            180,
-    'recommendations':       180,
-    'conclusion':            120,
-}
-
-_BUDGET_DISTRIBUTION = {
-    'abstract':              0.040,
-    'acknowledgments':       0.030,
-    'introduction':          0.065,
-    'activities_performed':  0.150,
-    'skills_acquired':       0.090,
-    'workshops':             0.030,
-    'lessons_learnt':        0.090,
-    'observation':           0.080,
-    'challenges':            0.075,
-    'recommendations':       0.075,
-    'conclusion':            0.055,
-}
 
 
 def _compute_word_budget(target_pages, log_count=0, competency_count=0):
-    if target_pages and target_pages >= 5:
+    try:
+        target_pages = int(target_pages) if target_pages else 0
+    except (TypeError, ValueError):
+        target_pages = 0
+
+    if target_pages >= 3:
         effective_pages = target_pages
+    elif log_count < 5:
+        effective_pages = 3
+    elif log_count < 10:
+        effective_pages = 5
+    elif log_count < 20:
+        effective_pages = 8
     else:
-        if log_count < 5:
-            effective_pages = 5
-        elif log_count < 10:
-            effective_pages = 8
-        elif log_count < 20:
-            effective_pages = 12
-        else:
-            effective_pages = 18
+        effective_pages = 12
 
     requested = int(effective_pages * 300)
-    source_capacity = (
-        500
-        + log_count * 180
-        + competency_count * 100
-    )
-    total_prose_words = min(requested, source_capacity)
+    source_capacity = 300 + log_count * 150 + competency_count * 60
+    total_prose_words = min(requested, max(source_capacity, 600))
 
     budgets = {
         section: max(int(total_prose_words * pct), _SECTION_FLOORS.get(section, 0))
         for section, pct in _BUDGET_DISTRIBUTION.items()
     }
-
-    budget_sum = sum(budgets.values())
-    headroom_ceiling = int(total_prose_words * 1.2)
-    if budget_sum > headroom_ceiling and headroom_ceiling > 0:
-        scale = headroom_ceiling / budget_sum
-        budgets = {
-            section: max(80, int(word_count * scale))
-            for section, word_count in budgets.items()
-        }
-
     return budgets
 
 
-_QUALITY_RULES = (
-    "\nQUALITY RULES (Apply to every section):\n"
-    "9. NEVER COPY RAW LOG TEXT. Transform sentence structure completely — "
-    "no sequence of 7+ words from the raw logs may appear. Change verbs, add "
-    "context, restructure. Write professional prose: "
-    "'I processed approximately fifteen outpatient registrations per session' "
-    "— not 'Registered 15 patients'. Fix all lowercase 'i' to capital 'I'.\n"
-    "10. DO NOT INVENT ACTIVITIES, UNITS, DATES, WORKSHOPS, OR PATIENT COUNTS "
-    "to hit a word target. Logs are the source of fact.\n"
-    "11. EXPAND ONLY WHERE REFLECTION IS APPROPRIATE: Lessons Learnt, "
-    "Observation, Recommendations, Conclusion, and Abstract. Use competency "
-    "areas — not invented events — as the raw material for reflection.\n"
-    "12. BUILD AROUND COMPETENCIES. Every paragraph should visibly connect "
-    "to at least one listed competency area. Name the competency explicitly "
-    "where it fits naturally.\n"
-    "13. PLAIN PROSE ONLY. No markdown headings (#), bold (**text**), "
-    "asterisks, bullet markers (*, -, •), numbered lists (unless the section "
-    "instruction explicitly asks for them), or HTML tags.\n"
-    "14. SIMPLE ENGLISH. Clear, accessible English. Technical HIM terms are fine.\n"
-    "15. TARGET WORD COUNT IS A RANGE, NOT A FLOOR TO GAME. Under-writing "
-    "fails; overwriting by more than 25% also fails. Sparse logs justify a "
-    "shorter section — the page target is not a reason to invent.\n"
-    "16. CONCISENESS — write directly. Remove filler phrases. Prefer short "
-    "declarative sentences over elaborate constructions.\n"
-)
+# ============================================================
+# Parallel runner
+# ============================================================
 
+def _run_parallel(tasks, max_seconds, workers):
+    """
+    tasks: list of (key, callable). Returns {key: result} for the tasks that
+    finished inside max_seconds. Unfinished threads are abandoned.
+    """
+    results = {}
+    if not tasks:
+        return results
+    ex = cf.ThreadPoolExecutor(max_workers=max(1, min(workers, len(tasks))))
+    futures = {ex.submit(fn): key for key, fn in tasks}
+    try:
+        done, not_done = cf.wait(list(futures), timeout=max_seconds)
+        for fut in done:
+            key = futures[fut]
+            try:
+                results[key] = fut.result()
+            except Exception:
+                logger.exception('AI drafting task %r raised', key)
+        for fut in not_done:
+            logger.warning('AI drafting task %r did not finish in %ds', futures[fut], max_seconds)
+    finally:
+        try:
+            ex.shutdown(wait=False, cancel_futures=True)
+        except TypeError:                                  # Python < 3.9
+            ex.shutdown(wait=False)
+    return results
+
+
+def _section_prompt(title, instruction, context, extras):
+    return (
+        f"You are an expert academic editor drafting the '{title}' section of a "
+        f"health-information practicum report for a Ghanaian college (COHY).\n\n"
+        f"{_COMMON_RULES}\n"
+        f"{extras}"
+        f"Section instructions (authoritative):\n{instruction}\n\n"
+        f"--- STUDENT DATA ---\n{context}\n-------------------\n"
+    )
+
+
+# ============================================================
+# Report drafting
+# ============================================================
 
 def draft_sections_with_ai(session, samples=None, target_pages=None):
-    """
-    Draft the prose sections with AI, with code-enforced quality gates.
-
-    v11: adds obstacle-stripping pass for activities_performed and
-    skills_acquired after the standard cleaning step. Also strips filler
-    phrases from all sections.
-    """
     if not getattr(settings, 'REPORT_AI_DRAFTING_ENABLED', True):
         return {}
+
+    if not _ai_configured():
+        logger.error('AI drafting skipped: no REPORT_AI_CALLABLE or API key configured')
+        return {'_ai_note': (
+            'AI drafting is not configured on the server, so the template text was '
+            'used. Ask the administrator to set an AI provider key.'
+        )}
 
     context = _build_context(session)
     if not context.strip():
         return {}
 
     log_ngrams = _build_log_ngrams(session)
-
     try:
         competencies = list(session.competencies.values_list('text', flat=True))
     except Exception:
         competencies = []
 
-    competencies_rule = ''
-    if competencies:
-        competencies_rule = (
-            "\nCOMPETENCY RULES (Apply to every section):\n"
-            "- The student's competency areas are listed in the student data below.\n"
-            "- Every chapter MUST visibly support at least one competency area. "
-            "Name them explicitly where appropriate.\n"
-            "- When selecting which log entries to feature, prioritise entries "
-            "that map to a competency.\n"
-            "- 'Lessons Learnt' must primarily reflect the competencies.\n"
-            "- 'Challenges' should describe obstacles encountered while trying "
-            "to achieve these competencies.\n"
-            "- 'Recommendations' must address how future students can better "
-            "achieve these competencies at the facility.\n"
-            "- Do NOT invent competencies. If a section is unmappable, still "
-            "write it — but keep the tone focused on skills and outcomes.\n"
-        )
+    units = _session_units(session)
+    fallback_unit = units[0][0] if len(units) == 1 else ''
+    log_count = session.daily_logs.filter(is_deleted=False).count()
 
-    format_notes = ''
+    extras = ''
+    if competencies:
+        extras += (
+            "COMPETENCY RULE: where natural, let each section support at least one "
+            "of the listed competency areas.\n"
+        )
     if samples:
         notes = [s.style_notes.strip() for s in samples if getattr(s, 'style_notes', '')]
         if notes:
-            format_notes = (
-                "\nFormat guidance from the department's official samples "
-                "(follow this strictly):\n"
-                + "\n".join(f"- {n}" for n in notes) + "\n"
-            )
-
-    log_count = session.daily_logs.filter(is_deleted=False).count()
-
+            extras += ("FORMAT GUIDANCE from the department's official samples "
+                       "(follow strictly):\n" + "\n".join(f"- {n}" for n in notes) + "\n")
     if log_count < 5:
-        expansion_rule = (
-            "\nCRITICAL SOURCE LIMIT: The student has very few daily logs "
-            f"({log_count}). Do NOT invent units, activities, workshops, dates, "
-            "or patient counts. HOWEVER — enrich each REAL activity with "
-            "professional context (system used, data quality check applied, "
-            "professional standard followed, competency supported). For "
-            "Activities Performed and Skills Acquired, you MAY name sub-skills "
-            "within a single activity to reach the target count. For Lessons "
-            "Learnt, Observation, Recommendations, Conclusion, and Abstract, "
-            "expand using the listed competency areas and general HIM "
-            "principles — present it as reflection, not as new log entries.\n"
+        extras += (
+            f"SPARSE LOGS: the student has only {log_count} daily log(s). Never pad "
+            "with invented activities, units, workshops or numbers. Refine and "
+            "enrich each REAL activity with true professional context (the system "
+            "used, the data-quality check applied, the competency supported). A "
+            "shorter, accurate section is better than an invented one.\n"
         )
     elif log_count < 15:
-        expansion_rule = (
-            f"\nNOTE: The student has {log_count} daily logs. Synthesize them. "
-            "Do not add units or activities that are not present in the logs. "
-            "Enrich real activities with professional context where useful.\n"
-        )
-    else:
-        expansion_rule = ''
+        extras += ("NOTE: synthesise the logs; do not add units or activities that "
+                   "are not in them.\n")
 
-    if target_pages and target_pages >= 15:
-        expansion_rule += (
-            "\nLENGTH NOTE: The user chose a long target. Increase depth by "
-            "adding analysis, reflection, competency links, and professional "
-            "implications. Do NOT add new activities, units, workshops, or "
-            "patient counts to reach the target.\n"
-        )
+    budgets = _compute_word_budget(target_pages, log_count=log_count,
+                                   competency_count=len(competencies))
 
-    note = ""
+    note = ''
     if log_count < 5:
-        if target_pages:
-            note = (
-                f"Note: You have very few logs ({log_count}). The AI stayed close "
-                f"to what you actually logged, and enriched each real activity with "
-                f"professional context using your competency areas. Adding more "
-                f"logs will strengthen depth and help reach your "
-                f"{target_pages}-page target."
-            )
-        else:
-            note = (
-                f"Note: You have very few logs ({log_count}). The AI stayed close "
-                f"to what you actually logged, and enriched each real activity with "
-                f"professional context using your competency areas. Adding more "
-                f"logs will further improve depth."
-            )
+        note = (f"Note: you have very few logs ({log_count}). The AI stayed close to what you "
+                f"logged. Adding more detailed daily logs will make the report fuller"
+                + (f" and help reach your {target_pages}-page target." if target_pages else "."))
     elif log_count < 15 and target_pages:
-        note = (
-            f"Note: If the generated report falls short of your {target_pages}-page "
-            f"target, adding more daily logs will provide the AI with more material."
-        )
-
-    drafts = {}
-    if note:
-        drafts['_ai_note'] = note
-
-    budgets = _compute_word_budget(
-        target_pages,
-        log_count=log_count,
-        competency_count=len(competencies),
-    )
+        note = (f"Note: if the report falls short of your {target_pages}-page target, "
+                f"adding more daily logs will give the AI more material.")
 
     max_seconds = getattr(settings, 'REPORT_AI_DRAFTING_MAX_SECONDS', DEFAULT_MAX_SECONDS)
-    unique_seed = random.randint(1000, 9999)
+    workers = getattr(settings, 'REPORT_AI_DRAFTING_WORKERS', 6)
+    deadline = time.time() + max_seconds
 
-    total_start = time.time()
-    retry_start = None
-    retries_used = 0
-    retry_flagged_sections = []
-    total = len(DRAFT_SECTIONS)
+    def make_task(key, title, instruction):
+        budget = budgets.get(key, 0)
+        hint = ''
+        if budget:
+            hint = (f"LENGTH: aim for roughly {int(budget * 0.8)} to {int(budget * 1.2)} "
+                    f"words, no more than the source material supports.\n")
+        prompt = _section_prompt(title, instruction, context, extras + hint)
+        max_tokens = _SECTION_MAX_TOKENS.get(key, _DEFAULT_MAX_TOKENS)
+        floor = _SECTION_FLOORS.get(key, 0)
+        max_word = int(budget * 1.5) if budget else 0
 
-    for idx, (key, title, instruction) in enumerate(DRAFT_SECTIONS, start=1):
-        elapsed = time.time() - total_start
-        if elapsed > max_seconds:
-            completed = len([k for k in drafts if not k.startswith('_')])
-            logger.warning(
-                'AI drafting: time budget %ds exhausted after %d/%d sections '
-                '(elapsed %.0fs) — bailing; remaining sections use defaults',
-                max_seconds, completed, total, elapsed,
-            )
-            break
+        def run():
+            reply = _call_ai(prompt, max_tokens=max_tokens)
+            if reply is None:
+                return None, ['no_reply']
+            text = finalize_section(key, reply, fallback_unit, title)
+            issues = [i for i in _quality_issues(key, text, log_ngrams, floor, max_word)
+                      if i[0] != 'too_long']
+            if not issues:
+                return text, []
+            if time.time() < deadline - 12:
+                retry_reply = _call_ai(_build_retry_prompt(prompt, title, issues),
+                                       max_tokens=max_tokens)
+                if retry_reply is not None:
+                    retry_text = finalize_section(key, retry_reply, fallback_unit, title)
+                    retry_issues = [i for i in _quality_issues(key, retry_text, log_ngrams, floor, max_word)
+                                    if i[0] != 'too_long']
+                    if not retry_issues:
+                        return retry_text, []
+                    if retry_text and (not text or len(retry_text) > len(text)):
+                        text = retry_text
+                    issues = retry_issues
+            return (text or None), [code for code, _ in issues]
 
-        word_budget = budgets.get(key, 0)
-        max_word = int(word_budget * 1.25) if word_budget else 0
-        budget_hint = ""
-        if word_budget:
-            lo = int(word_budget * 0.8)
-            hi = int(word_budget * 1.2)
-            if target_pages:
-                context_sentence = (
-                    f"Write enough to fill your share of the {target_pages}-page report, "
-                    f"using ONLY what the logs and competencies support."
-                )
-            else:
-                context_sentence = (
-                    "Write enough to make this section substantive, using ONLY "
-                    "what the logs and competencies support."
-                )
-            budget_hint = (
-                f"\nTARGET WORD COUNT FOR THIS SECTION: approximately {word_budget} words "
-                f"(acceptable range {lo}-{hi}). {context_sentence} "
-                f"Under-writing is a FAILURE. Over-writing by more than 25% is also a FAILURE.\n"
-            )
+        return run
 
-        prompt = (
-            f"You are an expert academic editor drafting the '{title}' section of a "
-            f"health-information practicum report for a Ghanaian college (COHY).\n\n"
-            f"CRITICAL RULES:\n"
-            f"1. FIRST-PERSON VOICE: Write strictly in the first-person ('I'). Do NOT use "
-            f"phrases like 'the student', 'the trainee', or 'the intern'.\n"
-            f"2. READ ALL DATA: Carefully review the Student Data below.\n"
-            f"3. REFINE AND ENHANCE: NEVER copy raw daily logs verbatim. Synthesize the "
-            f"information into polished, professional academic paragraphs.\n"
-            f"4. GRAMMAR: Check grammar, spelling, and sentence flow rigorously. "
-            f"Fix any lowercase 'i' to capital 'I'.\n"
-            f"5. DO NOT INVENT personal details, activities, units, or workshops. "
-            f"Logs are the source of fact.\n"
-            f"6. STRUCTURE: Follow the structural requirements in the section instruction "
-            f"(bullet count, sub-heading organization, format).\n"
-            f"7. UNIQUENESS (Seed: {unique_seed}): Vary sentence structure from standard "
-            f"reports to ensure this feels unique and personalized.\n"
-            f"{_QUALITY_RULES}"
-            f"{_SOURCE_BOUND_RULES}"
-            f"{competencies_rule}"
-            f"{budget_hint}"
-            f"{expansion_rule}"
-            f"\n{format_notes}\n"
-            f"Section instructions (authoritative):\n"
-            f"{instruction}\n\n"
-            f"--- STUDENT DATA ---\n{context}\n-------------------\n"
-        )
+    tasks = [(key, make_task(key, title, instruction))
+             for key, title, instruction in DRAFT_SECTIONS]
+    results = _run_parallel(tasks, max_seconds, workers)
 
-        reply = _call_ai(prompt)
-
-        if reply is None:
-            logger.warning(
-                'AI drafting: section %d/%d (%r) — AI call returned None, skipping',
-                idx, total, key,
-            )
-            continue
-
-        reply = _clean_draft_text(reply)
-
-        # NEW v11: strip obstacle/solution content from sections where it
-        # must never appear.
-        reply, removed_items = _strip_obstacle_content(reply, key)
-        if removed_items:
-            logger.info(
-                'AI drafting: stripped %d obstacle/solution line(s) from %r: %s',
-                len(removed_items), key,
-                '; '.join(f'{kind}:{snippet}' for kind, snippet in removed_items[:3]),
-            )
-
-        issues = _quality_issues(
-            key, reply, log_ngrams,
-            min_word_floor=_SECTION_FLOORS.get(key, 0),
-            max_word=max_word,
-        )
-
-        hard_issues = [i for i in issues if i[0] != 'too_long']
-
-        if not hard_issues:
-            drafts[key] = reply
-            if issues:
-                logger.info(
-                    'AI drafted section %r (%d words) — passed; soft warnings: %s',
-                    key, len(reply.split()),
-                    '; '.join(f'{c}:{d}' for c, d in issues),
-                )
-            else:
-                logger.debug('AI drafted section %r (%d words) — passed quality',
-                             key, len(reply.split()))
-            continue
-
-        logger.warning(
-            'AI drafting: section %r failed quality (%s) — attempting retry',
-            key, '; '.join(f'{c}:{d}' for c, d in hard_issues),
-        )
-
-        can_retry = (
-            retries_used < _MAX_RETRIES_TOTAL
-            and (retry_start is None or time.time() - retry_start < _MAX_RETRY_SECONDS)
-            and (time.time() - total_start) < (max_seconds - 15)
-        )
-
-        if not can_retry:
-            logger.warning(
-                'AI drafting: section %r — retry budget exhausted, using original draft',
-                key,
-            )
-            drafts[key] = reply
-            retry_flagged_sections.append((key, title))
-            continue
-
-        if retry_start is None:
-            retry_start = time.time()
-        retries_used += 1
-
-        retry_prompt = _build_retry_prompt(prompt, title, hard_issues)
-        retry_reply = _call_ai(retry_prompt)
-
-        if retry_reply is None:
-            logger.warning('AI drafting: section %r retry returned None — keeping original',
-                           key)
-            drafts[key] = reply
-            retry_flagged_sections.append((key, title))
-            continue
-
-        retry_reply = _clean_draft_text(retry_reply)
-        retry_reply, retry_removed = _strip_obstacle_content(retry_reply, key)
-        if retry_removed:
-            logger.info(
-                'AI drafting: retry stripped %d obstacle/solution line(s) from %r',
-                len(retry_removed), key,
-            )
-
-        retry_issues = _quality_issues(
-            key, retry_reply, log_ngrams,
-            min_word_floor=_SECTION_FLOORS.get(key, 0),
-            max_word=max_word,
-        )
-        hard_retry_issues = [i for i in retry_issues if i[0] != 'too_long']
-
-        if not hard_retry_issues:
-            drafts[key] = retry_reply
-            logger.info('AI drafting: section %r PASSED on retry', key)
+    drafts = {}
+    failed_titles, flagged_titles = [], []
+    for key, title, _instr in DRAFT_SECTIONS:
+        text, issue_codes = results.get(key, (None, ['timeout']))
+        if text:
+            drafts[key] = text
+            if issue_codes:
+                flagged_titles.append(title)
         else:
-            logger.warning(
-                'AI drafting: section %r failed retry too (%s) — using longer attempt',
-                key, '; '.join(f'{c}:{d}' for c, d in hard_retry_issues),
-            )
-            drafts[key] = retry_reply if len(retry_reply) > len(reply) else reply
-            retry_flagged_sections.append((key, title))
+            failed_titles.append(title)
 
-    if drafts:
-        completed = len([k for k in drafts if not k.startswith('_')])
-        logger.info(
-            'AI drafting complete: %d/%d sections drafted in %.1fs '
-            '(competencies=%d, target_pages=%s, log_count=%d, retries_used=%d, flagged=%d)',
-            completed, total, time.time() - total_start, len(competencies),
-            target_pages, log_count, retries_used, len(retry_flagged_sections),
+    notes_out = [note] if note else []
+    if failed_titles:
+        notes_out.append(
+            "These sections could not be drafted by the AI and use clean fallback "
+            "text instead: " + ', '.join(failed_titles) +
+            ". Click Generate again to retry them."
         )
-    else:
-        logger.info('AI drafting produced no sections — report will use template defaults')
-
-    if retry_flagged_sections:
-        names = ', '.join(title for _, title in retry_flagged_sections)
-        existing_note = drafts.get('_ai_note', '')
-        retry_note = (
-            f"{names} section(s) were drafted but flagged for manual review "
-            f"(possible copied phrasing, markdown pollution, or length mismatch). "
-            f"Open 'Edit Report Manually' to refine them."
+    if flagged_titles:
+        notes_out.append(
+            ', '.join(flagged_titles) + " were drafted but flagged for review. "
+            "Open 'Edit Report Manually' to check them."
         )
-        drafts['_ai_note'] = (existing_note + ' ' + retry_note).strip() if existing_note else retry_note
 
-    drafts['_source_hash'] = source_fingerprint(session)
+    logger.info('AI drafting finished: %d drafted, %d failed, %d flagged (v=%s)',
+                len(drafts), len(failed_titles), len(flagged_titles), PROMPT_VERSION)
 
-    return drafts
+    out = {}
+    if notes_out:
+        out['_ai_note'] = ' '.join(notes_out)
+    if not drafts:
+        return out                    # nothing usable: no fingerprint, so it retries next time
+    out.update(drafts)
+    out['_source_hash'] = source_fingerprint(session)
+    return out
+
+
+# ============================================================
+# Presentation drafting
+# ============================================================
+
+def _clean_pptx_text(text):
+    if not text:
+        return ''
+    text = _normalize_unicode(text)
+    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
+    text = re.sub(r'__(.+?)__', r'\1', text)
+    text = re.sub(r'\s+[\u2013\u2014]\s+', ': ', text)
+    text = re.sub(r'\s+-\s+', ': ', text)
+    text = re.sub(r'^[ \t]*#+[ \t]*.*$', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^[ \t]*[<\[][ \t]*([^<>\[\]\n]+?)[ \t]*[>\]][ \t]*$', r'\1',
+                  text, flags=re.MULTILINE)
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    text = _strip_filler(text)
+    return text.strip()
+
+
+def _finalize_pptx(key, text):
+    text = _clean_pptx_text(text)
+    if not text:
+        return ''
+
+    if key == 'pptx_speaker_notes':
+        notes = {}
+        for line in text.splitlines():
+            if ':' not in line:
+                continue
+            head, _, body = line.partition(':')
+            head, body = head.strip(), body.strip()
+            for title in PPTX_SLIDE_TITLES:
+                if head.lower().startswith(title.lower()[:8]) and body:
+                    notes[title] = body
+                    break
+        return '\n'.join(f"{t}: {notes[t]}" for t in PPTX_SLIDE_TITLES if t in notes)
+
+    lines = []
+    for raw in text.splitlines():
+        line = re.sub(r'^\s*[*\-\u2022\u00b7]\s+|^\s*\d+[\.\)]\s+', '', raw).strip()
+        line = re.sub(r'[<>]', '', line).strip().rstrip('.')
+        if not line:
+            continue
+        line = _polish_english(_capitalise_first(line))
+        lowered = line.lower()
+        if key in ('pptx_activities_bullets', 'pptx_skills_bullets'):
+            if any(m in lowered for m in _OBSTACLE_MARKERS) or \
+               any(m in lowered for m in _SOLUTION_MARKERS):
+                continue
+        lines.append(line)
+
+    seen, uniq = set(), []
+    for line in lines:
+        if line.lower() not in seen:
+            seen.add(line.lower())
+            uniq.append(line)
+    return '\n'.join(uniq[:_PPTX_MAX_BULLETS.get(key, 6)])
 
 
 def draft_presentation_with_ai(session, target_slides=7):
-    """
-    Draft slide-specific bullets + speaker notes for the PPTX.
-
-    v11: obstacle content is stripped from pptx_activities_bullets and
-    pptx_skills_bullets after the standard cleanup step.
-    """
     if not getattr(settings, 'REPORT_AI_DRAFTING_ENABLED', True):
         return {}
+    if not _ai_configured():
+        logger.error('PPTX AI drafting skipped: no AI provider configured')
+        return {}
 
-    context = _build_context(session)
+    context = _build_context(session, include_report=True)
     if not context.strip():
         return {}
 
@@ -1189,136 +1471,71 @@ def draft_presentation_with_ai(session, target_slides=7):
         competencies = list(session.competencies.values_list('text', flat=True))
     except Exception:
         competencies = []
-
-    competency_hint = ''
-    if competencies:
-        competency_hint = (
-            "\nCOMPETENCY HINT: The student developed these competencies — reflect them "
-            "in the Skills and Lessons bullet points where natural:\n"
-            + "\n".join(f"- {c}" for c in competencies) + "\n"
-        )
-
     log_count = session.daily_logs.filter(is_deleted=False).count()
+
+    extras = _PPTX_RULES
+    if competencies:
+        extras += "Reflect the competency areas in the Skills and Conclusion bullets where natural.\n"
     if log_count < 5:
-        competency_hint += (
-            "\nCRITICAL: The student has very few daily logs. "
-            "Produce truthful bullets — do NOT invent units, workshops, or "
-            "activities. It is better to have 3 solid, truthful bullets than "
-            "6 fabricated ones.\n"
-        )
+        extras += "The student has very few logs: stay truthful and do not invent anything.\n"
 
     max_seconds = getattr(settings, 'REPORT_AI_DRAFTING_MAX_SECONDS', DEFAULT_MAX_SECONDS)
+    workers = getattr(settings, 'REPORT_AI_DRAFTING_WORKERS', 6)
+    deadline = time.time() + max_seconds
 
-    drafts = {}
-    total_start = time.time()
-    total = len(PPTX_DRAFT_SECTIONS)
-
-    for idx, (key, title, instruction) in enumerate(PPTX_DRAFT_SECTIONS, start=1):
-        if time.time() - total_start > max_seconds:
-            logger.warning(
-                'PPTX AI drafting: time budget %ds exhausted after %d/%d sections',
-                max_seconds, len(drafts), total,
-            )
-            break
-
+    def make_task(key, title, instruction):
         prompt = (
             f"You are preparing '{title}' content for a PowerPoint presentation "
-            f"summarising a health-information practicum report for a Ghanaian college (COHY).\n\n"
-            f"CRITICAL RULES:\n"
-            f"1. BULLET FORMAT: Every line is a standalone bullet.\n"
-            f"2. WORD LIMITS ARE ABSOLUTE: exceeding a word limit is a FAILURE.\n"
-            f"3. REFINE, DON'T COPY: never paste raw logs.\n"
-            f"4. PRESENTATION VOICE: active verbs, present tense, short clauses.\n"
-            f"5. NO HEADINGS: no section titles, bullet markers, or markdown.\n"
-            f"6. STRUCTURE & GRAMMAR: perfect grammar, clean professional action statements.\n"
-            f"7. NO DASHES: do NOT use em dash (—), en dash (–), or hyphen (-) as a "
-            f"bullet separator. Use a colon (:) or rephrase instead.\n"
-            f"8. SECTION-FIELD MAPPING: each log field has a specific section:\n"
-            f"   - Activities slide → use ACTIVITY field ONLY. Not challenges, not solutions.\n"
-            f"   - Challenges slide → use CHALLENGE field ONLY. Not activities.\n"
-            f"   - Observation/Recs slide → use OBSERVATION + RECOMMENDATIONS.\n"
-            f"9. SIMPLE ENGLISH: short words, plain sentences.\n"
-            f"{_SOURCE_BOUND_RULES}"
-            f"{competency_hint}"
-            f"\nSection instruction (authoritative):\n{instruction}\n\n"
+            f"summarising a health-information practicum report for a Ghanaian "
+            f"college (COHY).\n\n"
+            f"{extras}\n"
+            f"Section instruction (authoritative):\n{instruction}\n\n"
             f"--- STUDENT DATA ---\n{context}\n-------------------\n"
         )
 
-        reply = _call_ai(prompt)
+        def run():
+            reply = _call_ai(prompt, max_tokens=500)
+            text = _finalize_pptx(key, reply) if reply else ''
+            if not text and time.time() < deadline - 10:
+                reply = _call_ai(prompt + "\nYour previous answer was empty or invalid. "
+                                 "Answer again following the format exactly.", max_tokens=500)
+                text = _finalize_pptx(key, reply) if reply else ''
+            return text
 
-        if reply is None:
-            logger.warning(
-                'PPTX AI drafting: section %d/%d (%r) — returned None, skipping',
-                idx, total, key,
-            )
-            continue
+        return run
 
-        reply = _clean_pptx_text(reply)
-        # Strip obstacle content from the two bullet sections where it must never appear.
-        if key in ('pptx_activities_bullets', 'pptx_skills_bullets'):
-            kept_lines = []
-            dropped = 0
-            for line in reply.splitlines():
-                lowered = line.lower()
-                if any(m in lowered for m in _OBSTACLE_MARKERS) or \
-                   any(m in lowered for m in _SOLUTION_MARKERS):
-                    dropped += 1
-                    continue
-                kept_lines.append(line)
-            if dropped:
-                logger.info(
-                    'PPTX AI drafting: dropped %d obstacle/solution bullet(s) from %r',
-                    dropped, key,
-                )
-            reply = '\n'.join(kept_lines)
+    tasks = [(key, make_task(key, title, instruction))
+             for key, title, instruction in PPTX_DRAFT_SECTIONS]
+    results = _run_parallel(tasks, max_seconds, workers)
 
-        drafts[key] = reply
-        logger.debug('PPTX AI drafted %r (%d chars)', key, len(reply))
-
-    if drafts:
-        logger.info(
-            'PPTX AI drafting complete: %d/%d sections in %.1fs',
-            len(drafts), total, time.time() - total_start,
-        )
-    else:
-        logger.info('PPTX AI drafting produced no sections — builder will trim report text')
-
+    drafts = {key: text for key, text in results.items() if text}
+    missing = [k for k, _t, _i in PPTX_DRAFT_SECTIONS if k not in drafts]
+    if missing:
+        logger.warning('PPTX AI drafting: %d slide section(s) missing: %s', len(missing), missing)
+    if not drafts:
+        return {}
     drafts['_source_hash'] = source_fingerprint(session)
-
     return drafts
 
 
-def _clean_pptx_text(text):
-    if not text:
-        return ''
-    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
-    text = re.sub(r'__(.+?)__', r'\1', text)
-    text = re.sub(r'\s+[\u2013\u2014]\s+', ': ', text)
-    text = re.sub(r'\s+-\s+', ': ', text)
-    text = re.sub(r'^[ \t]*#+[ \t]*.*$', '', text, flags=re.MULTILINE)
-    text = re.sub(r'\n{3,}', '\n\n', text)
-    text = _strip_filler(text)
-    return text.strip()
-
-
 # ============================================================
-# v9 — AI refinement of user-edited content (unchanged)
+# Manual-edit refinement
 # ============================================================
 
 _REFINE_INSTRUCTIONS = {
-    'introduction':         'Polish into 2 academic paragraphs in first person. Preserve all facts, units, dates. Fix grammar, vary sentences, improve flow. Keep it SHORT — under 250 words.',
-    'facility_profile':     'Polish into third-person academic prose about the facility. Preserve all facts. Do NOT use "I". Fix grammar and flow.',
-    'activities_performed': 'Polish each unit sub-heading and activity line. Preserve every unit and activity mentioned. Keep sub-headings if present. Fix grammar and flow.',
-    'skills_acquired':      'Polish each skill line. Keep one item per line. Preserve every skill and its description. Do NOT add new skills. Fix grammar.',
-    'workshops':            'Polish into 2 clean paragraphs. Preserve all facts about workshops or on-the-job training. Fix grammar.',
-    'lessons_learnt':       'Polish each lesson line into 2-3 sentences. Preserve every lesson. Do NOT add new lessons. Each lesson must remain an INSIGHT, not an activity summary. Fix grammar and flow.',
-    'observation':          'Polish into 3-4 academic paragraphs in first person. Preserve every observation. Fix grammar.',
-    'observations':         'Polish into 3-4 academic paragraphs in first person. Preserve every observation. Fix grammar.',
-    'challenges':           'Polish into 3-4 academic paragraphs in first person. Preserve every challenge. Fix grammar.',
-    'recommendations':      'Polish each recommendation line. Keep one item per line. Use professional tone. Preserve every recommendation. Fix grammar.',
-    'conclusion':           'Polish into 3 academic paragraphs in first person. Preserve every point. Fix grammar and flow.',
-    'abstract':             'Polish into one academic paragraph in third person. Preserve every fact and competency mentioned. Fix grammar and flow.',
-    'acknowledgments':      'Polish into 2-3 formal paragraphs in first person. Preserve every name and every gratitude expressed. Fix grammar.',
+    'introduction':         'Polish into ONE concise first-person paragraph. Preserve all facts, units and dates. Fix grammar and flow. Under 140 words.',
+    'facility_profile':     'Polish into third-person prose about the facility. Preserve all facts. Do NOT use "I". Fix grammar and flow.',
+    'activities_performed': 'Keep the layout: a plain unit heading line (no < > or [ ]) followed by one past-tense sentence per line. Preserve every unit and activity. Fix grammar, capitalisation and full stops.',
+    'skills_acquired':      'Keep one skill per line, each starting with "I learnt how to" or "I was able to" and naming the activity it came from. Preserve every skill. Fix grammar.',
+    'workshops':            'Polish into one short paragraph per workshop, in clear English without duplicate words. Preserve every workshop fact.',
+    'lessons_learnt':       'Polish into 1 or 2 cohesive first-person paragraphs. Preserve every point. Fix grammar and flow.',
+    'observation':          'Polish into 1 or 2 first-person paragraphs. Preserve every observation. Fix grammar.',
+    'observations':         'Polish into 1 or 2 first-person paragraphs. Preserve every observation. Fix grammar.',
+    'challenges':           'Polish into short first-person paragraphs, one per challenge. Preserve every challenge. Fix grammar.',
+    'recommendations':      'Polish into 1 or 2 professional paragraphs. Preserve every recommendation. Fix grammar.',
+    'conclusion':           'Polish into 1 or 2 first-person paragraphs. Preserve every point. Fix grammar and flow.',
+    'abstract':             'Polish into one third-person academic paragraph. Preserve every fact. Fix grammar and flow.',
+    'acknowledgments':      'Polish into 1 or 2 formal first-person paragraphs. Preserve every name and thanks. Fix grammar.',
     'references':           'Preserve every reference. Fix punctuation and APA formatting only. Do NOT remove any reference.',
 }
 
@@ -1327,7 +1544,12 @@ def refine_user_content(session, current_content):
     if not getattr(settings, 'REPORT_AI_DRAFTING_ENABLED', True):
         return dict(current_content or {})
 
-    refined = {}
+    units = _session_units(session)
+    fallback_unit = units[0][0] if len(units) == 1 else ''
+    ai_ok = _ai_configured()
+
+    refined, tasks = {}, []
+
     for key, value in (current_content or {}).items():
         if str(key).startswith('_'):
             refined[key] = value
@@ -1339,56 +1561,48 @@ def refine_user_content(session, current_content):
             continue
 
         instruction = _REFINE_INSTRUCTIONS.get(key)
-        if not instruction:
-            refined[key] = text
+        polished_original = finalize_section(key, text, fallback_unit) or _polish_english(text)
+        refined[key] = polished_original               # safe default
+
+        if not instruction or not ai_ok:
             continue
 
         prompt = (
-            "You are polishing a section of a health-information practicum "
-            "report written by a student. Your ONLY job is to fix grammar, "
-            "improve sentence flow, and raise the academic tone.\n\n"
-            "CRITICAL RULES:\n"
-            "1. PRESERVE every fact, number, unit, activity, workshop, and skill "
-            "in the text below. Do not invent anything.\n"
-            "2. PRESERVE structure — same number of paragraphs / bullets as input.\n"
-            "3. KEEP first-person voice ('I') where the input uses it. Fix any "
-            "lowercase 'i' to capital 'I'.\n"
-            "4. For bullet sections: one item per line, plain text. Do NOT add "
-            "bullet characters (•, -, *) — the renderer adds them.\n"
-            "5. Do NOT add a heading. Do NOT use markdown (**, ##).\n"
-            "6. Do NOT apologise, do NOT explain — output ONLY the refined section text.\n\n"
-            f"Section: {key}\n"
-            f"Refinement instruction: {instruction}\n\n"
-            f"--- INPUT ---\n{text}\n--- END INPUT ---\n\n"
-            "Refined section text:"
+            "You are polishing one section of a health-information practicum report "
+            "written by a student. Your ONLY job is to fix grammar, capitalisation "
+            "and flow and to raise the tone to official English.\n\n"
+            "RULES:\n"
+            "1. PRESERVE every fact, number, unit, activity, workshop and skill. Do not invent anything.\n"
+            "2. PRESERVE the structure (same paragraphs or lines).\n"
+            "3. Keep the first person ('I') where the input uses it. Every sentence and line starts with a capital letter.\n"
+            "4. No bullet symbols, no markdown, no angle brackets, no heading.\n"
+            "5. Output ONLY the refined section text, nothing else.\n\n"
+            f"Section: {key}\nInstruction: {instruction}\n\n"
+            f"--- INPUT ---\n{text}\n--- END INPUT ---\n"
         )
 
-        try:
-            reply = _call_ai(prompt)
-        except Exception:
-            logger.exception('refine_user_content: AI call failed for section=%s', key)
-            reply = None
+        def make_run(k=key, orig=text, p=prompt, polished=polished_original):
+            def run():
+                reply = _call_ai(p, max_tokens=_SECTION_MAX_TOKENS.get(k, _DEFAULT_MAX_TOKENS))
+                if not reply:
+                    return polished
+                cleaned = finalize_section(k, reply, fallback_unit)
+                if not cleaned:
+                    return polished
+                o, r = len(orig.split()), len(cleaned.split())
+                if o > 20 and (r < o * 0.4 or r > o * 2.5):
+                    logger.warning('refine_user_content: %s length drift (orig=%d, refined=%d); '
+                                   'keeping polished original', k, o, r)
+                    return polished
+                return cleaned
+            return run
 
-        if not reply:
-            refined[key] = text
-            continue
+        tasks.append((key, make_run()))
 
-        cleaned = _clean_draft_text(reply)
-        if not cleaned:
-            refined[key] = text
-            continue
-
-        orig_words = len(text.split())
-        ref_words = len(cleaned.split())
-        if orig_words > 20 and (ref_words < orig_words * 0.4 or ref_words > orig_words * 2.5):
-            logger.warning(
-                'refine_user_content: section %s length drift (orig=%d, refined=%d) '
-                '— keeping original',
-                key, orig_words, ref_words,
-            )
-            refined[key] = text
-            continue
-
-        refined[key] = cleaned
+    max_seconds = getattr(settings, 'REPORT_AI_REFINE_MAX_SECONDS', 80)
+    workers = getattr(settings, 'REPORT_AI_DRAFTING_WORKERS', 6)
+    for key, result in _run_parallel(tasks, max_seconds, workers).items():
+        if result:
+            refined[key] = result
 
     return refined

@@ -1,5 +1,5 @@
 // {% load static %}
-const VERSION = 'v8.6'; // ⚠️ BUMP ON EVERY DEPLOY — browser detects updates via file bytes
+const VERSION = 'v8.7'; // ⚠️ BUMP ON EVERY DEPLOY — browser detects updates via file bytes
 const STATIC_CACHE = 'mp-static-' + VERSION;
 const PAGES_CACHE  = 'mp-pages-'  + VERSION;
 const OFFLINE_URL  = '/offline/';

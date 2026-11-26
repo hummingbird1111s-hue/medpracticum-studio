@@ -22,15 +22,12 @@ def _rgb(hex_str):
 
 
 # ============================================================
-# Bullet / text sanitisation (v11)
+# Bullet / text sanitisation (v12)
 # ============================================================
 # All bullet text flows through _sanitize_bullet() before hitting a
-# shape. This is the LAST line of defence: even if the AI sneaks in
-# **bold**, __italic__, *emphasis*, em dashes, en dashes, hyphen
-# separators, or a leading "- " bullet, we strip them here.
-#
-# The final bullet character (•) is added by _add_para, NOT by this
-# function — so the text handed to _add_para must be plain prose.
+# shape. Strips markdown, dashes, leading markers, duplicate phrases,
+# stray spaces before punctuation, and fixes lowercase 'i' and first-letter
+# capitalization so slides never show raw unedited log strings.
 
 _BULLET_LEADING_RE = re.compile(r'^[\-\*\u2022\u00B7\d\.\)]+\s*')
 _BOLD_RE = re.compile(r'\*\*(.+?)\*\*')
@@ -39,18 +36,18 @@ _ITALIC_RE = re.compile(r'(?<!\w)\*(?!\s)([^*\n]+?)\*(?!\w)')
 _DASH_SEP_RE = re.compile(r'\s+[\u2013\u2014\u2012\u2015]\s+')
 _HYPHEN_SEP_RE = re.compile(r'\s+-\s+')
 _HTML_TAG_RE = re.compile(r'<[^>]+>')
+_ANGLE_BRACKET_RE = re.compile(r'^[<\[]+|[>\]]+$')
+_DUP_PHRASE_RE = re.compile(
+    r'\b(tutorial on|workshop on|meeting on|training on|session on)\s+\1\b',
+    re.IGNORECASE,
+)
+_SPACE_BEFORE_PUNCT_RE = re.compile(r'\s+([.,;:!?])')
+_LOWER_I_RE = re.compile(r'\bi\b')
 
 
 def _sanitize_bullet(text):
     """
-    Clean a single bullet line for a PowerPoint slide.
-
-    Order matters:
-      1. Strip HTML tags.
-      2. Strip markdown bold / italic.
-      3. Convert em/en dashes + spaced hyphens to colons.
-      4. Strip leading bullet markers (only ONE, at the very start).
-      5. Collapse whitespace.
+    Clean and polish a single bullet line for a PowerPoint slide.
     """
     if not text:
         return ''
@@ -61,8 +58,22 @@ def _sanitize_bullet(text):
     text = _DASH_SEP_RE.sub(': ', text)
     text = _HYPHEN_SEP_RE.sub(': ', text)
     text = _BULLET_LEADING_RE.sub('', text.strip())
-    text = re.sub(r'\s{2,}', ' ', text)
-    return text.strip()
+    text = _ANGLE_BRACKET_RE.sub('', text.strip())
+
+    while True:
+        updated = _DUP_PHRASE_RE.sub(r'\1', text)
+        if updated == text:
+            break
+        text = updated
+
+    text = _LOWER_I_RE.sub('I', text)
+    text = _SPACE_BEFORE_PUNCT_RE.sub(r'\1', text)
+    text = re.sub(r'\s{2,}', ' ', text).strip()
+
+    if text and text[0].islower():
+        text = text[0].upper() + text[1:]
+
+    return text
 
 
 def _strip_markup(text):
@@ -71,15 +82,8 @@ def _strip_markup(text):
 
 
 # ============================================================
-# v11 — Obstacle / solution filtering for Activities & Skills slides
+# v12 — Obstacle / solution filtering for Activities & Skills slides
 # ============================================================
-# The Activities and Skills slides must describe WHAT the student DID
-# and WHAT they LEARNED — not the CONDITIONS they endured or HOW they
-# worked around difficulties. Challenges and Recommendations have their
-# own slides. When the AI ignores this and slips a line like
-# "Managed high patient volume during registration" onto the Activities
-# slide, this filter drops it. The report-side filter in ai_drafting.py
-# handles the same problem for the DOCX/PDF; this one handles the PPTX.
 
 _OBSTACLE_MARKERS_PPTX = (
     # Challenges / difficulties
@@ -111,14 +115,15 @@ def _is_obstacle_bullet(text):
 def _trim_to_slide(items, max_items=6, max_chars=220):
     out = []
     for item in items:
-        item = _sanitize_bullet(item)
-        if not item:
-            continue
-        if len(item) > max_chars:
-            item = item[:max_chars].rstrip() + '…'
-        out.append(item)
-        if len(out) >= max_items:
-            break
+        for line in str(item or '').splitlines():
+            cleaned = _sanitize_bullet(line)
+            if not cleaned:
+                continue
+            if len(cleaned) > max_chars:
+                cleaned = cleaned[:max_chars].rstrip() + '…'
+            out.append(cleaned)
+            if len(out) >= max_items:
+                return out
     return out
 
 
@@ -204,8 +209,8 @@ class PracticumPptxBuilder:
         """
         Turn a multi-line block of text (e.g. skills_acquired from the
         report) into a clean list of bullet strings. Every line goes
-        through _sanitize_bullet, so bold, asterisks, dashes, and
-        leading markers are stripped before they reach the slide.
+        through _sanitize_bullet, so bold, asterisks, dashes, lowercase
+        starts, and leading markers are cleaned before reaching the slide.
         """
         out = []
         for line in (text or '').splitlines():
@@ -224,21 +229,15 @@ class PracticumPptxBuilder:
         Return the list of bullet strings for a given slide.
 
         Priority:
-          1. AI-drafted bullets in report.pptx_content[key], sanitised.
-          2. Fallback items derived from the report text, sanitised.
-
-        v11: for pptx_activities_bullets and pptx_skills_bullets, any
-        bullet containing obstacle/solution language is DROPPED. Those
-        slides must describe only what the student DID and LEARNED, never
-        what they endured or worked around. Challenges and Recommendations
-        have their own slides.
+        1. AI-drafted bullets in report.pptx_content[key], sanitised.
+        2. Fallback items derived from the report text, sanitised.
         """
         max_items = max_items or self._max_bullets()
         max_items = min(max_items, self._max_bullets())
         max_chars = self._max_chars()
         raw = (self._pptx_content().get(key) or '').strip()
 
-        # Only the Activities and Skills slides are scrubbed.
+        # Only the Activities and Skills slides are scrubbed for obstacle text.
         strip_obstacles = key in ('pptx_activities_bullets', 'pptx_skills_bullets')
 
         if raw:
@@ -283,6 +282,26 @@ class PracticumPptxBuilder:
                 notes[head] = body
         return notes
 
+    def _activity_fallback_bullets(self, unit_activities):
+        """
+        Build clean '<Unit>: <refined activity>' bullets when AI slide
+        bullets are unavailable.
+        """
+        bullets = []
+        for group in unit_activities:
+            unit = _ANGLE_BRACKET_RE.sub('', (group.get('unit') or '')).rstrip(':').strip()
+            for act in group.get('activities', []):
+                summary = _sanitize_bullet(act.get('summary') or '')
+                if not summary or _is_obstacle_bullet(summary):
+                    continue
+                if summary and summary[0].isupper():
+                    summary_body = summary[0].lower() + summary[1:]
+                else:
+                    summary_body = summary
+                line = f"{unit}: {summary_body}" if unit else summary
+                bullets.append(line)
+        return bullets
+
     def _slide_specs(self):
         d = self.rb._prepare()
         content = self.rb.effective_content()
@@ -315,44 +334,36 @@ class PracticumPptxBuilder:
         content_blocks = [
             ('slide_intro', 'INTRODUCTION',
                 self._bullets('pptx_intro_bullets',
-                              content.get('introduction', '').split('\n\n')),
+                              re.split(r'(?<=[.!?])\s+', content.get('introduction', ''))),
                 True),
             ('slide_facility', 'FACILITY PROFILE',
                 self._bullets('pptx_facility_bullets',
-                              content.get('facility_profile', '').split('\n\n')),
+                              re.split(r'(?<=[.!?])\s+', content.get('facility_profile', ''))),
                 True),
-
-            # v11: filter obstacles from the FALLBACK path for activities.
-            # The AI-drafted path is already filtered inside _bullets().
             ('slide_activities', 'ACTIVITIES PERFORMED',
                 self._bullets('pptx_activities_bullets',
-                              [g['narrative'] for g in d['unit_activities']
-                               if not _is_obstacle_bullet(g['narrative'])]),
+                              self._activity_fallback_bullets(d['unit_activities'])),
                 True),
-
-            # v11: same treatment for skills — both AI path and fallback
-            # path must be obstacle-free.
             ('slide_skills', 'SKILLS ACQUIRED',
                 self._bullets('pptx_skills_bullets',
                               [line for line in self._clean_list(content.get('skills_acquired', ''))
                                if not _is_obstacle_bullet(line)]),
                 True),
-
             ('slide_challenges', 'CHALLENGES FACED',
                 self._bullets('pptx_challenges_bullets',
-                              content.get('challenges', '').split('\n\n'),
+                              re.split(r'(?<=[.!?])\s+', content.get('challenges', '')),
                               max_items=2),
                 True),
             ('slide_observation', 'OBSERVATION AND RECOMMENDATION',
                 self._bullets('pptx_observation_recommendation_bullets',
-                              content.get('observation', '').split('\n\n')
-                              + self._clean_list(content.get('facility_recs', ''))
-                              + self._clean_list(content.get('academic_recs', '')),
+                              re.split(r'(?<=[.!?])\s+', content.get('observation', ''))[:2]
+                              + self._clean_list(content.get('facility_recs', ''))[:1]
+                              + self._clean_list(content.get('academic_recs', ''))[:1],
                               max_items=4),
                 True),
             ('slide_conclusion', 'CONCLUSION',
                 self._bullets('pptx_conclusion_bullets',
-                              content.get('conclusion', '').split('\n\n')),
+                              re.split(r'(?<=[.!?])\s+', content.get('conclusion', ''))),
                 True),
         ]
 
@@ -505,45 +516,46 @@ class PracticumPptxBuilder:
     def _cover_colors(self):
         t = self.template
         if t.get('style') == 'classic_bar':
-            return '1A1A1A', '808080'
+            return '1A1A1A', '4A4A4A'
         return t.get('title_color', '1A1A1A'), t.get('primary_color', '1A1A1A')
 
     def _render_cover(self, slide, data):
         W, H = self.prs_w, self.prs_h
         t = self.template
         self._draw_frame(slide)
-        self._add_logo(slide, data, 0, Inches(0.5), 1.5)
+        self._add_logo(slide, data, 0, Inches(0.35), 1.3)
         title_color, info_color = self._cover_colors()
 
-        _fill_rect(slide, Inches(0.5), Inches(2.1), W - Inches(1.0), Inches(0.08), t['primary_color'])
-        tb = slide.shapes.add_textbox(Inches(0.5), Inches(2.2), W - Inches(1.0), Inches(1.2))
+        _fill_rect(slide, Inches(0.6), Inches(1.85), W - Inches(1.2), Inches(0.06), t['primary_color'])
+        tb = slide.shapes.add_textbox(Inches(0.6), Inches(2.0), W - Inches(1.2), Inches(1.25))
         tb.text_frame.word_wrap = True
-        _add_para(tb.text_frame, data['school_name'].upper(), size=40, bold=True,
+        _add_para(tb.text_frame, data['school_name'].upper(), size=36, bold=True,
                   color=title_color, font=t['heading_font'], align=PP_ALIGN.CENTER,
-                  first=True, space_after=4)
-        _add_para(tb.text_frame, f"Department of {data['dept_name']}", size=28, bold=True,
+                  first=True, space_after=6)
+        _add_para(tb.text_frame, f"Department of {data['dept_name']}", size=26, bold=True,
                   color=title_color, font=t['heading_font'], align=PP_ALIGN.CENTER, space_after=0)
-        _fill_rect(slide, Inches(0.5), Inches(3.4), W - Inches(1.0), Inches(0.08), t['primary_color'])
-        tb = slide.shapes.add_textbox(Inches(0.6), Inches(4.2), W - Inches(1.2), Inches(2.0))
+        _fill_rect(slide, Inches(0.6), Inches(3.35), W - Inches(1.2), Inches(0.06), t['primary_color'])
+
+        tb = slide.shapes.add_textbox(Inches(0.6), Inches(3.9), W - Inches(1.2), Inches(2.2))
         tb.text_frame.word_wrap = True
-        _add_para(tb.text_frame, data['student_name'].upper(), size=32, bold=True,
+        _add_para(tb.text_frame, data['student_name'].upper(), size=30, bold=True,
                   color=info_color, font=t['body_font'], align=PP_ALIGN.CENTER,
-                  first=True, space_after=12)
-        _add_para(tb.text_frame, (data['index_number'] or '').upper(), size=28,
+                  first=True, space_after=10)
+        _add_para(tb.text_frame, (data['index_number'] or '').upper(), size=26,
                   color=info_color, font=t['body_font'], align=PP_ALIGN.CENTER, space_after=8)
-        _add_para(tb.text_frame, f"LEVEL {data['level']}".upper(), size=28,
+        _add_para(tb.text_frame, f"LEVEL {data['level']}".upper(), size=26,
                   color=info_color, font=t['body_font'], align=PP_ALIGN.CENTER, space_after=0)
 
     def _render_title(self, slide, data):
         W, H = self.prs_w, self.prs_h
         t = self.template
         self._draw_frame(slide)
-        self._add_logo(slide, data, 0, Inches(0.5), 1.5)
+        self._add_logo(slide, data, 0, Inches(0.6), 1.4)
         title_color = '1A1A1A' if t.get('style') == 'classic_bar' else t.get('title_color', '1A1A1A')
-        tb = slide.shapes.add_textbox(Inches(0.6), Inches(3.0), W - Inches(1.2), Inches(1.5))
+        tb = slide.shapes.add_textbox(Inches(0.8), Inches(2.6), W - Inches(1.6), Inches(2.0))
         tb.text_frame.word_wrap = True
         tb.text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
-        _add_para(tb.text_frame, data['title'].upper(), size=44, bold=True,
+        _add_para(tb.text_frame, data['title'].upper(), size=42, bold=True,
                   color=title_color, font=t['heading_font'], align=PP_ALIGN.CENTER,
                   first=True, space_after=0)
 
@@ -573,17 +585,17 @@ class PracticumPptxBuilder:
         if self.show_logo:
             logo_data = self.rb._school().get('title_logo')
             if logo_data and logo_data.startswith('data:image'):
-                lw = Inches(0.65)
+                lw = Inches(0.60)
                 ls = self._logo_stream({'title_logo': logo_data})
                 if ls:
                     try:
-                        slide.shapes.add_picture(ls, Inches(0.35), Inches(0.15), lw, lw)
+                        slide.shapes.add_picture(ls, Inches(0.35), Inches(0.18), lw, lw)
                     except Exception:
                         pass
                 rs = self._logo_stream({'title_logo': logo_data})
                 if rs:
                     try:
-                        slide.shapes.add_picture(rs, W - lw - Inches(0.35), Inches(0.15), lw, lw)
+                        slide.shapes.add_picture(rs, W - lw - Inches(0.35), Inches(0.18), lw, lw)
                     except Exception:
                         pass
 
@@ -593,19 +605,19 @@ class PracticumPptxBuilder:
             heading_color = 'FFFFFF'
         else:
             heading_top = Inches(0.20)
-            heading_box_h = Inches(0.80)
+            heading_box_h = Inches(0.75)
             heading_color = '1A1A1A' if is_him else t.get('title_color', '1A1A1A')
 
-        tb = slide.shapes.add_textbox(Inches(1.4), heading_top, W - Inches(2.8), heading_box_h)
+        tb = slide.shapes.add_textbox(Inches(1.3), heading_top, W - Inches(2.6), heading_box_h)
         tb.text_frame.word_wrap = True
         tb.text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
-        _add_para(tb.text_frame, data['heading'].upper(), size=32, bold=True,
+        _add_para(tb.text_frame, data['heading'].upper(), size=30, bold=True,
                   color=heading_color, font=t['heading_font'], align=PP_ALIGN.CENTER,
                   first=True, space_after=0)
 
         if is_him:
-            _fill_rect(slide, Inches(0.9), Inches(1.15), W - Inches(1.8),
-                       Inches(0.06), t['primary_color'])
+            _fill_rect(slide, Inches(0.9), Inches(1.10), W - Inches(1.8),
+                       Inches(0.05), t['primary_color'])
 
         # Defensive: even if a caller bypasses _bullets(), sanitise here too.
         raw_items = data.get('items') or []
@@ -614,8 +626,8 @@ class PracticumPptxBuilder:
         if not items:
             items = ['(No content available for this slide)']
 
-        body_top = Inches(1.35)
-        body_h = H - body_top - Inches(0.8)
+        body_top = Inches(1.30)
+        body_h = H - body_top - Inches(0.85)
         body_tb = slide.shapes.add_textbox(Inches(0.9), body_top, W - Inches(1.8), body_h)
         body_tf = body_tb.text_frame
         body_tf.word_wrap = True
@@ -644,7 +656,6 @@ class PracticumPptxBuilder:
                     'overflow_pct': round(100 * (est_height_pt - box_height_pt) / box_height_pt),
                 })
         except Exception:
-            # A warning should never break the build.
             pass
 
         for i, item in enumerate(items):
@@ -657,11 +668,11 @@ class PracticumPptxBuilder:
         W, H = self.prs_w, self.prs_h
         t = self.template
         self._draw_frame(slide)
-        self._add_logo(slide, data, 0, Inches(0.5), 1.5)
+        self._add_logo(slide, data, 0, Inches(0.6), 1.4)
         title_color = '1A1A1A' if t.get('style') == 'classic_bar' else t.get('title_color', '1A1A1A')
-        tb = slide.shapes.add_textbox(Inches(0.6), Inches(3.0), W - Inches(1.2), Inches(1.5))
+        tb = slide.shapes.add_textbox(Inches(0.8), Inches(2.6), W - Inches(1.6), Inches(2.0))
         tb.text_frame.word_wrap = True
         tb.text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
-        _add_para(tb.text_frame, data['title'], size=54, bold=True,
+        _add_para(tb.text_frame, data['title'], size=50, bold=True,
                   color=title_color, font=t['heading_font'], align=PP_ALIGN.CENTER,
                   first=True, space_after=0)
