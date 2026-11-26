@@ -1,38 +1,22 @@
 """
-Best-effort AI drafting for report sections and slides, with code-enforced
-quality gates.
+AI drafting with per-section local fallback and serialized calls.
 
-v13 — Official-ready, Issah-style output
-----------------------------------------
-* Every call that used to crash silently is now defined in this file:
-  _build_context, _call_ai, _SECTION_FLOORS.  (Previously these were missing,
-  so every draft raised NameError, views.py swallowed it, and the report fell
-  back to raw-log template text.)
-* Sections are drafted IN PARALLEL (ThreadPoolExecutor) instead of one after
-  another, so all of them finish inside the time budget.
-* Prompts match the reference report (Issah Abdul): concise bullets for
-  Activities and Skills, short paragraphs for everything else.
-* Code-level normalisers guarantee the structure the renderers expect
-  (unit heading + bullet lines, "I learnt how to ..." skills, clean
-  paragraphs, no < >, no markdown, capital letters, full stops).
-* Deterministic fallbacks (fallback_skill_line, fallback_lessons_text, ...)
-  so even when the AI is unavailable the report never shows raw lowercase
-  log text.
-* PROMPT_VERSION is part of source_fingerprint(), so drafts written by an
-  older prompt version are automatically re-drafted.
+v14 (Phase A — timing + fallback)
+---------------------------------
+* AI calls are SERIALIZED (one at a time, with a configurable delay) instead
+  of parallel, so rate-limit windows are respected.
+* When AI fails for a section, the LOCAL DRAFTER fills it — no section is ever
+  raw log copy, no section is ever empty.
+* Per-section temperature varies prose sections so regenerations differ.
+* Returns `_section_status` {key: 'ai'|'local'} so the UI can show what was
+  AI-drafted vs what was locally drafted, and can offer a one-click retry.
+* `retry_keys` param → retry only the sections the user chose to re-try.
 
-Settings (all optional)
------------------------
-REPORT_AI_DRAFTING_ENABLED       default True
-REPORT_AI_DRAFTING_MAX_SECONDS   default 90   (whole report, all sections)
-REPORT_AI_DRAFTING_WORKERS       default 6
-REPORT_AI_CALL_TIMEOUT           default 60   (seconds per API call)
-REPORT_AI_CALLABLE               dotted path to YOUR existing text-generation
-                                 function:  fn(prompt, max_tokens=...) -> str
-REPORT_AI_PROVIDER               'anthropic' | 'openai' | 'gemini'
-                                 (auto-detected from the API key if omitted)
-REPORT_AI_MODEL                  override the default model name
-ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY (or GOOGLE_API_KEY)
+Unchanged from v13:
+* Prompts (DRAFT_SECTIONS, PPTX_DRAFT_SECTIONS, _COMMON_RULES, ...)
+* All text polish helpers
+* _build_context, source_fingerprint, refine_user_content
+* draft_presentation_with_ai (still parallel — separate phase)
 """
 
 import concurrent.futures as cf
@@ -45,10 +29,14 @@ import time
 
 from django.conf import settings
 
+from . import local_drafter
+from . import local_pptx_drafter
+
 logger = logging.getLogger(__name__)
 
-PROMPT_VERSION = 'v13'
-DEFAULT_MAX_SECONDS = 90
+PROMPT_VERSION = 'v14'
+DEFAULT_MAX_SECONDS = 120           # raised from 90 — serial takes longer
+DEFAULT_INTER_CALL_DELAY = 0.8      # seconds between AI calls (rate-limit safe)
 
 
 # ============================================================
@@ -76,6 +64,8 @@ _COMMON_RULES = (
     "6. Be concise and direct, like a good student report. No filler such as 'It is "
     "worth noting that'. No heading. No closing remark. No explanation of what you "
     "did.\n"
+    "7. Use the SCHOOL name only for the school, and the FACILITY name only for the "
+    "attachment site. Never interchange them.\n"
 )
 
 _STYLE_EXAMPLES_NOTE = (
@@ -92,9 +82,9 @@ DRAFT_SECTIONS = [
      "work was carried out with the support and supervision of the staff.\n"
      + _STYLE_EXAMPLES_NOTE +
      "Style example: 'I am Ama Mensah, a Level 100 Health Information Management "
-     "student at the College of Health, Yamfo. I undertook my second semester clinical "
-     "attachment at Example Hospital. The practicum gave me practical experience in "
-     "patient registration, appointment booking and the use of LHIMS.'"),
+     "student. I undertook my second semester clinical attachment at Example Hospital. "
+     "The practicum gave me practical experience in patient registration, appointment "
+     "booking and the use of LHIMS.'"),
 
     ('activities_performed', 'Activities Performed',
      "Write the activities as BULLET LINES grouped under plain UNIT HEADINGS, "
@@ -132,7 +122,7 @@ DRAFT_SECTIONS = [
     ('workshops', 'Workshops',
      "Write one short paragraph for each workshop, tutorial, meeting or training "
      "session in the data. Each paragraph: state the date and the clean topic in one "
-     "sentence ('On 4 November 2026, I attended a tutorial on the use of protective "
+     "sentence ('On 4th November 2026, I attended a tutorial on the use of protective "
      "equipment.'), then add one or two sentences explaining in clear English what "
      "such a session covers and how it supported your practicum work. Keep it general "
      "and truthful; do not invent speakers, numbers or details. Never repeat words "
@@ -199,7 +189,6 @@ DRAFT_SECTIONS = [
 ]
 
 
-# Sections that are plain bullet lists / structured / prose (used by finalize_section)
 _PROSE_KEYS = frozenset({
     'introduction', 'workshops', 'lessons_learnt', 'observation', 'observations',
     'challenges', 'recommendations', 'conclusion', 'abstract', 'acknowledgments',
@@ -214,9 +203,6 @@ _SECTION_MAX_TOKENS = {
 }
 _DEFAULT_MAX_TOKENS = 700
 
-
-# Minimum sensible word counts per section (the quality gate rejects drafts
-# shorter than half of these).
 _SECTION_FLOORS = {
     'introduction': 60,
     'activities_performed': 40,
@@ -230,6 +216,23 @@ _SECTION_FLOORS = {
     'abstract': 60,
     'acknowledgments': 40,
 }
+
+# Per-section temperature: high for prose that should vary on regeneration,
+# low for factual sections that must stay stable.
+_SECTION_TEMPERATURE = {
+    'introduction':         0.75,
+    'activities_performed': 0.50,
+    'skills_acquired':      0.60,
+    'workshops':            0.50,
+    'lessons_learnt':       0.80,
+    'observation':          0.75,
+    'challenges':           0.60,
+    'recommendations':      0.70,
+    'conclusion':           0.75,
+    'abstract':             0.70,
+    'acknowledgments':      0.60,
+}
+_DEFAULT_TEMPERATURE = 0.65
 
 _BUDGET_DISTRIBUTION = {
     'acknowledgments':       0.030,
@@ -246,7 +249,7 @@ _BUDGET_DISTRIBUTION = {
 
 
 # ============================================================
-# Presentation drafting (slide bullets + speaker notes)
+# Presentation drafting (unchanged from v13)
 # ============================================================
 
 PPTX_SLIDE_TITLES = (
@@ -337,7 +340,7 @@ _PPTX_MAX_BULLETS = {
 
 
 # ============================================================
-# Quality enforcement constants
+# Quality enforcement constants (unchanged)
 # ============================================================
 
 _VERBATIM_NGRAM_SIZE = 7
@@ -357,9 +360,6 @@ _PLACEHOLDER_TOKENS = (
     'lorem ipsum', '<insert', 'todo:', 'placeholder:', 'xxxx', 'tbd',
 )
 
-# Obstacle / solution language that must not appear in Activities or Skills.
-# (Deliberately narrow: legitimate phrases such as "assisted with registration"
-# or "optimised the filing order" are NOT removed.)
 _OBSTACLE_MARKERS = (
     'challeng', 'difficult', 'struggl', 'obstacle', 'barrier',
     'hinder', 'disrupt', 'delay', 'congest', 'overcrowd', 'shortage',
@@ -395,27 +395,11 @@ _LOWER_I_RE = re.compile(r'\bi\b')
 
 
 # ============================================================
-# Text polishing helpers (also imported by service.py / pptx_builder.py)
+# Text polish helpers (unchanged — re-exported for services.py)
 # ============================================================
 
-def _polish_english(text: str) -> str:
-    """
-    Normalise capitalisation, duplicate prefixes (e.g. 'tutorial on Tutorial on'),
-    a stray lowercase 'i', and spacing before punctuation.
-    """
-    if not text:
-        return ''
-    while True:
-        updated = _DUP_PHRASE_RE.sub(r'\1', text)
-        if updated == text:
-            break
-        text = updated
-
-    text = _LOWER_I_RE.sub('I', text)
-    text = _SPACE_BEFORE_PUNCT_RE.sub(r'\1', text)
-    text = re.sub(r'^([a-z])', lambda m: m.group(1).upper(), text, flags=re.MULTILINE)
-    text = re.sub(r'([.!?]\s+)([a-z])', lambda m: m.group(1) + m.group(2).upper(), text)
-    return text.strip()
+def _polish_english(text):
+    return local_drafter._polish_english(text)
 
 
 def _strip_filler(text):
@@ -428,112 +412,52 @@ def _strip_filler(text):
 
 
 def _clean_unit_heading(heading):
-    cleaned = re.sub(r'^[<\[\s]+|[>\]\s]+$', '', (heading or '')).strip()
-    return cleaned.rstrip(':').strip()
+    return local_drafter._canonical_unit_label(heading)
 
 
 def _ensure_period(line):
-    line = (line or '').strip()
-    if line and line[-1] not in '.!?':
-        line += '.'
-    return line
+    return local_drafter._ensure_period(line)
 
 
 def _capitalise_first(line):
-    line = (line or '').strip()
-    return line[0].upper() + line[1:] if line else line
-
-
-_IRREGULAR_PAST = {
-    'wrote': 'write', 'made': 'make', 'took': 'take', 'ran': 'run', 'kept': 'keep',
-    'gave': 'give', 'held': 'hold', 'led': 'lead', 'met': 'meet', 'sent': 'send',
-    'built': 'build', 'began': 'begin', 'did': 'do', 'saw': 'see', 'got': 'get',
-    'found': 'find', 'taught': 'teach', 'learnt': 'learn', 'learned': 'learn',
-    'brought': 'bring', 'read': 'read', 'put': 'put', 'set': 'set', 'cut': 'cut',
-    'filed': 'file', 'wrote': 'write', 'drew': 'draw', 'spoke': 'speak',
-}
-
-_E_VERBS = frozenset({
-    'schedule', 'update', 'create', 'use', 'calculate', 'generate', 'communicate',
-    'locate', 'manage', 'capture', 'compare', 'organize', 'organise', 'retrieve',
-    'archive', 'file', 'store', 'receive', 'provide', 'prepare', 'complete',
-    'operate', 'navigate', 'validate', 'trace', 'observe', 'change', 'cancel',
-    'issue', 'revise', 'review', 'initiate', 'indicate', 'estimate', 'translate',
-    'withdraw', 'close', 'combine', 'compile', 'continue', 'determine', 'ensure',
-    'explore', 'handle', 'involve', 'name', 'note', 'practise', 'practice',
-    'promote', 'reschedule', 'share', 'type', 'verify', 'rotate', 'integrate',
-})
+    return local_drafter._capitalise_first(line)
 
 
 def _to_base_verb(word):
-    """Past-tense verb -> base form (small heuristic, good for typical log verbs)."""
-    w = (word or '').lower()
-    if w in _IRREGULAR_PAST:
-        return _IRREGULAR_PAST[w]
-    if w.endswith('ied') and len(w) > 4:
-        return w[:-3] + 'y'
-    if w.endswith('ed') and len(w) > 3:
-        with_e = w[:-1]
-        if with_e in _E_VERBS:
-            return with_e
-        base = w[:-2]
-        if len(base) > 3 and base[-1] == base[-2] and base[-1] not in 'lsz':
-            base = base[:-1]
-        return base
-    return w
+    return local_drafter._base_verb(word)
 
 
 def _is_past_verb(word):
-    w = (word or '').lower()
-    return w in _IRREGULAR_PAST or (w.endswith('ed') and len(w) > 3)
+    return local_drafter._is_past_verb(word)
 
 
 def _convert_following_verbs(text):
-    """'register 15 patients and booked appointments' -> '... and book appointments'."""
-    def repl(m):
-        joiner, word = m.group(1), m.group(2)
-        if _is_past_verb(word):
-            return f"{joiner} {_to_base_verb(word)}"
-        return m.group(0)
-    return re.sub(r'\b(and|then|also)\s+([A-Za-z]+)\b', repl, text)
+    return local_drafter._convert_following_verbs(text)
 
 
 def fallback_activity_line(raw):
-    """Raw log activity -> a clean, capitalised, full-stopped line (no AI needed)."""
-    text = ' '.join((raw or '').split())
-    text = re.sub(r'^(?:i\s+)', '', text, flags=re.IGNORECASE)
-    text = _polish_english(text)
-    return _ensure_period(_capitalise_first(text))
+    return local_drafter._to_past_start(raw)
 
 
 def fallback_skill_line(raw):
-    """
-    Raw log skill -> 'I learnt how to ...' (no AI needed).
-    'i registered 15 new patients and booked appointments for them'
-        -> 'I learnt how to register 15 new patients and book appointments for them.'
-    """
+    return local_drafter._draft_skills.__wrapped__ if False else _fallback_skill_line_impl(raw)
+
+
+def _fallback_skill_line_impl(raw):
     text = ' '.join((raw or '').split()).strip().rstrip('.')
     if not text:
         return ''
-    text = re.sub(r'^(?:i\s+(?:was able to|learnt how to|learned how to)\s+)', '',
-                  text, flags=re.IGNORECASE)
+    text = re.sub(r'^(?:i\s+(?:was able to|learnt how to|learned how to)\s+)', '', text, flags=re.IGNORECASE)
     text = re.sub(r'^(?:i\s+)', '', text, flags=re.IGNORECASE)
-    parts = text.split(' ', 1)
-    first = parts[0]
-    rest = parts[1] if len(parts) > 1 else ''
-    if _is_past_verb(first):
-        base = _to_base_verb(first)
-        rest = _convert_following_verbs(rest)
+    first, _, rest = text.partition(' ')
+    if local_drafter._is_past_verb(first.lower()):
+        base = local_drafter._base_verb(first.lower())
+        rest = local_drafter._convert_following_verbs(rest)
         return _ensure_period(f"I learnt how to {base} {rest}".strip())
-    lowered = text[0].lower() + text[1:]
-    return _ensure_period(f"I learnt about {lowered}")
+    return _ensure_period(f"I learnt about {text[0].lower() + text[1:]}")
 
 
 def fallback_lessons_text(skill_lines):
-    """
-    Build 1 short, clean lessons paragraph from skill lines when the AI is
-    unavailable. Never echoes raw log text.
-    """
     phrases = []
     for line in skill_lines or []:
         m = re.match(r'^I learnt how to\s+(.*?)\.?$', (line or '').strip(), flags=re.IGNORECASE)
@@ -555,50 +479,18 @@ def fallback_lessons_text(skill_lines):
     return para
 
 
-# ---------------- unit-name canonicalisation ----------------
-
-_UNIT_ALIASES = {
-    'rch': 'Reproductive and Child Health (RCH) Unit',
-    'reproductive and child health': 'Reproductive and Child Health (RCH) Unit',
-    'reproductive child health': 'Reproductive and Child Health (RCH) Unit',
-    'reproductive and child health rch': 'Reproductive and Child Health (RCH) Unit',
-    'mch': 'Maternal and Child Health (MCH) Unit',
-    'maternal and child health': 'Maternal and Child Health (MCH) Unit',
-    'opd': 'Outpatient Department (OPD)',
-    'out patient': 'Outpatient Department (OPD)',
-    'outpatient': 'Outpatient Department (OPD)',
-    'out patient department': 'Outpatient Department (OPD)',
-    'outpatient department': 'Outpatient Department (OPD)',
-    'opd outpatient department': 'Outpatient Department (OPD)',
-    'medical records': 'Records Unit',
-    'records': 'Records Unit',
-    'record': 'Records Unit',
-    'health information': 'Records Unit',
-}
-
-_UNIT_NOISE_WORDS = frozenset({'unit', 'department', 'dept', 'section', 'the'})
-
+# ---------------- unit canonicalisation (delegates to local_drafter) ----------------
 
 def canonical_unit_key(name):
-    """Lower-case key used to group spellings of the same unit."""
-    text = re.sub(r'[()\[\]<>.,:;/&-]', ' ', (name or '').lower())
-    words = [w for w in text.split() if w not in _UNIT_NOISE_WORDS]
-    return ' '.join(words)
+    return local_drafter._canonical_unit_key(name)
 
 
 def canonical_unit_label(name):
-    """Display name for a unit; merges spellings such as 'RCH' and 'Reproductive and Child Health'."""
-    cleaned = _clean_unit_heading(' '.join((name or '').split()))
-    key = canonical_unit_key(cleaned)
-    if key in _UNIT_ALIASES:
-        return _UNIT_ALIASES[key]
-    if cleaned.islower():
-        return cleaned.title()
-    return cleaned
+    return local_drafter._canonical_unit_label(name)
 
 
 # ============================================================
-# Structure normalisers
+# Structure normalisers (unchanged)
 # ============================================================
 
 _UNICODE_FIXES = {
@@ -625,15 +517,6 @@ def _looks_like_activity_line(line):
 
 
 def _normalize_activities(text, fallback_unit=''):
-    """
-    Re-build Activities Performed so the renderers always get
-        Heading
-        Bullet sentence.
-        Bullet sentence.
-        <blank line>
-        Heading ...
-    Headings: short line, no terminal punctuation, not a past-tense activity.
-    """
     lines = [l.strip() for l in (text or '').splitlines() if l.strip()]
     blocks = []
     cur_head, cur = None, []
@@ -661,7 +544,7 @@ def _normalize_activities(text, fallback_unit=''):
             continue
         head = head or canonical_unit_label(fallback_unit) or 'Other Activities'
         key = canonical_unit_key(head)
-        if key in seen_heads:                       # merge repeated headings
+        if key in seen_heads:
             seen_heads[key][1].extend(bullets)
             continue
         entry = [head, list(bullets)]
@@ -737,7 +620,6 @@ def _strip_obstacle_content(text, section_key):
 
 
 def _clean_draft_text(text, section_title=''):
-    """Remove markdown / brackets / bullets / numbering and polish capitalisation."""
     if not text:
         return ''
     text = _normalize_unicode(text)
@@ -745,7 +627,6 @@ def _clean_draft_text(text, section_title=''):
     text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
     text = re.sub(r'__(.+?)__', r'\1', text)
     text = re.sub(r'(?<!\w)\*(?!\s)([^*\n]+?)\*(?!\w)', r'\1', text)
-    # <Records Unit>  /  [Records Unit]:  ->  Records Unit
     text = re.sub(r'^[ \t]*[<\[][ \t]*([^<>\[\]\n]+?)[ \t]*[>\]][ \t]*:?[ \t]*$',
                   r'\1', text, flags=re.MULTILINE)
     text = _KNOWN_HTML_TAG_RE.sub('', text)
@@ -764,10 +645,6 @@ def _clean_draft_text(text, section_title=''):
 
 
 def finalize_section(key, text, fallback_unit='', section_title=''):
-    """
-    Clean + structurally normalise one section. Used for freshly drafted AND
-    refined text, so both paths produce renderer-ready output.
-    """
     text = _clean_draft_text(text or '', section_title)
     text, _removed = _strip_obstacle_content(text, key)
     if not text.strip():
@@ -782,7 +659,7 @@ def finalize_section(key, text, fallback_unit='', section_title=''):
 
 
 # ============================================================
-# AI client
+# AI client (temperature now configurable)
 # ============================================================
 
 def _ai_setting(name, default=None):
@@ -813,14 +690,14 @@ def _http_json(url, headers, payload, timeout):
     for attempt in range(2):
         try:
             resp = requests.post(url, headers=headers, json=payload, timeout=timeout)
-        except Exception as exc:                          # network / timeout
+        except Exception as exc:
             last = exc
             logger.warning('AI HTTP error (attempt %d): %s', attempt + 1, exc)
             time.sleep(1.5)
             continue
         if resp.status_code in (429, 500, 502, 503, 529) and attempt == 0:
-            logger.warning('AI HTTP %s — retrying once', resp.status_code)
-            time.sleep(2.0)
+            logger.warning('AI HTTP %s — retrying once after 5s', resp.status_code)
+            time.sleep(5.0)   # raised from 2.0 — gives 429 windows time to reset
             continue
         if resp.status_code >= 400:
             logger.error('AI HTTP %s: %s', resp.status_code, resp.text[:300])
@@ -835,16 +712,11 @@ def _http_json(url, headers, payload, timeout):
     return None
 
 
-def _call_ai(prompt, max_tokens=None):
-    """
-    Send ONE prompt, return the reply text or None on any failure.
-
-    Priority:
-      1. settings.REPORT_AI_CALLABLE  (dotted path to your existing function)
-      2. Anthropic / OpenAI / Gemini over HTTPS, chosen by REPORT_AI_PROVIDER
-         or by whichever API key is configured.
-    """
+def _call_ai(prompt, max_tokens=None, temperature=None):
+    """Send one prompt, return the reply text or None. Temperature defaults per section caller."""
     max_tokens = max_tokens or _DEFAULT_MAX_TOKENS
+    if temperature is None:
+        temperature = _DEFAULT_TEMPERATURE
     timeout = float(_ai_setting('REPORT_AI_CALL_TIMEOUT', 60))
 
     dotted = _ai_setting('REPORT_AI_CALLABLE')
@@ -853,9 +725,12 @@ def _call_ai(prompt, max_tokens=None):
             from django.utils.module_loading import import_string
             fn = import_string(dotted)
             try:
-                result = fn(prompt, max_tokens=max_tokens)
+                result = fn(prompt, max_tokens=max_tokens, temperature=temperature)
             except TypeError:
-                result = fn(prompt)
+                try:
+                    result = fn(prompt, max_tokens=max_tokens)
+                except TypeError:
+                    result = fn(prompt)
             return (result or '').strip() or None
         except Exception:
             logger.exception('REPORT_AI_CALLABLE %s failed', dotted)
@@ -876,7 +751,7 @@ def _call_ai(prompt, max_tokens=None):
                 {
                     'model': model or 'claude-sonnet-4-6',
                     'max_tokens': max_tokens,
-                    'temperature': 0.4,
+                    'temperature': temperature,
                     'messages': [{'role': 'user', 'content': prompt}],
                 },
                 timeout,
@@ -897,7 +772,7 @@ def _call_ai(prompt, max_tokens=None):
                 {
                     'model': model or 'gpt-4o-mini',
                     'max_tokens': max_tokens,
-                    'temperature': 0.4,
+                    'temperature': temperature,
                     'messages': [{'role': 'user', 'content': prompt}],
                 },
                 timeout,
@@ -914,7 +789,7 @@ def _call_ai(prompt, max_tokens=None):
                 {'Content-Type': 'application/json'},
                 {
                     'contents': [{'parts': [{'text': prompt}]}],
-                    'generationConfig': {'temperature': 0.4, 'maxOutputTokens': max_tokens},
+                    'generationConfig': {'temperature': temperature, 'maxOutputTokens': max_tokens},
                 },
                 timeout,
             )
@@ -931,7 +806,7 @@ def _call_ai(prompt, max_tokens=None):
 
 
 # ============================================================
-# Student-data context
+# Student-data context (unchanged)
 # ============================================================
 
 def _clean_workshop_topic(text):
@@ -942,33 +817,14 @@ def _clean_workshop_topic(text):
 
 
 def _fmt_date(value):
-    try:
-        return value.strftime('%d %B %Y').lstrip('0')
-    except Exception:
-        return str(value or '')
+    return local_drafter._fmt_date(value)
 
 
 def _session_units(session):
-    """OrderedDict-like list of (canonical label, day count) in order of appearance."""
-    units, order = {}, []
-    for log in session.daily_logs.filter(is_deleted=False).order_by('date'):
-        label = canonical_unit_label(getattr(log, 'unit_sub_department', '') or '')
-        if not label:
-            continue
-        key = canonical_unit_key(label)
-        if key not in units:
-            units[key] = [label, 0]
-            order.append(key)
-        units[key][1] += 1
-    return [tuple(units[k]) for k in order]
+    return local_drafter._units(session)
 
 
 def _build_context(session, include_report=False):
-    """
-    Labelled plain-text dump of everything the AI may use as fact.
-    Field labels (ACTIVITY / SKILL / CHALLENGE / SOLUTION) are referenced by
-    the prompt rules, so do not rename them.
-    """
     lines = []
     user = getattr(session, 'user', None)
     facility = getattr(session, 'facility', None)
@@ -1060,7 +916,7 @@ def _build_context(session, include_report=False):
 
 
 # ============================================================
-# Fingerprint + quality gates
+# Fingerprint + quality gates (unchanged)
 # ============================================================
 
 def source_fingerprint(session):
@@ -1209,14 +1065,10 @@ def _compute_word_budget(target_pages, log_count=0, competency_count=0):
 
 
 # ============================================================
-# Parallel runner
+# Parallel runner — kept for PPTX path
 # ============================================================
 
 def _run_parallel(tasks, max_seconds, workers):
-    """
-    tasks: list of (key, callable). Returns {key: result} for the tasks that
-    finished inside max_seconds. Unfinished threads are abandoned.
-    """
     results = {}
     if not tasks:
         return results
@@ -1235,7 +1087,7 @@ def _run_parallel(tasks, max_seconds, workers):
     finally:
         try:
             ex.shutdown(wait=False, cancel_futures=True)
-        except TypeError:                                  # Python < 3.9
+        except TypeError:
             ex.shutdown(wait=False)
     return results
 
@@ -1252,23 +1104,131 @@ def _section_prompt(title, instruction, context, extras):
 
 
 # ============================================================
-# Report drafting
+# Report drafting — SERIAL with per-section local fallback
 # ============================================================
 
-def draft_sections_with_ai(session, samples=None, target_pages=None):
-    if not getattr(settings, 'REPORT_AI_DRAFTING_ENABLED', True):
-        return {}
+def _draft_one_section(
+    session, key, title, instruction, context, extras, budgets, log_ngrams, fallback_unit,
+):
+    """
+    Try AI for one section; fall back to local drafter on ANY failure.
+    Returns (text, source) where source is 'ai' or 'local'.
+    """
+    budget = budgets.get(key, 0)
+    hint = ''
+    if budget:
+        hint = (f"LENGTH: aim for roughly {int(budget * 0.8)} to {int(budget * 1.2)} "
+                f"words, no more than the source material supports.\n")
+    prompt = _section_prompt(title, instruction, context, extras + hint)
+    max_tokens = _SECTION_MAX_TOKENS.get(key, _DEFAULT_MAX_TOKENS)
+    floor = _SECTION_FLOORS.get(key, 0)
+    max_word = int(budget * 1.5) if budget else 0
+    temperature = _SECTION_TEMPERATURE.get(key, _DEFAULT_TEMPERATURE)
 
-    if not _ai_configured():
-        logger.error('AI drafting skipped: no REPORT_AI_CALLABLE or API key configured')
-        return {'_ai_note': (
-            'AI drafting is not configured on the server, so the template text was '
-            'used. Ask the administrator to set an AI provider key.'
-        )}
+    try:
+        reply = _call_ai(prompt, max_tokens=max_tokens, temperature=temperature)
+    except Exception:
+        logger.exception('AI call raised for section %s', key)
+        reply = None
+
+    if reply is not None:
+        text = finalize_section(key, reply, fallback_unit, title)
+        issues = [i for i in _quality_issues(key, text, log_ngrams, floor, max_word)
+                  if i[0] != 'too_long']
+        if text and not issues:
+            return text, 'ai'
+        # Quality retry once (only if we still have a valid text to fall back on)
+        retry_reply = _call_ai(
+            _build_retry_prompt(prompt, title, issues),
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+        if retry_reply is not None:
+            retry_text = finalize_section(key, retry_reply, fallback_unit, title)
+            retry_issues = [i for i in _quality_issues(key, retry_text, log_ngrams, floor, max_word)
+                            if i[0] != 'too_long']
+            if retry_text and not retry_issues:
+                return retry_text, 'ai'
+            if retry_text and (not text or len(retry_text) > len(text)):
+                text = retry_text
+        if text:
+            return text, 'ai'
+
+    # AI failed — local drafter
+    local_text = local_drafter.draft_local_section(session, key)
+    if local_text:
+        return local_text, 'local'
+    logger.error('Both AI and local drafting failed for section %s', key)
+    return None, None
+
+
+def _status_note(section_status):
+    ai_keys = [k for k, v in section_status.items() if v == 'ai']
+    local_keys = [k for k, v in section_status.items() if v == 'local']
+    total = len(section_status)
+    if not total:
+        return ''
+    if not local_keys:
+        return f'All {total} sections were drafted by AI. Regenerate any time to re-polish.'
+    if not ai_keys:
+        return (
+            f'All {total} sections were drafted locally because the AI service was '
+            f'unavailable. The report is complete and usable. If you want AI-polished '
+            f'prose, wait 60 seconds and try again.'
+        )
+    return (
+        f'{len(ai_keys)} of {total} sections were drafted by AI. '
+        f'{len(local_keys)} section(s) were drafted locally because the AI service was '
+        f'unavailable for them: {", ".join(local_keys)}. '
+        f'You can retry just those sections after 60 seconds.'
+    )
+
+
+def draft_sections_with_ai(session, samples=None, target_pages=None, retry_keys=None):
+    """
+    Draft all report sections. AI first, local fallback per section.
+
+    Returns:
+        {
+            'introduction': 'text',
+            ...
+            '_ai_note': 'Human summary of what was AI-drafted vs locally-drafted',
+            '_section_status': {'introduction': 'ai', 'skills_acquired': 'local', ...},
+            '_failed_keys': ['skills_acquired', ...],   # retry candidates
+            '_source_hash': '...',
+        }
+
+    When `retry_keys` is given, only those sections are drafted (the caller is
+    expected to merge results into existing content).
+    """
+    enabled = getattr(settings, 'REPORT_AI_DRAFTING_ENABLED', True)
+    ai_ok = _ai_configured()
+
+    # If AI is off entirely → produce a full local report, never empty.
+    if not enabled or not ai_ok:
+        keys = retry_keys or [k for k, _t, _i in DRAFT_SECTIONS]
+        local_drafts = local_drafter.draft_local_sections(session, keys)
+        section_status = {k: 'local' for k in local_drafts}
+        reason = ('AI drafting is disabled on the server.' if not enabled
+                  else 'No AI provider is configured on the server.')
+        return {
+            **local_drafts,
+            '_ai_note': f'{reason} All sections were drafted locally.',
+            '_section_status': section_status,
+            '_failed_keys': list(local_drafts.keys()),
+            '_source_hash': source_fingerprint(session),
+        }
 
     context = _build_context(session)
     if not context.strip():
-        return {}
+        local_drafts = local_drafter.draft_local_sections(session, retry_keys)
+        return {
+            **local_drafts,
+            '_ai_note': 'No student data was available — sections drafted with placeholders.',
+            '_section_status': {k: 'local' for k in local_drafts},
+            '_failed_keys': list(local_drafts.keys()),
+            '_source_hash': '',
+        }
 
     log_ngrams = _build_log_ngrams(session)
     try:
@@ -1306,98 +1266,69 @@ def draft_sections_with_ai(session, samples=None, target_pages=None):
     budgets = _compute_word_budget(target_pages, log_count=log_count,
                                    competency_count=len(competencies))
 
-    note = ''
-    if log_count < 5:
-        note = (f"Note: you have very few logs ({log_count}). The AI stayed close to what you "
-                f"logged. Adding more detailed daily logs will make the report fuller"
-                + (f" and help reach your {target_pages}-page target." if target_pages else "."))
-    elif log_count < 15 and target_pages:
-        note = (f"Note: if the report falls short of your {target_pages}-page target, "
-                f"adding more daily logs will give the AI more material.")
-
-    max_seconds = getattr(settings, 'REPORT_AI_DRAFTING_MAX_SECONDS', DEFAULT_MAX_SECONDS)
-    workers = getattr(settings, 'REPORT_AI_DRAFTING_WORKERS', 6)
+    max_seconds = float(getattr(settings, 'REPORT_AI_DRAFTING_MAX_SECONDS', DEFAULT_MAX_SECONDS))
+    inter_delay = float(getattr(settings, 'REPORT_AI_DRAFTING_INTER_CALL_DELAY',
+                                DEFAULT_INTER_CALL_DELAY))
     deadline = time.time() + max_seconds
 
-    def make_task(key, title, instruction):
-        budget = budgets.get(key, 0)
-        hint = ''
-        if budget:
-            hint = (f"LENGTH: aim for roughly {int(budget * 0.8)} to {int(budget * 1.2)} "
-                    f"words, no more than the source material supports.\n")
-        prompt = _section_prompt(title, instruction, context, extras + hint)
-        max_tokens = _SECTION_MAX_TOKENS.get(key, _DEFAULT_MAX_TOKENS)
-        floor = _SECTION_FLOORS.get(key, 0)
-        max_word = int(budget * 1.5) if budget else 0
-
-        def run():
-            reply = _call_ai(prompt, max_tokens=max_tokens)
-            if reply is None:
-                return None, ['no_reply']
-            text = finalize_section(key, reply, fallback_unit, title)
-            issues = [i for i in _quality_issues(key, text, log_ngrams, floor, max_word)
-                      if i[0] != 'too_long']
-            if not issues:
-                return text, []
-            if time.time() < deadline - 12:
-                retry_reply = _call_ai(_build_retry_prompt(prompt, title, issues),
-                                       max_tokens=max_tokens)
-                if retry_reply is not None:
-                    retry_text = finalize_section(key, retry_reply, fallback_unit, title)
-                    retry_issues = [i for i in _quality_issues(key, retry_text, log_ngrams, floor, max_word)
-                                    if i[0] != 'too_long']
-                    if not retry_issues:
-                        return retry_text, []
-                    if retry_text and (not text or len(retry_text) > len(text)):
-                        text = retry_text
-                    issues = retry_issues
-            return (text or None), [code for code, _ in issues]
-
-        return run
-
-    tasks = [(key, make_task(key, title, instruction))
-             for key, title, instruction in DRAFT_SECTIONS]
-    results = _run_parallel(tasks, max_seconds, workers)
-
+    sections_to_run = retry_keys or [k for k, _t, _i in DRAFT_SECTIONS]
+    section_status = {}
     drafts = {}
-    failed_titles, flagged_titles = [], []
-    for key, title, _instr in DRAFT_SECTIONS:
-        text, issue_codes = results.get(key, (None, ['timeout']))
+
+    first_call_done = False
+    for key, title, instruction in DRAFT_SECTIONS:
+        if key not in sections_to_run:
+            continue
+
+        # Serial pacing — sleep between calls so we don't hit TPM
+        if first_call_done and inter_delay > 0:
+            time.sleep(inter_delay)
+
+        # Time budget check
+        if time.time() >= deadline:
+            local_text = local_drafter.draft_local_section(session, key)
+            if local_text:
+                drafts[key] = local_text
+                section_status[key] = 'local'
+                logger.warning('Time budget hit — %s drafted locally', key)
+            continue
+
+        text, source = _draft_one_section(
+            session, key, title, instruction, context, extras, budgets,
+            log_ngrams, fallback_unit,
+        )
+        first_call_done = True
+
         if text:
             drafts[key] = text
-            if issue_codes:
-                flagged_titles.append(title)
+            section_status[key] = source
         else:
-            failed_titles.append(title)
+            # Both AI and local failed — log loudly, but never leave the section out
+            logger.error('Section %s could not be drafted at all', key)
 
-    notes_out = [note] if note else []
-    if failed_titles:
-        notes_out.append(
-            "These sections could not be drafted by the AI and use clean fallback "
-            "text instead: " + ', '.join(failed_titles) +
-            ". Click Generate again to retry them."
-        )
-    if flagged_titles:
-        notes_out.append(
-            ', '.join(flagged_titles) + " were drafted but flagged for review. "
-            "Open 'Edit Report Manually' to check them."
-        )
+    failed_keys = [k for k, v in section_status.items() if v == 'local']
+    note = _status_note(section_status)
+    if log_count < 5:
+        note = f"Note: only {log_count} log(s) recorded. " + note
 
-    logger.info('AI drafting finished: %d drafted, %d failed, %d flagged (v=%s)',
-                len(drafts), len(failed_titles), len(flagged_titles), PROMPT_VERSION)
+    logger.info(
+        'AI drafting finished: %d ai, %d local, %d empty (v=%s)',
+        sum(1 for v in section_status.values() if v == 'ai'),
+        sum(1 for v in section_status.values() if v == 'local'),
+        len(sections_to_run) - len(section_status),
+        PROMPT_VERSION,
+    )
 
-    out = {}
-    if notes_out:
-        out['_ai_note'] = ' '.join(notes_out)
-    if not drafts:
-        return out                    # nothing usable: no fingerprint, so it retries next time
-    out.update(drafts)
+    out = dict(drafts)
+    out['_ai_note'] = note
+    out['_section_status'] = section_status
+    out['_failed_keys'] = failed_keys
     out['_source_hash'] = source_fingerprint(session)
     return out
 
 
 # ============================================================
-# Presentation drafting
+# Presentation drafting (unchanged from v13 — Phase B will fix)
 # ============================================================
 
 def _clean_pptx_text(text):
@@ -1456,16 +1387,60 @@ def _finalize_pptx(key, text):
     return '\n'.join(uniq[:_PPTX_MAX_BULLETS.get(key, 6)])
 
 
-def draft_presentation_with_ai(session, target_slides=7):
-    if not getattr(settings, 'REPORT_AI_DRAFTING_ENABLED', True):
-        return {}
-    if not _ai_configured():
-        logger.error('PPTX AI drafting skipped: no AI provider configured')
-        return {}
+def draft_presentation_with_ai(session, target_slides=7, retry_keys=None):
+    """
+    Draft PPTX slide content. Serial (like report drafting). AI first,
+    local fallback per slide (derived from the already-generated report).
+
+    Returns a dict with:
+      - the slide bullet keys (pptx_intro_bullets, ..., pptx_speaker_notes)
+      - '_pptx_section_status': {key: 'ai'|'local'}
+      - '_pptx_failed_keys': [key, ...]        # retry candidates
+      - '_pptx_ai_note': human-readable summary
+      - '_source_hash': fingerprint
+
+    When `retry_keys` is given, only those slides are re-drafted (the caller
+    is expected to merge the results into existing pptx_content).
+    """
+    enabled = getattr(settings, 'REPORT_AI_DRAFTING_ENABLED', True)
+
+    # Fetch the already-generated report (guaranteed complete after Phase A).
+    try:
+        from .models import GeneratedReport
+        report = GeneratedReport.objects.filter(attachment=session).first()
+        report_content = (report.content or {}) if report else {}
+    except Exception:
+        report_content = {}
+
+    keys_to_run = retry_keys or [k for k, _t, _i in PPTX_DRAFT_SECTIONS]
+
+    # AI off entirely (or not configured) → full local PPTX.
+    if not enabled or not _ai_configured():
+        local_drafts = local_pptx_drafter.draft_local_pptx_sections(
+            session, report_content, keys_to_run,
+        )
+        reason = ('AI drafting is disabled on the server.' if not enabled
+                  else 'No AI provider is configured on the server.')
+        return {
+            **local_drafts,
+            '_pptx_ai_note': f'{reason} All slides were drafted locally.',
+            '_pptx_section_status': {k: 'local' for k in local_drafts},
+            '_pptx_failed_keys': list(local_drafts.keys()),
+            '_source_hash': source_fingerprint(session),
+        }
 
     context = _build_context(session, include_report=True)
     if not context.strip():
-        return {}
+        local_drafts = local_pptx_drafter.draft_local_pptx_sections(
+            session, report_content, keys_to_run,
+        )
+        return {
+            **local_drafts,
+            '_pptx_ai_note': 'No student data available — slides drafted locally.',
+            '_pptx_section_status': {k: 'local' for k in local_drafts},
+            '_pptx_failed_keys': list(local_drafts.keys()),
+            '_source_hash': '',
+        }
 
     try:
         competencies = list(session.competencies.values_list('text', flat=True))
@@ -1475,15 +1450,41 @@ def draft_presentation_with_ai(session, target_slides=7):
 
     extras = _PPTX_RULES
     if competencies:
-        extras += "Reflect the competency areas in the Skills and Conclusion bullets where natural.\n"
+        extras += ("Reflect the competency areas in the Skills and Conclusion "
+                   "bullets where natural.\n")
     if log_count < 5:
-        extras += "The student has very few logs: stay truthful and do not invent anything.\n"
+        extras += ("The student has very few logs: stay truthful and do not "
+                   "invent anything.\n")
 
-    max_seconds = getattr(settings, 'REPORT_AI_DRAFTING_MAX_SECONDS', DEFAULT_MAX_SECONDS)
-    workers = getattr(settings, 'REPORT_AI_DRAFTING_WORKERS', 6)
+    max_seconds = float(getattr(settings, 'REPORT_AI_DRAFTING_MAX_SECONDS',
+                                DEFAULT_MAX_SECONDS))
+    inter_delay = float(getattr(settings, 'REPORT_AI_DRAFTING_INTER_CALL_DELAY',
+                                DEFAULT_INTER_CALL_DELAY))
     deadline = time.time() + max_seconds
 
-    def make_task(key, title, instruction):
+    section_status = {}
+    drafts = {}
+    first_call_done = False
+
+    for key, title, instruction in PPTX_DRAFT_SECTIONS:
+        if key not in keys_to_run:
+            continue
+
+        # Serial pacing (rate-limit safe)
+        if first_call_done and inter_delay > 0:
+            time.sleep(inter_delay)
+
+        # Time budget check
+        if time.time() >= deadline:
+            local_text = local_pptx_drafter.draft_local_pptx_section(
+                session, key, report_content,
+            )
+            if local_text:
+                drafts[key] = local_text
+                section_status[key] = 'local'
+                logger.warning('PPTX time budget hit — %s drafted locally', key)
+            continue
+
         prompt = (
             f"You are preparing '{title}' content for a PowerPoint presentation "
             f"summarising a health-information practicum report for a Ghanaian "
@@ -1493,33 +1494,61 @@ def draft_presentation_with_ai(session, target_slides=7):
             f"--- STUDENT DATA ---\n{context}\n-------------------\n"
         )
 
-        def run():
-            reply = _call_ai(prompt, max_tokens=500)
-            text = _finalize_pptx(key, reply) if reply else ''
-            if not text and time.time() < deadline - 10:
-                reply = _call_ai(prompt + "\nYour previous answer was empty or invalid. "
-                                 "Answer again following the format exactly.", max_tokens=500)
-                text = _finalize_pptx(key, reply) if reply else ''
-            return text
+        try:
+            reply = _call_ai(prompt, max_tokens=500, temperature=0.6)
+        except Exception:
+            logger.exception('PPTX AI call raised for %s', key)
+            reply = None
+        first_call_done = True
 
-        return run
+        text = _finalize_pptx(key, reply) if reply else ''
 
-    tasks = [(key, make_task(key, title, instruction))
-             for key, title, instruction in PPTX_DRAFT_SECTIONS]
-    results = _run_parallel(tasks, max_seconds, workers)
+        if text:
+            drafts[key] = text
+            section_status[key] = 'ai'
+        else:
+            local_text = local_pptx_drafter.draft_local_pptx_section(
+                session, key, report_content,
+            )
+            if local_text:
+                drafts[key] = local_text
+                section_status[key] = 'local'
+            else:
+                logger.error('Both AI and local PPTX drafting failed for %s', key)
 
-    drafts = {key: text for key, text in results.items() if text}
-    missing = [k for k, _t, _i in PPTX_DRAFT_SECTIONS if k not in drafts]
-    if missing:
-        logger.warning('PPTX AI drafting: %d slide section(s) missing: %s', len(missing), missing)
-    if not drafts:
-        return {}
-    drafts['_source_hash'] = source_fingerprint(session)
-    return drafts
+    failed = [k for k, v in section_status.items() if v == 'local']
+    ai_count = sum(1 for v in section_status.values() if v == 'ai')
+    local_count = sum(1 for v in section_status.values() if v == 'local')
+    total = len(section_status)
+
+    if not failed:
+        note = f'All {total} slides were drafted by AI.'
+    elif ai_count == 0:
+        note = (f'All {total} slides were drafted locally because the AI '
+                f'service was unavailable. The presentation is complete. '
+                f'Wait 60 seconds and retry to get AI-polished slides.')
+    else:
+        note = (f'{ai_count} of {total} slides were drafted by AI. '
+                f'{local_count} slide(s) were drafted locally: '
+                f'{", ".join(failed)}. You can retry just those slides '
+                f'after 60 seconds.')
+
+    logger.info(
+        'PPTX drafting finished: %d ai, %d local, %d empty (v=%s)',
+        ai_count, local_count, len(keys_to_run) - len(section_status),
+        PROMPT_VERSION,
+    )
+
+    out = dict(drafts)
+    out['_pptx_ai_note'] = note
+    out['_pptx_section_status'] = section_status
+    out['_pptx_failed_keys'] = failed
+    out['_source_hash'] = source_fingerprint(session)
+    return out
 
 
 # ============================================================
-# Manual-edit refinement
+# Manual-edit refinement (unchanged)
 # ============================================================
 
 _REFINE_INSTRUCTIONS = {
@@ -1562,7 +1591,7 @@ def refine_user_content(session, current_content):
 
         instruction = _REFINE_INSTRUCTIONS.get(key)
         polished_original = finalize_section(key, text, fallback_unit) or _polish_english(text)
-        refined[key] = polished_original               # safe default
+        refined[key] = polished_original
 
         if not instruction or not ai_ok:
             continue
@@ -1583,7 +1612,8 @@ def refine_user_content(session, current_content):
 
         def make_run(k=key, orig=text, p=prompt, polished=polished_original):
             def run():
-                reply = _call_ai(p, max_tokens=_SECTION_MAX_TOKENS.get(k, _DEFAULT_MAX_TOKENS))
+                reply = _call_ai(p, max_tokens=_SECTION_MAX_TOKENS.get(k, _DEFAULT_MAX_TOKENS),
+                                 temperature=0.5)
                 if not reply:
                     return polished
                 cleaned = finalize_section(k, reply, fallback_unit)

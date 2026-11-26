@@ -127,6 +127,56 @@
     to   { transform: scaleX(0); }
   }
 
+  /* ============================================================
+     Phase B3 — AI status banner + retry button
+     ============================================================ */
+  .mp-ai-status {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    padding: 14px 16px;
+    border-radius: 14px;
+    margin-bottom: 16px;
+    border: 2px solid;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+  .mp-ai-status--ok     { background: #f0fdf4; border-color: #86efac; }
+  .mp-ai-status--partial { background: #fffbeb; border-color: #fcd34d; }
+  .mp-ai-status--local  { background: #fef2f2; border-color: #fecaca; }
+  .mp-ai-status__icon {
+    flex-shrink: 0;
+    font-size: 22px;
+    line-height: 1;
+    margin-top: 1px;
+  }
+  .mp-ai-status__body { flex: 1; min-width: 0; }
+  .mp-ai-status__note {
+    margin: 0 0 8px;
+    font-size: 13.5px;
+    line-height: 1.55;
+  }
+  .mp-ai-status--ok     .mp-ai-status__note { color: #065f46; }
+  .mp-ai-status--partial .mp-ai-status__note { color: #92400e; }
+  .mp-ai-status--local  .mp-ai-status__note { color: #991b1b; }
+  .mp-ai-retry-btn {
+    border: 0;
+    border-radius: 9px;
+    padding: 9px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #ffffff;
+    background: #059669;
+    cursor: wait;
+    opacity: 0.65;
+    transition: opacity 0.15s, background-color 0.15s;
+    font-family: inherit;
+  }
+  .mp-ai-retry-btn:not(:disabled) {
+    cursor: pointer;
+    opacity: 1;
+  }
+  .mp-ai-retry-btn:not(:disabled):hover { background: #047857; }
+
   #gen-overlay {
     display: none; position: fixed; inset: 0; z-index: 999999;
     background: rgba(17, 24, 39, 0.72); backdrop-filter: blur(2px);
@@ -362,6 +412,67 @@ after 12s with a slow 1.2s fade.
     {% endif %}
   {% endfor %}
 </div>
+{% endif %}
+
+{# ============================================================
+   PHASE B3 — PPTX AI STATUS BANNER + RETRY
+   Shown when report.pptx_content._pptx_ai_note exists (i.e. a
+   presentation has been drafted at least once). Renders the
+   human summary produced by draft_presentation_with_ai().
+   If any slides are still 'local', a retry button appears —
+   disabled for 60s from page load, then clickable.
+   ============================================================ #}
+{% if pptx_ai_note %}
+  {% if pptx_failed_keys %}
+    {% if pptx_failed_keys|length < pptx_section_status|length %}
+      <div class="mp-ai-status mp-ai-status--partial">
+    {% else %}
+      <div class="mp-ai-status mp-ai-status--local">
+    {% endif %}
+  {% else %}
+    <div class="mp-ai-status mp-ai-status--ok">
+  {% endif %}
+    <div class="mp-ai-status__icon">🎞️</div>
+    <div class="mp-ai-status__body">
+      <p class="mp-ai-status__note">{{ pptx_ai_note }}</p>
+      {% if pptx_failed_keys %}
+        <form method="post"
+              action="{% url 'retry_pptx_sections' %}?attachment_id={{ session.id }}"
+              style="margin:0;">
+          {% csrf_token %}
+          {% for k in pptx_failed_keys %}
+            <input type="hidden" name="keys" value="{{ k }}">
+          {% endfor %}
+          <button type="submit"
+                  class="mp-ai-retry-btn"
+                  data-retry-countdown="60"
+                  data-retry-idle="Retry {{ pptx_failed_keys|length }} slide{{ pptx_failed_keys|length|pluralize }}"
+                  disabled>
+            Retry {{ pptx_failed_keys|length }} slide{{ pptx_failed_keys|length|pluralize }} (wait 60s)
+          </button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+  <script>
+    (function () {
+      var btn = document.querySelector('.mp-ai-retry-btn[data-retry-countdown]');
+      if (!btn) return;
+      var idle = btn.getAttribute('data-retry-idle') || 'Retry';
+      var remaining = parseInt(btn.getAttribute('data-retry-countdown'), 10) || 60;
+      function tick() {
+        if (remaining <= 0) {
+          btn.disabled = false;
+          btn.textContent = idle;
+          return;
+        }
+        btn.textContent = idle + ' (wait ' + remaining + 's)';
+        remaining -= 1;
+        setTimeout(tick, 1000);
+      }
+      tick();
+    })();
+  </script>
 {% endif %}
 
 <!-- PHASE 3 GATE: subscription state banner -->

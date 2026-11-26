@@ -31,6 +31,27 @@
   .switcher-wrapper { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 12px; display: inline-block; }
   .switcher-label { font-size: 10px; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 2px; }
   .switcher-select { background: transparent; border: none; font-size: 14px; font-weight: 600; color: #047857; cursor: pointer; outline: none; padding-right: 16px; width: 100%; }
+
+  /* ── Custom unit autocomplete (PWA-safe) ──────────────────── */
+  .unit-input-wrap { position: relative; }
+  .unit-dropdown {
+    display: none;
+    position: absolute; top: 100%; left: 0; right: 0;
+    background: #fff; border: 1px solid #d1d5db; border-radius: 6px;
+    margin-top: 4px; max-height: 220px; overflow-y: auto;
+    z-index: 50; box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+  }
+  .unit-dropdown.show { display: block; }
+  .unit-dropdown .unit-option {
+    padding: 9px 12px; cursor: pointer; font-size: 14px; color: #111827;
+    border-bottom: 1px solid #f3f4f6;
+  }
+  .unit-dropdown .unit-option:last-child { border-bottom: none; }
+  .unit-dropdown .unit-option:hover,
+  .unit-dropdown .unit-option.active { background: #ecfdf5; color: #065f46; }
+  .unit-dropdown .unit-empty {
+    padding: 9px 12px; font-size: 13px; color: #9ca3af; font-style: italic;
+  }
 </style>
 
 <div x-data="logForm(JSON.parse(document.getElementById('config-data').textContent))" class="logbook-wrapper">
@@ -80,18 +101,20 @@
       </div>
       <div class="logbook-col">
         <label class="logbook-label">Unit / Sub-Department</label>
-        <input type="text"
-               x-model="form.unit_sub_department"
-               list="unit-suggestions"
-               placeholder="e.g., OPD, Records Unit"
-               class="logbook-input"
-               @blur="rememberUnit()"
-               @change="rememberUnit()">
-        <datalist id="unit-suggestions">
-          <template x-for="u in unitSuggestions" :key="u">
-            <option :value="u"></option>
-          </template>
-        </datalist>
+        {# ✅ Custom dropdown replaces <datalist> — works in PWA/standalone #}
+        <div class="unit-input-wrap">
+          <input type="text"
+                 id="unit-input"
+                 x-model="form.unit_sub_department"
+                 placeholder="e.g., OPD, Records Unit"
+                 class="logbook-input"
+                 autocomplete="off"
+                 aria-autocomplete="list"
+                 aria-controls="unit-dropdown"
+                 @change="rememberUnit()"
+                 @blur="rememberUnit()">
+          <div id="unit-dropdown" class="unit-dropdown" role="listbox"></div>
+        </div>
       </div>
     </div>
 
@@ -166,6 +189,154 @@
     }
     return true;
   }
+
+  /* ── PWA-safe unit autocomplete ──────────────────────────── */
+  (function unitAutocomplete() {
+    var input    = document.getElementById('unit-input');
+    var dropdown = document.getElementById('unit-dropdown');
+    if (!input || !dropdown) return;
+
+    // Seed units from the JSON script tag
+    var serverUnits = [];
+    try {
+      var tag = document.getElementById('units-data');
+      if (tag) {
+        var parsed = JSON.parse(tag.textContent || '[]');
+        if (Array.isArray(parsed)) {
+          serverUnits = parsed.filter(function (u) {
+            return u && typeof u === 'string' && u.trim();
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('[unit autocomplete] JSON parse failed', e);
+    }
+
+    // Merge in any units Alpine has added to state.unitSuggestions
+    function liveUnits() {
+      var merged = serverUnits.slice();
+      try {
+        var root = document.querySelector('[x-data]');
+        var state = null;
+        if (root && root._x_dataStack && root._x_dataStack[0]) state = root._x_dataStack[0];
+        else if (root && root.__x && root.__x.$data) state = root.__x.$data;
+        if (state && Array.isArray(state.unitSuggestions)) {
+          state.unitSuggestions.forEach(function (u) {
+            if (u && typeof u === 'string' && merged.indexOf(u) === -1) merged.push(u);
+          });
+        }
+      } catch (e) { /* silent */ }
+      return merged;
+    }
+
+    function render(query) {
+      var q = (query || '').toLowerCase().trim();
+      var all = liveUnits();
+      var matches = q
+        ? all.filter(function (u) { return u.toLowerCase().indexOf(q) !== -1; })
+        : all;
+
+      if (!matches.length) {
+        if (q) {
+          dropdown.innerHTML = '<div class="unit-empty">No match — you can keep typing a new unit.</div>';
+          dropdown.classList.add('show');
+        } else {
+          dropdown.classList.remove('show');
+        }
+        return;
+      }
+
+      matches = matches.slice(0, 25);
+      dropdown.innerHTML = matches.map(function (u) {
+        return '<div class="unit-option" role="option" data-value="' +
+          u.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;') +
+          '">' + u.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>';
+      }).join('');
+      dropdown.classList.add('show');
+    }
+
+    input.addEventListener('focus', function () { render(input.value); });
+    input.addEventListener('input', function () { render(input.value); });
+    input.addEventListener('blur', function () {
+      // Delay so mousedown on an option fires first
+      setTimeout(function () { dropdown.classList.remove('show'); }, 180);
+    });
+
+    input.addEventListener('keydown', function (e) {
+      if (!dropdown.classList.contains('show')) return;
+      var opts = dropdown.querySelectorAll('.unit-option');
+      if (!opts.length) return;
+      var activeIdx = -1;
+      opts.forEach(function (o, i) { if (o.classList.contains('active')) activeIdx = i; });
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        activeIdx = (activeIdx + 1) % opts.length;
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        activeIdx = (activeIdx - 1 + opts.length) % opts.length;
+      } else if (e.key === 'Enter' && activeIdx >= 0) {
+        e.preventDefault();
+        opts[activeIdx].dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+        return;
+      } else if (e.key === 'Escape') {
+        dropdown.classList.remove('show');
+        return;
+      } else {
+        return;
+      }
+
+      opts.forEach(function (o, i) { o.classList.toggle('active', i === activeIdx); });
+      if (activeIdx >= 0) opts[activeIdx].scrollIntoView({ block: 'nearest' });
+    });
+
+    dropdown.addEventListener('mousedown', function (e) {
+      var row = e.target.closest('.unit-option');
+      if (!row) return;
+      e.preventDefault();
+      var v = row.getAttribute('data-value');
+      input.value = v;
+      // Fire input so Alpine's x-model picks up the change
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      // Also fire change so @change="rememberUnit()" triggers
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      dropdown.classList.remove('show');
+    });
+  })();
+
+  /* ── Defensive stopgap: clear stuck "Hearing…" after stop ── */
+  (function dictateWatchdog() {
+    // Alpine state lookup (works with Alpine 2 and 3)
+    function getState() {
+      var root = document.querySelector('[x-data]');
+      if (!root) return null;
+      if (root._x_dataStack && root._x_dataStack[0]) return root._x_dataStack[0];
+      if (root.__x && root.__x.$data) return root.__x.$data;
+      return null;
+    }
+
+    document.querySelectorAll('.dictate-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        // If this click was a STOP (button currently has .recording class),
+        // give log_form.js a moment to clean up, then force-clear if stuck.
+        var wasRecording = btn.classList.contains('recording');
+        if (!wasRecording) return;
+
+        setTimeout(function () {
+          var state = getState();
+          if (!state) return;
+          // If nothing is actively recording but listening is still set → force reset
+          var stillRecording = document.querySelector('.dictate-btn.recording');
+          if (!stillRecording && state.listening) {
+            var stuck = state.listening;
+            state.listening = null;
+            state.interimText = '';
+            console.info('[watchdog] cleared stuck listening state:', stuck);
+          }
+        }, 900);
+      });
+    });
+  })();
 </script>
 {% endblock %}
 

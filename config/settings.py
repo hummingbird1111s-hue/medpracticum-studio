@@ -296,9 +296,54 @@ SITE_URL = os.environ.get('SITE_URL', 'http://127.0.0.1:8000')
 REPORT_ALLOW_CUSTOM_FORMAT = True
 
 
-# ===== AI DRAFTING =====
+# ===== School identity (used in AI + local drafting) =====
+# Used by apps.reports.ai_drafting and apps.reports.local_drafter when the
+# generated prose refers to the student's institution. Override here if the
+# college changes; both drafters pick it up automatically.
+SCHOOL_NAME = 'the College of Health, Yamfo'
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# AI DRAFTING — Phase A (serial + local fallback)
+# ═══════════════════════════════════════════════════════════════════════
+# Reports are drafted SERIAL (one AI call at a time) to stay under Groq's
+# 8 000 TPM limit. Sections that fail to draft with AI are filled by the
+# local template drafter — never by raw log copy.
+#
+# REPORT_AI_DRAFTING_ENABLED
+#     Master switch. When False, ALL sections are drafted locally.
+#
+# REPORT_AI_CALLABLE
+#     Dotted path to the shared AI client. This is the same client used by
+#     the AI assistant. It already has its own provider chain
+#     (Gemini → Groq → OpenRouter) and rate-limit handling.
+#
+# REPORT_AI_DRAFTING_MAX_SECONDS
+#     Wall-clock budget for the whole report. When exceeded, remaining
+#     sections are drafted locally so the user always gets a complete report.
+#
+# REPORT_AI_DRAFTING_INTER_CALL_DELAY
+#     Seconds to sleep between serial AI calls. 0.8s keeps us at ~40 TPM,
+#     well under Groq's 8 000 TPM.
+#
+# REPORT_AI_CALL_TIMEOUT
+#     Per-request HTTP timeout (seconds). Applies to the underlying HTTP call
+#     inside the AI client.
+#
+# REPORT_AI_REFINE_MAX_SECONDS
+#     Wall-clock budget for "Edit Report Manually → Polish with AI". Uses a
+#     parallel runner (unchanged); independent of the drafting budget.
+#
+# REPORT_AI_DRAFTING_WORKERS
+#     Only used by the PPTX drafting path (still parallel until Phase B).
+#     Reduced to 4 as an interim safety margin against rate limits.
 REPORT_AI_DRAFTING_ENABLED = True
 REPORT_AI_CALLABLE = 'apps.logs.ai_client.get_ai_reply'
+REPORT_AI_DRAFTING_MAX_SECONDS = 120
+REPORT_AI_DRAFTING_INTER_CALL_DELAY = 0.8
+REPORT_AI_CALL_TIMEOUT = 60
+REPORT_AI_REFINE_MAX_SECONDS = 80
+REPORT_AI_DRAFTING_WORKERS = 4
 
 
 # ===== Email (password reset) =====

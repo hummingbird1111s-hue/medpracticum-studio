@@ -42,15 +42,69 @@
   #cmp-info-overlay .btn-primary:hover { background: #047857; }
 
   #cmp-error { display: none; background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; border-radius: 10px; padding: 12px 14px; font-size: 14px; margin-bottom: 12px; font-weight: 500; }
+
+  /* ── Save progress overlay ──────────────────────────────── */
+  #save-overlay {
+    display: none; position: fixed; inset: 0; z-index: 99998;
+    background: rgba(17, 24, 39, 0.65); backdrop-filter: blur(2px);
+    align-items: center; justify-content: center; padding: 16px;
+  }
+  #save-overlay.show { display: flex; }
+  #save-overlay .save-card {
+    background: #fff; border-radius: 16px; padding: 28px 32px;
+    max-width: 440px; width: 100%;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+    text-align: center;
+  }
+  #save-overlay .save-spinner {
+    width: 44px; height: 44px; border: 4px solid #d1fae5;
+    border-top-color: #059669; border-radius: 50%;
+    animation: cmpspin 0.9s linear infinite;
+    margin: 0 auto 16px;
+  }
+  #save-overlay .save-title {
+    margin: 0 0 6px; font-size: 16px; font-weight: 700; color: #065f46;
+  }
+  #save-overlay .save-sub {
+    margin: 0; font-size: 13px; color: #6b7280; line-height: 1.5;
+  }
+  #save-overlay .save-warning {
+    margin-top: 14px; padding: 10px 12px;
+    background: #fffbeb; border: 1px solid #fcd34d;
+    border-radius: 8px; font-size: 12px; color: #92400e;
+    text-align: left; line-height: 1.55;
+  }
+  #save-overlay .save-error {
+    margin-top: 14px; padding: 10px 12px;
+    background: #fef2f2; border: 1px solid #fecaca;
+    border-radius: 8px; font-size: 12px; color: #991b1b;
+    text-align: left; line-height: 1.55;
+  }
+  #save-overlay .save-dismiss-btn {
+    margin-top: 14px; background: #059669; color: #fff;
+    border: 0; border-radius: 8px; padding: 9px 16px;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s;
+  }
+  #save-overlay .save-dismiss-btn:hover { background: #047857; }
 </style>
 
 <div class="max-w-2xl mx-auto">
   <form method="post" id="start-att-form">
     {% csrf_token %}
 
-    {% if form.non_field_errors %}
+    {% if form.errors %}
       <div class="bg-red-50 border border-red-200 text-red-700 rounded-2xl px-4 py-3 mb-4 text-sm" role="alert">
-        {% for err in form.non_field_errors %}<p style="margin: 0;">{{ err }}</p>{% endfor %}
+        <p style="margin: 0 0 6px; font-weight: 600;">Please fix the following before saving:</p>
+        <ul style="margin: 0; padding-left: 18px;">
+          {% for err in form.non_field_errors %}<li>{{ err }}</li>{% endfor %}
+          {% for field in form %}
+            {% for err in field.errors %}
+              <li><strong>{{ field.label }}:</strong> {{ err }}</li>
+            {% endfor %}
+          {% endfor %}
+        </ul>
       </div>
     {% endif %}
 
@@ -148,7 +202,8 @@
       </div>
     </div>
 
-    <input type="hidden" name="competencies_json" id="cmp-json" value="">
+    <input type="hidden" name="competencies_json" id="cmp-json"
+           value="{{ form.data.competencies_json|default:''|escape }}">
 
     <button type="submit" class="w-full mt-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg py-2.5">
       Save attachment
@@ -177,6 +232,24 @@
       <button type="button" class="btn-skip" id="cmp-info-skip">Skip for now</button>
       <button type="button" class="btn-primary" id="cmp-info-go">Got it, let's add</button>
     </div>
+  </div>
+</div>
+
+<div id="save-overlay" role="status" aria-live="polite" aria-hidden="true">
+  <div class="save-card">
+    <div class="save-spinner"></div>
+    <h3 class="save-title">Saving your attachment…</h3>
+    <p class="save-sub">Please wait while we save your details.</p>
+    <div id="save-slow-warning" class="save-warning" hidden>
+      ⏳ <strong>Slow connection detected.</strong> Still saving — please don't close this page.
+    </div>
+    <div id="save-error-state" class="save-error" hidden>
+      ❌ <strong>This is taking longer than expected.</strong>
+      Please check your internet connection. You can wait a bit longer, or dismiss this message and try clicking <strong>Save attachment</strong> again.
+    </div>
+    <button type="button" id="save-dismiss" class="save-dismiss-btn" hidden>
+      Dismiss
+    </button>
   </div>
 </div>
 
@@ -575,6 +648,82 @@
     });
 
     document.addEventListener('visibilitychange', function () { if (document.hidden && activeRec) stopActive(); });
+  })();
+
+  /* ── 7. Restore competencies on validation failure ────────── */
+  (function restoreCompetencies() {
+    try {
+      var initialJSON = jsonIn.value;
+      if (!initialJSON || initialJSON === '[]') return;
+      var initialItems = JSON.parse(initialJSON);
+      if (!Array.isArray(initialItems)) return;
+      initialItems.forEach(function (item) {
+        var text   = (item && item.text) ? item.text : (typeof item === 'string' ? item : '');
+        var source = (item && item.source) ? item.source : 'manual';
+        if (text && String(text).trim()) {
+          addRow(String(text).trim(), source);
+        }
+      });
+    } catch (err) {
+      console.warn('[competency restore]', err);
+    }
+  })();
+
+  /* ── 8. Save overlay + slow-network feedback ──────────────── */
+  (function saveFeedback() {
+    var overlay   = document.getElementById('save-overlay');
+    var slowWarn  = document.getElementById('save-slow-warning');
+    var errorState= document.getElementById('save-error-state');
+    var dismissBtn= document.getElementById('save-dismiss');
+
+    if (!overlay) return;
+
+    var slowTimer = null;
+    var failTimer = null;
+
+    function hideOverlay() {
+      if (slowTimer) { clearTimeout(slowTimer); slowTimer = null; }
+      if (failTimer) { clearTimeout(failTimer); failTimer = null; }
+      overlay.classList.remove('show');
+      overlay.setAttribute('aria-hidden', 'true');
+    }
+
+    function showOverlay() {
+      if (slowWarn)   slowWarn.hidden = true;
+      if (errorState) errorState.hidden = true;
+      if (dismissBtn) dismissBtn.hidden = true;
+      overlay.classList.add('show');
+      overlay.setAttribute('aria-hidden', 'false');
+
+      slowTimer = setTimeout(function () {
+        if (slowWarn) slowWarn.hidden = false;
+      }, 12000);
+
+      failTimer = setTimeout(function () {
+        if (slowWarn)   slowWarn.hidden = true;
+        if (errorState) errorState.hidden = false;
+        if (dismissBtn) dismissBtn.hidden = false;
+      }, 45000);
+    }
+
+    if (dismissBtn) {
+      dismissBtn.addEventListener('click', hideOverlay);
+    }
+
+    // Show the overlay only when the form is actually going to submit.
+    // The competency gate uses preventDefault() on the same submit event,
+    // so we defer by one tick to observe the final defaultPrevented state.
+    form.addEventListener('submit', function (e) {
+      setTimeout(function () {
+        if (e.defaultPrevented) return;   // gate blocked submission — no overlay
+        showOverlay();
+      }, 0);
+    });
+
+    // Reset on back/forward navigation (bfcache restore)
+    window.addEventListener('pageshow', function (e) {
+      if (e.persisted) hideOverlay();
+    });
   })();
 })();
 </script>

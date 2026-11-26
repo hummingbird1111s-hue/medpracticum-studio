@@ -146,10 +146,9 @@ def _build(request, session, use_ai=True, force_ai=False):
                 target_pages = report.options.get('target_pages')
                 drafts = draft_sections_with_ai(session, samples, target_pages=target_pages)
                 if drafts:
-                    ai_note = drafts.pop('_ai_note', '')
-                    if ai_note:
-                        messages.warning(request, ai_note)
-
+                    # Phase B3: keep _ai_note / _section_status / _failed_keys
+                    # inside content so the options template can render the
+                    # persistent AI-status banner + retry button on reload.
                     report.content = drafts
                     report.save(update_fields=['content'])
                     logger.info(
@@ -400,6 +399,11 @@ def report_options(request):
         'abstract_paragraphs': abstract_paragraphs,
         'preview_keywords': preview_keywords,
         'generated': request.GET.get('generated') == '1',
+
+        # --- Phase B3: AI status banner + retry ---
+        'ai_note': (report.content or {}).get('_ai_note', ''),
+        'failed_keys': (report.content or {}).get('_failed_keys', []),
+        'section_status': (report.content or {}).get('_section_status', {}),
     })
 
 
@@ -709,9 +713,7 @@ def _ensure_ai_content(request, session, force_ai=False):
         target_pages = report.options.get('target_pages')
         drafts = draft_sections_with_ai(session, samples, target_pages=target_pages)
         if drafts:
-            ai_note = drafts.pop('_ai_note', '')
-            if ai_note:
-                messages.warning(request, ai_note)
+            # Phase B3: keep the metadata keys — the template needs them.
             report.content = drafts
             report.save(update_fields=['content'])
             return True
@@ -753,6 +755,214 @@ def _ensure_pptx_content(request, session, force_ai=False):
     except Exception:
         logger.exception('PPTX AI drafting failed')
     return False
+
+
+# ============================================================
+# Phase B3 — retry helpers and views
+# ============================================================
+
+def _recompute_ai_note_from_status(section_status, section_label='section'):
+    """Rebuild a human-readable summary from the merged status dict."""
+    if not section_status:
+        return ''
+    ai_keys = [k for k, v in section_status.items() if v == 'ai']
+    local_keys = [k for k, v in section_status.items() if v == 'local']
+    total = len(section_status)
+    plural = 's' if total != 1 else ''
+    if not local_keys:
+        return f'All {total} {section_label}{plural} were drafted by AI.'
+    if not ai_keys:
+        return (
+            f'All {total} {section_label}{plural} were drafted locally '
+            f'because the AI service was unavailable. The output is '
+            f'complete and usable. Wait 60 seconds and retry to get '
+            f'AI-polished text.'
+        )
+    local_plural = '' if len(local_keys) == 1 else 's'
+    return (
+        f'{len(ai_keys)} of {total} {section_label}{plural} were drafted by AI. '
+        f'{len(local_keys)} {section_label}{local_plural} were drafted locally: '
+        f'{", ".join(local_keys)}. You can retry just those after 60 seconds.'
+    )
+
+
+@login_required
+@require_POST
+def retry_report_sections(request):
+    """Re-draft a specific set of report sections that were drafted locally."""
+    session, bounce = _session_with_logs(request)
+    if bounce:
+        return bounce
+
+    allowed, _status, gate_msg = subscription_gate(request.user)
+    if not allowed:
+        messages.error(request, gate_msg)
+        return _redirect_after_generation(request, 'report_options', session)
+
+    retry_keys = request.POST.getlist('keys')
+    if not retry_keys:
+        messages.error(request, 'No sections were selected for retry.')
+        return _redirect_after_generation(request, 'report_options', session)
+
+    report, _ = GeneratedReport.objects.get_or_create(attachment=session)
+
+    from .ai_drafting import draft_sections_with_ai, source_fingerprint
+
+    try:
+        fresh = draft_sections_with_ai(session, retry_keys=retry_keys)
+    except Exception:
+        logger.exception('Retry drafting failed for keys=%s', retry_keys)
+        messages.error(
+            request,
+            'Retry failed unexpectedly. Wait 60 seconds and try again.',
+        )
+        return _redirect_after_generation(request, 'report_options', session)
+
+    if not fresh:
+        messages.error(
+            request,
+            'Retry produced no content. Please wait 60 seconds and try again.',
+        )
+        return _redirect_after_generation(request, 'report_options', session)
+
+    # Merge new section text back into the stored content
+    merged = dict(report.content or {})
+    for key in retry_keys:
+        if key in fresh and fresh[key]:
+            merged[key] = fresh[key]
+
+    # Merge status: new status for retried keys, old status for the rest
+    old_status = dict(merged.get('_section_status') or {})
+    new_status = dict(fresh.get('_section_status') or {})
+    old_status.update(new_status)
+    merged['_section_status'] = old_status
+
+    # Recompute failed keys: drop keys we just retried, then add any new
+    # failures the fresh call reported.
+    old_failed = list(merged.get('_failed_keys') or [])
+    new_failed = list(fresh.get('_failed_keys') or [])
+    remaining = [k for k in old_failed if k not in retry_keys]
+    merged['_failed_keys'] = list(dict.fromkeys(remaining + new_failed))
+    merged['_ai_note'] = _recompute_ai_note_from_status(old_status, 'section')
+    merged['_source_hash'] = source_fingerprint(session)
+
+    report.content = merged
+    report.save(update_fields=['content'])
+
+    # Rebuild the PDF from the new content
+    try:
+        builder = PracticumReportBuilder(session)
+        builder.save()
+        if new_failed:
+            messages.warning(
+                request,
+                f'Retry finished: {len(new_failed)} of {len(retry_keys)} '
+                f'section(s) are still locally drafted (AI unavailable). '
+                f'Wait 60 seconds and retry again if you wish.',
+            )
+        else:
+            messages.success(
+                request,
+                f'Retry finished: all {len(retry_keys)} section(s) are now '
+                f'AI-drafted and the PDF was rebuilt.',
+            )
+    except Exception:
+        logger.exception('PDF rebuild failed after retry')
+        messages.warning(
+            request,
+            'AI retry succeeded but the PDF rebuild failed. '
+            'The new text is saved — try downloading the report again.',
+        )
+
+    return _redirect_after_generation(request, 'report_options', session)
+
+
+@login_required
+@require_POST
+def retry_pptx_sections(request):
+    """Re-draft a specific set of PPTX slides that were drafted locally."""
+    session, bounce = _session_with_logs(request)
+    if bounce:
+        return bounce
+
+    allowed, _status, gate_msg = subscription_gate(request.user)
+    if not allowed:
+        messages.error(request, gate_msg)
+        return _redirect_after_generation(request, 'pptx_options', session)
+
+    retry_keys = request.POST.getlist('keys')
+    if not retry_keys:
+        messages.error(request, 'No slides were selected for retry.')
+        return _redirect_after_generation(request, 'pptx_options', session)
+
+    report, _ = GeneratedReport.objects.get_or_create(attachment=session)
+
+    from .ai_drafting import draft_presentation_with_ai, source_fingerprint
+
+    try:
+        fresh = draft_presentation_with_ai(session, retry_keys=retry_keys)
+    except Exception:
+        logger.exception('PPTX retry drafting failed for keys=%s', retry_keys)
+        messages.error(
+            request,
+            'Retry failed unexpectedly. Wait 60 seconds and try again.',
+        )
+        return _redirect_after_generation(request, 'pptx_options', session)
+
+    if not fresh:
+        messages.error(
+            request,
+            'Retry produced no content. Please wait 60 seconds and try again.',
+        )
+        return _redirect_after_generation(request, 'pptx_options', session)
+
+    merged = dict(report.pptx_content or {})
+    for key in retry_keys:
+        if key in fresh and fresh[key]:
+            merged[key] = fresh[key]
+
+    old_status = dict(merged.get('_pptx_section_status') or {})
+    new_status = dict(fresh.get('_pptx_section_status') or {})
+    old_status.update(new_status)
+    merged['_pptx_section_status'] = old_status
+
+    old_failed = list(merged.get('_pptx_failed_keys') or [])
+    new_failed = list(fresh.get('_pptx_failed_keys') or [])
+    remaining = [k for k in old_failed if k not in retry_keys]
+    merged['_pptx_failed_keys'] = list(dict.fromkeys(remaining + new_failed))
+    merged['_pptx_ai_note'] = _recompute_ai_note_from_status(old_status, 'slide')
+    merged['_source_hash'] = source_fingerprint(session)
+
+    report.pptx_content = merged
+    report.save(update_fields=['pptx_content'])
+
+    # Rebuild the PPTX file
+    template_key = report.pptx_template or 'cohy_classic'
+    try:
+        builder = PracticumReportBuilder(session)
+        builder.save_pptx(template_key, force_ai=False)
+        if new_failed:
+            messages.warning(
+                request,
+                f'Retry finished: {len(new_failed)} of {len(retry_keys)} '
+                f'slide(s) are still locally drafted. Wait 60 seconds and '
+                f'retry again if you wish.',
+            )
+        else:
+            messages.success(
+                request,
+                f'Retry finished: all {len(retry_keys)} slide(s) are now '
+                f'AI-drafted and the presentation was rebuilt.',
+            )
+    except Exception:
+        logger.exception('PPTX rebuild failed after retry')
+        messages.warning(
+            request,
+            'AI retry succeeded but the presentation rebuild failed. '
+            'The new text is saved — try regenerating again.',
+        )
+
+    return _redirect_after_generation(request, 'pptx_options', session)
 
 
 def _build_pptx_from_scratch(request, session, template_key, force_ai=False):
@@ -1081,6 +1291,11 @@ def pptx_options(request):
         'pptx_section_fields': PPTX_SECTION_FIELDS,
         'generated': request.GET.get('generated') == '1',
         'overflow_warnings': overflow_warnings,
+
+        # --- Phase B3: PPTX status banner + retry ---
+        'pptx_ai_note': (report.pptx_content or {}).get('_pptx_ai_note', ''),
+        'pptx_failed_keys': (report.pptx_content or {}).get('_pptx_failed_keys', []),
+        'pptx_section_status': (report.pptx_content or {}).get('_pptx_section_status', {}),
     })
 
 

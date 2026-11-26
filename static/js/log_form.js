@@ -1,6 +1,7 @@
 document.addEventListener('alpine:init', () => {
   Alpine.data('logForm', (cfg) => {
     const UNITS_KEY = 'mp_unit_suggestions_v1';
+    const LISTENING_MSG = 'Listening... Speak now.';
 
     function readUnitsFromDom() {
       const el = document.getElementById('units-data');
@@ -86,6 +87,13 @@ document.addEventListener('alpine:init', () => {
         try { localStorage.setItem(UNITS_KEY, JSON.stringify(this.unitSuggestions)); } catch (e) {}
       },
 
+      _clearListeningMessage() {
+        if (this.message === LISTENING_MSG) {
+          this.message = '';
+          this.messageType = 'info';
+        }
+      },
+
       // ---- Recording (fresh instance, synchronous reset, stale-event guards) ----
       dictate(field) {
         if (!this.speechSupported) {
@@ -115,7 +123,7 @@ document.addEventListener('alpine:init', () => {
         rec.onstart = () => {
           if (this._recognition !== rec) return;
           this.listening = field;
-          this.setMessage('Listening... Speak now.', 'success');
+          this.setMessage(LISTENING_MSG, 'success');
         };
 
         rec.onresult = (e) => {
@@ -143,6 +151,7 @@ document.addEventListener('alpine:init', () => {
           this._recField = null;
           this.listening = null;
           this.interimText = '';
+          this._clearListeningMessage();
         };
 
         rec.onerror = (e) => {
@@ -178,6 +187,7 @@ document.addEventListener('alpine:init', () => {
         this._recField = null;
         this.listening = null;
         this.interimText = '';
+        this._clearListeningMessage();
         if (rec) {
           try { rec.onstart = null; rec.onresult = null; rec.onend = null; rec.onerror = null; } catch (e) {}
           try { rec.stop(); } catch (e) { try { rec.abort(); } catch (e2) {} }
@@ -208,7 +218,6 @@ document.addEventListener('alpine:init', () => {
       },
 
       async queueOffline(payload, authProblem) {
-        // Guard: offline-sync.js must be loaded before we can queue
         if (!window.MPOffline || typeof window.MPOffline.queueLog !== 'function') {
           this.setMessage('Offline sync not available. Please reload the page and try again.', 'error');
           return;
@@ -224,8 +233,6 @@ document.addEventListener('alpine:init', () => {
         const problem = this.validate();
         if (problem) { this.setMessage(problem, 'error'); return; }
 
-        // Guard: sync module must be loaded. Turns a cryptic "queueLog of undefined"
-        // into a clear message if offline-sync.js ever fails to load again.
         if (!window.MPOffline || typeof window.MPOffline.sendLogs !== 'function') {
           this.setMessage('Sync module not loaded. Reload the page and try again.', 'error');
           return;

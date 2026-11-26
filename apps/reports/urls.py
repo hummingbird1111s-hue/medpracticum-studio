@@ -14,6 +14,10 @@ urlpatterns = [
     path('view/',                views.view_report,      name='view_report'),
     path('preview/',             views.preview_report,   name='preview_report'),
 
+    # ---------- AI retry endpoints (Phase B3) ----------
+    path('retry-sections/', views.retry_report_sections, name='retry_report_sections'),
+    path('retry-pptx/',     views.retry_pptx_sections,   name='retry_pptx_sections'),
+
     # ---------- Format sample upload / delete (modal) ----------
     path('format-sample/upload/',          views.upload_format_sample, name='upload_format_sample'),
     path('format-sample/<int:pk>/delete/', views.delete_format_sample, name='delete_format_sample'),
