@@ -76,7 +76,19 @@ def _get_session(request):
     attachment_id = request.GET.get('attachment_id') or request.POST.get('attachment_id')
     if attachment_id:
         return request.user.attachments.filter(id=attachment_id, is_deleted=False).first()
-    return request.user.attachments.filter(is_deleted=False).order_by('-start_date', '-id').first()
+
+    # No attachment_id in the URL (e.g. sidebar click). Prefer an attachment
+    # that actually has daily logs, otherwise the guard in _session_with_logs()
+    # bounces the user to /dashboard/ even though they have a valid older
+    # attachment with logs.
+    from django.db.models import Count, Q
+    qs = request.user.attachments.filter(is_deleted=False).annotate(
+        log_count=Count('daily_logs', filter=Q(daily_logs__is_deleted=False))
+    )
+    return (
+        qs.filter(log_count__gt=0).order_by('-start_date', '-id').first()
+        or qs.order_by('-start_date', '-id').first()
+    )
 
 
 def _has_real_sections(content):
