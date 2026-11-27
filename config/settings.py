@@ -455,3 +455,37 @@ LOGGING = {
         },
     },
 }
+
+# ═══════════════════════════════════════════════════════════════════════
+# AI PROVIDER POOL (apps/reports/ai_gateway.py + ai_batch.py)
+# ═══════════════════════════════════════════════════════════════════════
+# One JSON request per report, spread over these endpoints. Lower 'priority'
+# is tried first; equal priorities are shuffled. Rows with an empty api_key
+# or model are ignored. If every endpoint fails, the local drafter fills in.
+REPORT_AI_ENDPOINTS = [
+    {'name': 'gemini-3.8-flash', 'priority': 0,
+     'base_url': 'https://generativelanguage.googleapis.com/v1beta/openai',
+     'api_key': GEMINI_API_KEY,
+     'model': 'gemini-3.8-flash'},
+    {'name': 'gemini-3.6-flash', 'priority': 1,
+     'base_url': 'https://generativelanguage.googleapis.com/v1beta/openai',
+     'api_key': GEMINI_API_KEY,
+     'model': 'gemini-3.6-flash'},
+    {'name': 'groq-120b', 'priority': 1,
+     'base_url': 'https://api.groq.com/openai/v1',
+     'api_key': GROQ_API_KEY,
+     'model': 'openai/gpt-oss-120b',
+     'extra': {'reasoning_effort': 'low'}},
+    {'name': 'groq-20b', 'priority': 2,
+     'base_url': 'https://api.groq.com/openai/v1',
+     'api_key': GROQ_API_KEY,
+     'model': 'openai/gpt-oss-20b',
+     'extra': {'reasoning_effort': 'low'}},
+    {'name': 'openrouter', 'priority': 3,
+     'base_url': 'https://openrouter.ai/api/v1',
+     'api_key': OPENROUTER_API_KEY,
+     'model': 'openrouter/free',
+     'json_mode': False},
+]
+REPORT_AI_BATCH_MAX_TOKENS = 4000    # keeps one request inside Groq's 8k TPM
+REPORT_AI_GATEWAY_MAX_WAIT = 150
