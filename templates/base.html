@@ -775,6 +775,12 @@
       font-family: inherit;
     }
     .mp-notif-toast__close:hover { color: #dc2626; }
+
+    /* Important-priority toast (amber) */
+    .mp-notif-toast.is-important { border-left-color: #f59e0b; }
+    .mp-notif-toast.is-important .mp-notif-toast__icon { background: #fef3c7; }
+    .mp-notif-toast.is-important .mp-notif-toast__title { color: #b45309; }
+
     @media (max-width: 480px) {
       .mp-notif-toast-stack {
         top: calc(58px + env(safe-area-inset-top, 0px));
@@ -876,6 +882,106 @@
     .mp-notif-item:hover .mp-notif-del { opacity: 1; }
     .mp-notif-del:hover { color: #dc2626; }
     .mp-notif-empty { text-align: center; color: #9ca3af; padding: 32px 12px; font-size: 13px; margin: 0; }
+
+    /* Priority styling inside the bell panel */
+    .mp-notif-item.is-important { border-left: 4px solid #f59e0b; background: #fffbeb; }
+    .mp-notif-item.is-important .mp-notif-icon { background: #fef3c7; }
+    .mp-notif-item.is-urgent { border-left: 4px solid #dc2626; background: #fef2f2; }
+    .mp-notif-item.is-urgent:hover { background: #fee2e2; }
+    .mp-notif-item.is-urgent .mp-notif-icon { background: #fee2e2; }
+    .mp-notif-tag {
+      display: inline-block;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-bottom: 3px;
+      text-transform: uppercase;
+    }
+    .mp-notif-tag--important { background: #fef3c7; color: #92400e; }
+    .mp-notif-tag--urgent { background: #dc2626; color: #ffffff; }
+    .mp-notif-tag--done { background: #e5e7eb; color: #4b5563; }
+
+    /* ================= URGENT ALERT (full-screen, must acknowledge) ================= */
+    #mp-urgent-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 100001;
+      background: rgba(127, 29, 29, 0.78);
+      backdrop-filter: blur(5px);
+      -webkit-backdrop-filter: blur(5px);
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    #mp-urgent-overlay.show { display: flex; }
+    #mp-urgent-card {
+      max-width: 480px;
+      width: 100%;
+      max-height: calc(100% - 16px);
+      overflow-y: auto;
+      background: #ffffff;
+      border-radius: 18px;
+      border-top: 8px solid #dc2626;
+      padding: 24px 22px 22px;
+      text-align: center;
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+      animation: mp-urgent-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), mp-urgent-pulse 1.8s ease-in-out 0.4s infinite;
+    }
+    @keyframes mp-urgent-in {
+      from { opacity: 0; transform: scale(0.92) translateY(16px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    @keyframes mp-urgent-pulse {
+      0%, 100% { box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45), 0 0 0 0 rgba(220, 38, 38, 0.55); }
+      50% { box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45), 0 0 0 14px rgba(220, 38, 38, 0); }
+    }
+    #mp-urgent-card .mp-urgent-icon { font-size: 44px; line-height: 1; margin-bottom: 6px; }
+    #mp-urgent-card .mp-urgent-tag {
+      display: inline-block;
+      background: #dc2626;
+      color: #ffffff;
+      font-weight: 800;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      padding: 4px 12px;
+      border-radius: 999px;
+      margin-bottom: 10px;
+    }
+    #mp-urgent-card h2 { margin: 0 0 10px; color: #991b1b; font-size: 20px; letter-spacing: -0.2px; }
+    #mp-urgent-card .mp-urgent-msg {
+      margin: 0 0 14px;
+      color: #111827;
+      font-size: 15px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      text-align: left;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 10px;
+      padding: 12px 14px;
+    }
+    #mp-urgent-card .mp-urgent-count { margin: 0 0 12px; font-size: 12px; font-weight: 700; color: #b91c1c; }
+    #mp-urgent-card .mp-urgent-error { margin: 0 0 12px; font-size: 12px; color: #b91c1c; }
+    #mp-urgent-ack {
+      background: #dc2626;
+      color: #ffffff;
+      border: 0;
+      border-radius: 10px;
+      padding: 12px 26px;
+      font-weight: 700;
+      font-size: 15px;
+      cursor: pointer;
+      font-family: inherit;
+      width: 100%;
+      transition: background 0.15s;
+    }
+    #mp-urgent-ack:hover { background: #b91c1c; }
+    #mp-urgent-ack:disabled { background: #fca5a5; cursor: not-allowed; }
+    #mp-urgent-card .mp-urgent-note { margin: 10px 0 0; font-size: 11px; color: #6b7280; }
 
     /* ================= WELCOME OVERLAY ================= */
     #mp-welcome-overlay {
@@ -2246,6 +2352,20 @@
 
   <div id="mp-notif-toast-stack" class="mp-notif-toast-stack" aria-live="polite" aria-label="New notifications"></div>
 
+  <!-- ================= URGENT ALERT (must be acknowledged) ================= -->
+  <div id="mp-urgent-overlay" role="alertdialog" aria-modal="true" aria-labelledby="mp-urgent-title" aria-describedby="mp-urgent-msg">
+    <div id="mp-urgent-card">
+      <div class="mp-urgent-icon">🚨</div>
+      <span class="mp-urgent-tag">URGENT – ACTION REQUIRED</span>
+      <h2 id="mp-urgent-title">Immediate attention needed</h2>
+      <p class="mp-urgent-count" id="mp-urgent-count" style="display:none;"></p>
+      <p class="mp-urgent-msg" id="mp-urgent-msg"></p>
+      <p class="mp-urgent-error" id="mp-urgent-error" style="display:none;"></p>
+      <button type="button" id="mp-urgent-ack">I understand</button>
+      <p class="mp-urgent-note">This message from the administrator stays on screen until you confirm you have seen it.</p>
+    </div>
+  </div>
+
   <!-- ================= WELCOME OVERLAY ================= -->
   <div id="mp-welcome-overlay" role="dialog" aria-modal="true" aria-label="Welcome tour">
     <div id="mp-welcome-card">
@@ -2327,6 +2447,13 @@
        NOTIFICATIONS JS
        Preloads on page load. Per-user localStorage so PWA close/reopen
        and logout/login do not wipe the seen-state.
+
+       Priorities (set by staff when sending a message):
+         normal    → regular toast
+         important → amber toast + highlighted row in the bell panel
+         urgent    → NO toast; a full-screen alert that stays until the
+                     user taps "I understand" (POST /api/notifications/<id>/read/).
+                     It re-appears on every page load / poll until acknowledged.
        ============================================================ -->
   <script>
     (function () {
@@ -2344,6 +2471,14 @@
 
       var userId = panel.getAttribute('data-user-id') || '';
       var TOASTED_KEY = 'mp_notif_toasted_' + userId;
+
+      /* ----- Urgent alert elements ----- */
+      var urgentOverlay = document.getElementById('mp-urgent-overlay');
+      var urgentMsgEl = document.getElementById('mp-urgent-msg');
+      var urgentCountEl = document.getElementById('mp-urgent-count');
+      var urgentErrorEl = document.getElementById('mp-urgent-error');
+      var urgentAckBtn = document.getElementById('mp-urgent-ack');
+      var urgentQueue = [];
 
       function getToastedIds() {
         try {
@@ -2376,15 +2511,94 @@
         setTimeout(function () { btn.classList.remove('shake'); }, 850);
       }
 
+      /* ================= URGENT ALERT ================= */
+      function renderUrgent() {
+        if (!urgentOverlay) return;
+
+        if (urgentQueue.length === 0) {
+          urgentOverlay.classList.remove('show');
+          return;
+        }
+
+        var n = urgentQueue[0];
+        urgentMsgEl.textContent = n.message;
+
+        if (urgentQueue.length > 1) {
+          urgentCountEl.textContent = '1 of ' + urgentQueue.length + ' urgent messages';
+          urgentCountEl.style.display = 'block';
+        } else {
+          urgentCountEl.style.display = 'none';
+        }
+
+        var wasHidden = !urgentOverlay.classList.contains('show');
+        urgentOverlay.classList.add('show');
+
+        if (wasHidden) {
+          urgentErrorEl.style.display = 'none';
+          urgentAckBtn.disabled = false;
+          urgentAckBtn.textContent = 'I understand';
+          try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) {}
+          setTimeout(function () { try { urgentAckBtn.focus(); } catch (e) {} }, 50);
+        }
+      }
+
+      function syncUrgent(items) {
+        urgentQueue = items;
+        renderUrgent();
+      }
+
+      if (urgentAckBtn) {
+        urgentAckBtn.addEventListener('click', function () {
+          if (urgentQueue.length === 0) return;
+          var current = urgentQueue[0];
+
+          urgentAckBtn.disabled = true;
+          urgentAckBtn.textContent = 'Confirming…';
+          urgentErrorEl.style.display = 'none';
+
+          fetch('/api/notifications/' + current.id + '/read/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': window.mpGetCsrf() },
+            credentials: 'same-origin'
+          }).then(function (r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+          }).then(function () {
+            urgentQueue.shift();
+            urgentAckBtn.disabled = false;
+            urgentAckBtn.textContent = 'I understand';
+            renderUrgent();
+            loadNotifs();
+          }).catch(function () {
+            urgentAckBtn.disabled = false;
+            urgentAckBtn.textContent = 'I understand';
+            urgentErrorEl.textContent = 'Could not confirm. Check your connection and try again.';
+            urgentErrorEl.style.display = 'block';
+          });
+        });
+      }
+
+      /* Urgent alert can't be dismissed with Escape or by clicking outside:
+         the only way out is the "I understand" button. */
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && urgentOverlay && urgentOverlay.classList.contains('show')) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }, true);
+
+      /* ================= TOASTS ================= */
       function showToast(n) {
         if (!toastStack) return;
 
+        var important = n.priority === 'important';
+
         var el = document.createElement('div');
-        el.className = 'mp-notif-toast';
+        el.className = 'mp-notif-toast' + (important ? ' is-important' : '');
         el.innerHTML =
           '<div class="mp-notif-toast__icon">' + escapeHtml(n.icon || '🔔') + '</div>' +
           '<div class="mp-notif-toast__body">' +
-            '<p class="mp-notif-toast__title">New notification</p>' +
+            '<p class="mp-notif-toast__title">' + (important ? 'Important message' : 'New notification') + '</p>' +
             '<p class="mp-notif-toast__msg">' + escapeHtml(n.message) + '</p>' +
           '</div>' +
           '<button type="button" class="mp-notif-toast__close" aria-label="Dismiss">×</button>';
@@ -2412,9 +2626,10 @@
 
         toastStack.appendChild(el);
         requestAnimationFrame(function () { el.classList.add('show'); });
-        setTimeout(dismiss, 5500);
+        setTimeout(dismiss, important ? 8000 : 5500);
       }
 
+      /* ================= BELL PANEL ================= */
       function renderNotifs(items) {
         if (!items || items.length === 0) {
           list.innerHTML = '<p class="mp-notif-empty">No notifications yet</p>';
@@ -2423,13 +2638,31 @@
 
         var html = '';
         items.forEach(function (n) {
-          html += '<div class="mp-notif-item' + (n.is_read ? '' : ' is-unread') + '" data-id="' + n.id + '">' +
+          var isUrgent = n.priority === 'urgent';
+          var isImportant = n.priority === 'important';
+          var lockedUrgent = isUrgent && !n.is_read;   /* can't be deleted until acknowledged */
+
+          var cls = 'mp-notif-item' +
+            (n.is_read ? '' : ' is-unread') +
+            (isUrgent ? ' is-urgent' : (isImportant ? ' is-important' : ''));
+
+          var tag = '';
+          if (isUrgent) {
+            tag = n.is_read
+              ? '<span class="mp-notif-tag mp-notif-tag--done">Urgent · acknowledged</span><br>'
+              : '<span class="mp-notif-tag mp-notif-tag--urgent">Urgent · action required</span><br>';
+          } else if (isImportant) {
+            tag = '<span class="mp-notif-tag mp-notif-tag--important">Important</span><br>';
+          }
+
+          html += '<div class="' + cls + '" data-id="' + n.id + '">' +
             '<div class="mp-notif-icon">' + escapeHtml(n.icon || '🔔') + '</div>' +
             '<div class="mp-notif-body">' +
+              tag +
               '<p class="mp-notif-msg">' + escapeHtml(n.message) + '</p>' +
               '<span class="mp-notif-time">' + escapeHtml(n.created_at_display || '') + '</span>' +
             '</div>' +
-            '<button type="button" class="mp-notif-del" data-id="' + n.id + '" title="Delete">×</button>' +
+            (lockedUrgent ? '' : '<button type="button" class="mp-notif-del" data-id="' + n.id + '" title="Delete">×</button>') +
           '</div>';
         });
         list.innerHTML = html;
@@ -2471,9 +2704,16 @@
           unread = items.filter(function (n) { return !n.is_read; }).length;
         }
 
-        /* Toast every unread notification not yet toasted (persisted in localStorage) */
+        /* Urgent alerts: shown full-screen (oldest first) until acknowledged.
+           They never get a toast — the overlay is the notification. */
+        var pendingUrgent = items.filter(function (n) {
+          return n.priority === 'urgent' && !n.is_read;
+        }).sort(function (a, b) { return a.id - b.id; });
+
+        /* Toast every other unread notification not yet toasted (persisted in localStorage) */
         var newToasts = [];
         items.forEach(function (n) {
+          if (n.priority === 'urgent') return;
           if (!n.is_read && !toastedIds.has(n.id)) {
             newToasts.push(n);
             toastedIds.add(n.id);
@@ -2492,6 +2732,7 @@
 
         updateBadge(unread);
         renderNotifs(items);
+        syncUrgent(pendingUrgent);
       }
 
       function loadNotifs() {
@@ -2550,6 +2791,13 @@
       /* Preload immediately so badge and panel are ready before the user opens it */
       loadNotifs();
       setInterval(loadNotifs, POLL_MS);
+
+      /* Re-check as soon as the user comes back to the tab / app so an urgent
+         alert sent while they were away appears right away. */
+      document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) loadNotifs();
+      });
+      window.addEventListener('focus', loadNotifs);
     })();
   </script>
 
