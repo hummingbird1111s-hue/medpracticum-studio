@@ -414,14 +414,16 @@ after 12s with a slow 1.2s fade.
 </div>
 {% endif %}
 
-{# ============================================================
-   PHASE B3 — PPTX AI STATUS BANNER + RETRY
-   Shown when report.pptx_content._pptx_ai_note exists (i.e. a
-   presentation has been drafted at least once). Renders the
-   human summary produced by draft_presentation_with_ai().
-   If any slides are still 'local', a retry button appears —
-   disabled for 60s from page load, then clickable.
-   ============================================================ #}
+{% comment %}
+============================================================
+PHASE B3 — PPTX AI STATUS BANNER + RETRY
+Shown when report.pptx_content._pptx_ai_note exists (i.e. a
+presentation has been drafted at least once). Renders the
+human summary produced by draft_presentation_with_ai().
+If any slides are still 'local', a retry button appears —
+disabled for 60s from page load, then clickable.
+============================================================
+{% endcomment %}
 {% if pptx_ai_note %}
   {% if pptx_failed_keys %}
     {% if pptx_failed_keys|length < pptx_section_status|length %}

@@ -423,14 +423,16 @@ auto-dismiss after 12s with a slow 1.2s fade.
 </div>
 {% endif %}
 
-{# ============================================================
-   PHASE B3 — AI STATUS BANNER + RETRY
-   Shown when report.content._ai_note exists (i.e. a report has
-   been drafted at least once). Renders the human summary that
-   draft_sections_with_ai() produced. If any sections are still
-   'local' (AI was unavailable), a retry button appears —
-   disabled for 60s from page load, then clickable.
-   ============================================================ #}
+{% comment %}
+============================================================
+PHASE B3 — AI STATUS BANNER + RETRY
+Shown when report.content._ai_note exists (i.e. a report has
+been drafted at least once). Renders the human summary that
+draft_sections_with_ai() produced. If any sections are still
+'local' (AI was unavailable), a retry button appears —
+disabled for 60s from page load, then clickable.
+============================================================
+{% endcomment %}
 {% if ai_note %}
   {% if failed_keys %}
     {% if failed_keys|length < section_status|length %}

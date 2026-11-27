@@ -18,6 +18,20 @@
   <script defer src="{% static 'vendor/htmx.min.js' %}"></script>
   <script defer src="{% static 'js/offline-sync.js' %}"></script>   <!-- 👈 add this -->
 
+  <!-- Capture the native install prompt as early as possible so it is never missed.
+       Shared by the header Install button and any landing-page install overlay. -->
+  <script>
+    window.__mpDeferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault();
+      window.__mpDeferredPrompt = e;
+      try { window.dispatchEvent(new Event('mp:install-ready')); } catch (err) {}
+    });
+    window.addEventListener('appinstalled', function () {
+      window.__mpDeferredPrompt = null;
+    });
+  </script>
+
   <style>
     /* ================= BASE ================= */
     *, *::before, *::after { box-sizing: border-box; }
@@ -563,6 +577,7 @@
       font-size: 13px;
       font-weight: 500;
       cursor: pointer;
+      white-space: nowrap;
     }
     #install-btn:hover { background: #047857; }
     #install-btn.show { display: inline-block; }
@@ -1704,7 +1719,8 @@
           <a href="{% url 'login' %}" class="mp-login-pill" title="Log in to your account">Log in →</a>
           {% endif %}
 
-          <button id="install-btn" type="button" data-authenticated="{% if user.is_authenticated %}1{% else %}0{% endif %}">Install app</button>
+          <!-- Visible to everyone (logged in or not); hidden only once the app is installed -->
+          <button id="install-btn" type="button">Install app</button>
         </div>
       </header>
 
@@ -2128,46 +2144,42 @@
 
   <!-- ============================================================
        INSTALL APP BUTTON
+       - Header button is visible to everyone (logged in or not).
+       - Hides only when already installed (standalone) or after install.
+       - Exposes window.mpInstallApp() so a landing-page install overlay
+         can trigger the exact same real install routine.
        ============================================================ -->
   <script>
     (function () {
       var installBtn = document.getElementById('install-btn');
-      if (!installBtn) return;
 
       var isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
                          window.navigator.standalone === true;
-      if (isStandalone) {
-        installBtn.style.display = 'none';
+
+      /* Public helpers (usable from the landing page overlay) */
+      window.mpIsStandalone = isStandalone;
+
+      function hideInstallBtn() {
+        if (!installBtn) return;
         installBtn.classList.remove('show');
-        return;
+        installBtn.style.display = 'none';
       }
 
-      if (installBtn.dataset.authenticated === '1') {
-        installBtn.classList.add('show');
+      function isInAppBrowser() {
+        return /WhatsApp|FBAN|FBAV|Instagram|Line\/|MicroMessenger|Snapchat|TikTok|Twitter/i
+          .test(navigator.userAgent || '');
       }
 
-      var deferredPrompt = null;
-
-      window.addEventListener('beforeinstallprompt', function (e) {
-        e.preventDefault();
-        deferredPrompt = e;
-      });
-
-      installBtn.addEventListener('click', async function () {
-        if (deferredPrompt) {
-          deferredPrompt.prompt();
-          var choice = await deferredPrompt.userChoice;
-          deferredPrompt = null;
-          if (choice.outcome === 'accepted') {
-            installBtn.classList.remove('show');
-            installBtn.style.display = 'none';
-          }
-          return;
-        }
-
-        var ua = navigator.userAgent.toLowerCase();
+      function showManualHelp() {
+        var ua = (navigator.userAgent || '').toLowerCase();
         var msg = '';
-        if (ua.indexOf('iphone') !== -1 || ua.indexOf('ipad') !== -1) {
+
+        if (isInAppBrowser()) {
+          msg = 'To install the app, first open this page in your main browser:\n\n' +
+                '• iPhone: tap the Safari (compass) icon, or Share > Open in Safari\n' +
+                '• Android: tap the menu (three dots) > Open in Chrome\n\n' +
+                'Then tap "Install app" again.';
+        } else if (ua.indexOf('iphone') !== -1 || ua.indexOf('ipad') !== -1) {
           msg = 'To install on iPhone/iPad:\n\n1. Tap the Share button (square with up arrow)\n2. Scroll down and tap "Add to Home Screen"\n3. Tap "Add"';
         } else if (ua.indexOf('android') !== -1) {
           msg = 'To install on Android:\n\n1. Tap the browser menu (three dots)\n2. Tap "Install app" or "Add to Home screen"\n3. Tap "Install"';
@@ -2175,11 +2187,46 @@
           msg = 'To install on desktop:\n\n• Chrome: Menu (three dots) > "Install MedPracticum Studio"\n• Edge: Menu (...) > Apps > "Install this site as an app"\n\nLook for the install icon in your address bar.';
         }
         alert(msg);
-      });
+      }
+
+      /* Real install routine. Returns 'accepted' | 'dismissed' | 'manual' */
+      window.mpInstallApp = async function () {
+        var promptEvt = window.__mpDeferredPrompt;
+
+        if (promptEvt) {
+          try {
+            promptEvt.prompt();
+            var choice = await promptEvt.userChoice;
+            window.__mpDeferredPrompt = null;
+            if (choice && choice.outcome === 'accepted') {
+              hideInstallBtn();
+              return 'accepted';
+            }
+            return 'dismissed';
+          } catch (err) {
+            window.__mpDeferredPrompt = null;
+          }
+        }
+
+        showManualHelp();
+        return 'manual';
+      };
+
+      if (isStandalone) {
+        hideInstallBtn();
+        return;
+      }
+
+      if (installBtn) {
+        /* Show for everyone, regardless of authentication */
+        installBtn.classList.add('show');
+        installBtn.addEventListener('click', function () {
+          window.mpInstallApp();
+        });
+      }
 
       window.addEventListener('appinstalled', function () {
-        installBtn.classList.remove('show');
-        installBtn.style.display = 'none';
+        hideInstallBtn();
       });
     })();
   </script>
