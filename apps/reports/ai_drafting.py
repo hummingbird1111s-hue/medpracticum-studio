@@ -31,10 +31,11 @@ from django.conf import settings
 
 from . import local_drafter
 from . import local_pptx_drafter
+from . import ai_gateway
 
 logger = logging.getLogger(__name__)
 
-PROMPT_VERSION = 'v14'
+PROMPT_VERSION = 'v15'
 DEFAULT_MAX_SECONDS = 120           # raised from 90 — serial takes longer
 DEFAULT_INTER_CALL_DELAY = 0.8      # seconds between AI calls (rate-limit safe)
 
@@ -681,7 +682,8 @@ def _ai_provider():
 
 
 def _ai_configured():
-    return bool(_ai_setting('REPORT_AI_CALLABLE') or _ai_provider())
+    return bool(_ai_setting('REPORT_AI_CALLABLE') or _ai_provider()
+                or ai_gateway.configured())
 
 
 def _http_json(url, headers, payload, timeout):
@@ -718,6 +720,11 @@ def _call_ai(prompt, max_tokens=None, temperature=None):
     if temperature is None:
         temperature = _DEFAULT_TEMPERATURE
     timeout = float(_ai_setting('REPORT_AI_CALL_TIMEOUT', 60))
+
+    if ai_gateway.configured():
+        reply = ai_gateway.chat(prompt, max_tokens=max_tokens, temperature=temperature)
+        if reply:
+            return reply
 
     dotted = _ai_setting('REPORT_AI_CALLABLE')
     if dotted:
@@ -1272,6 +1279,11 @@ def draft_sections_with_ai(session, samples=None, target_pages=None, retry_keys=
     deadline = time.time() + max_seconds
 
     sections_to_run = retry_keys or [k for k, _t, _i in DRAFT_SECTIONS]
+
+    if ai_gateway.configured():
+        from . import ai_batch
+        return ai_batch.draft_report(session, sections_to_run, context, extras,
+                                     budgets, log_ngrams, fallback_unit, log_count)
     section_status = {}
     drafts = {}
 
@@ -1465,6 +1477,10 @@ def draft_presentation_with_ai(session, target_slides=7, retry_keys=None):
     section_status = {}
     drafts = {}
     first_call_done = False
+
+    if ai_gateway.configured():
+        from . import ai_batch
+        return ai_batch.draft_pptx(session, keys_to_run, context, extras, report_content)
 
     for key, title, instruction in PPTX_DRAFT_SECTIONS:
         if key not in keys_to_run:
