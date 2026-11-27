@@ -4,7 +4,7 @@
 
 {% block content %}
 <style>
-  .admin-wrap    { max-width: 1200px; margin: 2rem auto; padding: 0 1rem; }
+  .admin-wrap    { max-width: 1400px; margin: 2rem auto; padding: 0 1rem; }
   .admin-header  { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; gap: 1rem; flex-wrap: wrap; }
   .admin-header h1 { margin: 0; font-size: 1.5rem; color: #111827; }
   .admin-back    { display: inline-block; padding: 0.5rem 1rem; border-radius: 6px; background: #eef2ff; color: #3730a3; text-decoration: none; font-size: 0.88rem; font-weight: 600; }
@@ -18,19 +18,10 @@
   .filter-bar .clear:hover { background: #4b5563; }
   .count-note    { color: #6b7280; font-size: 0.85rem; margin-bottom: 0.75rem; }
 
-  /* ============================================================
-     TABLE SCROLL CONTAINER
-     ------------------------------------------------------------
-     The table is wider than the viewport on mobile (min-width:900px),
-     and taller than 65vh on long pages. This wrapper gives it its own
-     two-axis scroll. The table header sticks to the top of this box,
-     and the checkbox column sticks to the left edge. Result: on mobile
-     you can swipe horizontally through all 8 columns without losing
-     sight of the row's checkbox or the header labels.
-     ============================================================ */
+  /* ---------- Scroll container (two-axis, sticky header + sticky checkbox column) ---------- */
   .table-wrapper {
     overflow: auto;
-    max-height: 65vh;
+    max-height: 70vh;
     min-height: 200px;
     border: 1px solid #e5e7eb;
     border-radius: 8px;
@@ -39,7 +30,6 @@
     -webkit-overflow-scrolling: touch;
     scrollbar-width: thin;
     scrollbar-color: #d1d5db #f3f4f6;
-    /* Contain sticky children within the rounded corners on iOS Safari */
     position: relative;
     isolation: isolate;
   }
@@ -50,14 +40,14 @@
 
   .admin-table {
     width: 100%;
-    min-width: 900px;              /* forces horizontal scroll on mobile */
-    border-collapse: separate;     /* required for reliable sticky headers */
+    min-width: 1700px;             /* 8 profile columns + 9 count columns */
+    border-collapse: separate;
     border-spacing: 0;
     background: #fff;
   }
   .admin-table th,
   .admin-table td {
-    padding: 0.75rem 1rem;
+    padding: 0.7rem 0.85rem;
     text-align: left;
     border-bottom: 1px solid #eef0f3;
     font-size: 0.9rem;
@@ -65,48 +55,58 @@
   }
   .admin-table tbody tr:last-child td { border-bottom: none; }
 
-  /* ---- Sticky header row ---- */
+  /* Two-row header: group labels on row 1, column labels on row 2 */
   .admin-table thead th {
     position: sticky;
-    top: 0;
-    z-index: 2;
     background: #f5f7fa;
     font-weight: 600;
     color: #4a5568;
-    font-size: 0.78rem;
+    font-size: 0.74rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     border-bottom: 1px solid #e5e7eb;
     white-space: nowrap;
+    z-index: 2;
   }
+  .admin-table thead tr:first-child th  { top: 0; }
+  .admin-table thead tr:nth-child(2) th { top: 34px; }   /* height of the first header row */
+  .admin-table thead th.group {
+    text-align: center;
+    background: #eef2ff;
+    color: #3730a3;
+    border-left: 1px solid #e0e7ff;
+    height: 34px;
+    box-sizing: border-box;
+  }
+  .admin-table thead th.group-profile { background: #f5f7fa; color: #4a5568; border-left: none; }
 
-  /* ---- Sticky first column (checkbox) ---- */
+  /* Sticky checkbox column */
   .admin-table td:first-child {
-    position: sticky;
-    left: 0;
-    z-index: 1;
-    background: #fff;
+    position: sticky; left: 0; z-index: 1; background: #fff;
     border-right: 1px solid #eef0f3;
-    /* Subtle right-edge shadow so users see content continues to the right */
     box-shadow: 1px 0 0 0 #eef0f3, 6px 0 8px -6px rgba(0,0,0,0.08);
   }
   .admin-table thead th:first-child {
-    left: 0;
-    z-index: 3;                    /* above both the header row and the sticky column */
-    background: #f5f7fa;
+    left: 0; z-index: 3; background: #f5f7fa;
     border-right: 1px solid #e5e7eb;
-    box-shadow: 1px 0 0 0 #e5e7eb, 6px 0 8px -6px rgba(0,0,0,0.08);
   }
 
-  /* ---- Hover / selected states must repaint the sticky column too ---- */
-  .admin-table tr:hover td { background: #fafbfc; }
+  .admin-table tr:hover td,
   .admin-table tr:hover td:first-child { background: #fafbfc; }
-
-  .admin-table tr.selected td { background: #eff6ff; }
-  .admin-table tr.selected td:first-child { background: #eff6ff; }
-  /* Selected beats hover — always show the selection colour, even mid-hover */
+  .admin-table tr.selected td,
+  .admin-table tr.selected td:first-child,
   .admin-table tr.selected:hover td,
   .admin-table tr.selected:hover td:first-child { background: #eff6ff; }
+
+  /* Count cells */
+  .admin-table td.num, .admin-table th.num { text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .admin-table td.num { color: #111827; font-weight: 600; }
+  .admin-table td.num.zero { color: #cbd5e1; font-weight: 400; }
+  .admin-table td.num.sep, .admin-table th.num.sep { border-left: 1px solid #eef0f3; }
+  .admin-table td.num a { color: inherit; text-decoration: none; border-bottom: 1px dotted #9ca3af; }
+  .admin-table td.num a:hover { color: #2563eb; border-color: #2563eb; }
+  .regen { color: #b45309; }                      /* regenerated counts get an amber tint */
+  .admin-table td.num.zero.regen { color: #fde7c3; }
 
   .admin-table input[type=checkbox] { cursor: pointer; width: 16px; height: 16px; accent-color: #2563eb; }
   .badge { display: inline-block; padding: 0.2rem 0.65rem; border-radius: 999px; font-size: 0.74rem; font-weight: 600; margin-right: 0.25rem; white-space: nowrap; }
@@ -120,40 +120,25 @@
   .pagination a:hover { background: #f3f4f6; }
   .pagination .current { background: #2563eb; color: #fff; border-color: #2563eb; font-weight: 600; }
 
-  /* ----- Floating bulk-action bar ----- */
+  /* Floating bulk-action bar */
   .selection-bar {
     position: fixed; left: 50%; bottom: 1.5rem; transform: translateX(-50%);
     background: #111827; color: #fff; padding: 0.75rem 1.25rem;
     border-radius: 999px; box-shadow: 0 8px 30px rgba(0,0,0,0.25);
-    display: none; align-items: center; gap: 1rem; z-index: 100;
-    font-size: 0.9rem;
+    display: none; align-items: center; gap: 1rem; z-index: 100; font-size: 0.9rem;
   }
   .selection-bar.active { display: flex; }
-  .selection-bar button {
-    background: #2563eb; color: #fff; border: none; padding: 0.5rem 1rem;
-    border-radius: 999px; cursor: pointer; font-weight: 600; font-size: 0.88rem;
-  }
+  .selection-bar button { background: #2563eb; color: #fff; border: none; padding: 0.5rem 1rem; border-radius: 999px; cursor: pointer; font-weight: 600; font-size: 0.88rem; }
   .selection-bar button:hover { background: #1e40af; }
 
-  /* ----- Modal ----- */
-  .modal-backdrop {
-    position: fixed; inset: 0; background: rgba(17,24,39,0.55);
-    display: none; align-items: center; justify-content: center; z-index: 200;
-    padding: 1rem;
-  }
+  /* Modal */
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(17,24,39,0.55); display: none; align-items: center; justify-content: center; z-index: 200; padding: 1rem; }
   .modal-backdrop.active { display: flex; }
-  .modal {
-    background: #fff; border-radius: 12px; padding: 1.5rem; width: 100%;
-    max-width: 540px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-  }
+  .modal { background: #fff; border-radius: 12px; padding: 1.5rem; width: 100%; max-width: 540px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
   .modal h2 { margin: 0 0 0.35rem; font-size: 1.2rem; color: #111827; }
   .modal .recipients { color: #6b7280; font-size: 0.85rem; margin-bottom: 1rem; }
   .modal label { display: block; font-size: 0.82rem; font-weight: 600; color: #374151; margin-bottom: 0.35rem; }
-  .modal select, .modal textarea {
-    width: 100%; padding: 0.6rem 0.75rem; border: 1px solid #d1d5db;
-    border-radius: 6px; font-size: 0.9rem; font-family: inherit; margin-bottom: 0.9rem;
-    box-sizing: border-box; background: #fff;
-  }
+  .modal select, .modal textarea { width: 100%; padding: 0.6rem 0.75rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.9rem; font-family: inherit; margin-bottom: 0.9rem; box-sizing: border-box; background: #fff; }
   .modal textarea { resize: vertical; min-height: 130px; line-height: 1.5; }
   .modal textarea:focus, .modal select:focus { outline: 2px solid #93c5fd; outline-offset: 1px; border-color: #2563eb; }
   .modal .counter { float: right; font-size: 0.75rem; color: #9ca3af; margin-top: -0.6rem; margin-bottom: 0.5rem; }
@@ -164,17 +149,22 @@
   .btn-secondary { background: #f3f4f6; color: #374151; border: none; padding: 0.6rem 1.25rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
   .btn-secondary:hover { background: #e5e7eb; }
 
-  /* On mobile, allow the table wrapper to use a bit less vertical space
-     so the filter bar + table + pagination fit better in the viewport */
+  /* Message priority */
+  .modal .priority-help { font-size: 0.78rem; color: #6b7280; margin: -0.55rem 0 0.9rem; }
+  .modal.is-urgent { border-top: 6px solid #dc2626; }
+  .modal.is-urgent h2 { color: #b91c1c; }
+  .modal.is-urgent .priority-help { color: #b91c1c; font-weight: 600; }
+  .modal.is-urgent #priority-select { border-color: #dc2626; background: #fef2f2; color: #991b1b; font-weight: 600; }
+  .modal.is-urgent .btn-primary { background: #dc2626; }
+  .modal.is-urgent .btn-primary:hover { background: #b91c1c; }
+  .modal.is-urgent .btn-primary:disabled { background: #fca5a5; }
+
   @media (max-width: 767px) {
-    .table-wrapper { max-height: 60vh; }
+    .table-wrapper { max-height: 65vh; }
     .admin-wrap    { margin: 1rem auto; }
   }
 </style>
 
-<!-- Hidden form that actually submits the message. Checkboxes in the table
-     are associated with this form via form="send-msg-form" so they aren't
-     part of the GET filter form. -->
 <form method="post" action="{% url 'admin_send_message' %}" id="send-msg-form" style="display:none;">
   {% csrf_token %}
 </form>
@@ -199,8 +189,18 @@
       <option value="active"   {% if current_role == 'active' %}selected{% endif %}>Active users</option>
       <option value="inactive" {% if current_role == 'inactive' %}selected{% endif %}>Inactive users</option>
     </select>
+    <select name="sort">
+      <option value="">Sort: Username</option>
+      <option value="-attachments_count"   {% if current_sort == '-attachments_count' %}selected{% endif %}>Most attachments</option>
+      <option value="-notifications_count" {% if current_sort == '-notifications_count' %}selected{% endif %}>Most notifications</option>
+      <option value="-logs_count"          {% if current_sort == '-logs_count' %}selected{% endif %}>Most logs</option>
+      <option value="-presentations_total" {% if current_sort == '-presentations_total' %}selected{% endif %}>Most presentations</option>
+      <option value="-reports_total"       {% if current_sort == '-reports_total' %}selected{% endif %}>Most reports</option>
+      <option value="-competencies_count"  {% if current_sort == '-competencies_count' %}selected{% endif %}>Most competencies</option>
+      <option value="-workshops_count"     {% if current_sort == '-workshops_count' %}selected{% endif %}>Most workshops</option>
+    </select>
     <button type="submit">Apply filters</button>
-    {% if current_department or current_role or q %}
+    {% if current_department or current_role or current_sort or q %}
       <a class="clear" href="{% url 'admin_all_users' %}">Clear</a>
     {% endif %}
   </form>
@@ -214,6 +214,12 @@
       <table class="admin-table">
         <thead>
           <tr>
+            <th class="group group-profile" colspan="8">User</th>
+            <th class="group" colspan="3">Files &amp; messages</th>
+            <th class="group" colspan="4">Presentations &amp; reports</th>
+            <th class="group" colspan="2">Learning</th>
+          </tr>
+          <tr>
             <th style="width:36px;"><input type="checkbox" id="select-all" aria-label="Select all"></th>
             <th>Username</th>
             <th>Name</th>
@@ -222,6 +228,18 @@
             <th>Level</th>
             <th>Status</th>
             <th>Last login</th>
+
+            <th class="num sep">Attachments</th>
+            <th class="num">Notifications</th>
+            <th class="num">Logs</th>
+
+            <th class="num sep">Pres. generated</th>
+            <th class="num regen">Pres. regenerated</th>
+            <th class="num">Reports generated</th>
+            <th class="num regen">Reports regenerated</th>
+
+            <th class="num sep">Competencies</th>
+            <th class="num">Workshops</th>
           </tr>
         </thead>
         <tbody>
@@ -229,12 +247,7 @@
             <tr>
               <td>
                 {% if u.is_active %}
-                  <input type="checkbox"
-                         class="user-checkbox"
-                         name="user_ids"
-                         value="{{ u.id }}"
-                         form="send-msg-form"
-                         aria-label="Select {{ u.username }}">
+                  <input type="checkbox" class="user-checkbox" name="user_ids" value="{{ u.id }}" form="send-msg-form" aria-label="Select {{ u.username }}">
                 {% endif %}
               </td>
               <td><strong>{{ u.username }}</strong><br><span class="mono">{{ u.index_number }}</span></td>
@@ -250,6 +263,18 @@
               <td class="mono">
                 {% if u.last_login %}{{ u.last_login|date:"d M Y, H:i" }}{% else %}—{% endif %}
               </td>
+
+              <td class="num sep {% if not u.attachments_count %}zero{% endif %}">{{ u.attachments_count }}</td>
+              <td class="num {% if not u.notifications_count %}zero{% endif %}">{{ u.notifications_count }}</td>
+              <td class="num {% if not u.logs_count %}zero{% endif %}">{{ u.logs_count }}</td>
+
+              <td class="num sep {% if not u.presentations_generated %}zero{% endif %}">{{ u.presentations_generated }}</td>
+              <td class="num regen {% if not u.presentations_regenerated %}zero{% endif %}">{{ u.presentations_regenerated }}</td>
+              <td class="num {% if not u.reports_generated %}zero{% endif %}">{{ u.reports_generated }}</td>
+              <td class="num regen {% if not u.reports_regenerated %}zero{% endif %}">{{ u.reports_regenerated }}</td>
+
+              <td class="num sep {% if not u.competencies_count %}zero{% endif %}">{{ u.competencies_count }}</td>
+              <td class="num {% if not u.workshops_count %}zero{% endif %}">{{ u.workshops_count }}</td>
             </tr>
           {% endfor %}
         </tbody>
@@ -259,11 +284,11 @@
     {% if page.has_other_pages %}
       <div class="pagination">
         {% if page.has_previous %}
-          <a href="?page={{ page.previous_page_number }}{% if current_department %}&department={{ current_department }}{% endif %}{% if current_role %}&role={{ current_role }}{% endif %}{% if q %}&q={{ q }}{% endif %}">← Prev</a>
+          <a href="?page={{ page.previous_page_number }}{% if current_department %}&department={{ current_department }}{% endif %}{% if current_role %}&role={{ current_role }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}{% if q %}&q={{ q|urlencode }}{% endif %}">← Prev</a>
         {% endif %}
         <span class="current">{{ page.number }} / {{ page.paginator.num_pages }}</span>
         {% if page.has_next %}
-          <a href="?page={{ page.next_page_number }}{% if current_department %}&department={{ current_department }}{% endif %}{% if current_role %}&role={{ current_role }}{% endif %}{% if q %}&q={{ q }}{% endif %}">Next →</a>
+          <a href="?page={{ page.next_page_number }}{% if current_department %}&department={{ current_department }}{% endif %}{% if current_role %}&role={{ current_role }}{% endif %}{% if current_sort %}&sort={{ current_sort }}{% endif %}{% if q %}&q={{ q|urlencode }}{% endif %}">Next →</a>
         {% endif %}
       </div>
     {% endif %}
@@ -272,13 +297,11 @@
   {% endif %}
 </div>
 
-<!-- Floating selection bar -->
 <div class="selection-bar" id="selection-bar" role="region" aria-live="polite">
   <span id="sel-count">0 users selected</span>
   <button type="button" id="btn-open-modal">Send message</button>
 </div>
 
-<!-- Compose modal -->
 <div class="modal-backdrop" id="msg-modal" role="dialog" aria-modal="true" aria-labelledby="msg-modal-title">
   <div class="modal">
     <h2 id="msg-modal-title">Send message</h2>
@@ -292,9 +315,18 @@
       {% endfor %}
     </select>
 
+    <label for="priority-select">Message type</label>
+    <select id="priority-select" name="priority" form="send-msg-form">
+      <option value="normal">Normal</option>
+      <option value="important">Important</option>
+      <option value="urgent">🚨 Urgent – requires action immediately</option>
+    </select>
+    <div class="priority-help" id="priority-help" style="display:none;">
+      Urgent messages interrupt the user with a full-screen alert they must acknowledge.
+    </div>
+
     <label for="msg-text">Message</label>
-    <textarea id="msg-text" name="message" form="send-msg-form"
-              maxlength="1000" placeholder="Type your message…" required></textarea>
+    <textarea id="msg-text" name="message" form="send-msg-form" maxlength="1000" placeholder="Type your message…" required></textarea>
     <div class="counter"><span id="char-count">0</span> / 1000</div>
 
     <div class="modal-actions">
@@ -319,19 +351,23 @@
   const msgText       = document.getElementById('msg-text');
   const charCount     = document.getElementById('char-count');
   const btnSend       = document.getElementById('btn-send');
+  const prioritySelect = document.getElementById('priority-select');
+  const priorityHelp  = document.getElementById('priority-help');
+
+  function applyPriorityStyle() {
+    const urgent = prioritySelect.value === 'urgent';
+    modal.querySelector('.modal').classList.toggle('is-urgent', urgent);
+    priorityHelp.style.display = urgent ? 'block' : 'none';
+    btnSend.textContent = urgent ? '🚨 Send urgent' : 'Send';
+  }
 
   function updateSelection() {
-    const boxes    = checkboxes();
-    const checked  = boxes.filter(cb => cb.checked);
-    const n        = checked.length;
-
+    const boxes   = checkboxes();
+    const checked = boxes.filter(cb => cb.checked);
+    const n       = checked.length;
     selCount.textContent = n === 1 ? '1 user selected' : n + ' users selected';
     selectionBar.classList.toggle('active', n > 0);
-
-    // Row highlighting
     boxes.forEach(cb => cb.closest('tr').classList.toggle('selected', cb.checked));
-
-    // Select-all state
     if (selectAll) {
       selectAll.checked       = n > 0 && n === boxes.length;
       selectAll.indeterminate = n > 0 && n < boxes.length;
@@ -344,13 +380,14 @@
       updateSelection();
     });
   }
-
   checkboxes().forEach(cb => cb.addEventListener('change', updateSelection));
 
   function openModal() {
     const n = checkboxes().filter(cb => cb.checked).length;
     if (n === 0) return;
     recipientsLbl.textContent = n === 1 ? 'To: 1 user' : 'To: ' + n + ' users';
+    prioritySelect.value = 'normal';
+    applyPriorityStyle();
     presetSelect.value = '';
     msgText.value = '';
     charCount.textContent = '0';
@@ -359,23 +396,15 @@
     modal.classList.add('active');
     setTimeout(() => msgText.focus(), 30);
   }
-
-  function closeModal() {
-    modal.classList.remove('active');
-  }
+  function closeModal() { modal.classList.remove('active'); }
 
   btnOpen.addEventListener('click', openModal);
   btnCancel.addEventListener('click', closeModal);
-
-  modal.addEventListener('click', (e) => {
-    if (e.target === modal) closeModal();
-  });
-
+  modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && modal.classList.contains('active')) closeModal();
   });
 
-  // Preset → fill textarea, reset the select so the same preset can be re-picked
   presetSelect.addEventListener('change', () => {
     if (presetSelect.value) {
       msgText.value = presetSelect.value;
@@ -384,22 +413,17 @@
       msgText.focus();
     }
   });
+  msgText.addEventListener('input', () => { charCount.textContent = msgText.value.length; });
 
-  msgText.addEventListener('input', () => {
-    charCount.textContent = msgText.value.length;
-  });
+  prioritySelect.addEventListener('change', applyPriorityStyle);
 
-  // Prevent accidental submit with nothing typed / nothing selected
   sendForm.addEventListener('submit', (e) => {
     const n = checkboxes().filter(cb => cb.checked).length;
-    if (n === 0) {
+    if (n === 0) { e.preventDefault(); closeModal(); return; }
+    if (!msgText.value.trim()) { e.preventDefault(); msgText.focus(); return; }
+    if (prioritySelect.value === 'urgent' &&
+        !confirm('Send this as URGENT to ' + n + (n === 1 ? ' user' : ' users') + '? It will interrupt them with a full-screen alert.')) {
       e.preventDefault();
-      closeModal();
-      return;
-    }
-    if (!msgText.value.trim()) {
-      e.preventDefault();
-      msgText.focus();
       return;
     }
     btnSend.disabled = true;
