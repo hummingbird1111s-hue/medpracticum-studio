@@ -1,5 +1,5 @@
 // {% load static %}
-const VERSION = 'v8.8'; // ⚠️ BUMP ON EVERY DEPLOY — browser detects updates via file bytes
+const VERSION = 'v8.9'; // ⚠️ BUMP ON EVERY DEPLOY — browser detects updates via file bytes
 const STATIC_CACHE = 'mp-static-' + VERSION;
 const PAGES_CACHE  = 'mp-pages-'  + VERSION;
 const OFFLINE_URL  = '/offline/';
@@ -55,6 +55,10 @@ self.addEventListener('message', (event) => {
 //      with /api/notifications/ before: cached forever, so no
 //      toast/bell/badge ever fired.
 //
+//      Auth & account routes are explicitly network-only so that
+//      stale registration / login / password-reset pages are
+//      never served from a cached response.
+//
 //   2. STALE-WHILE-REVALIDATE
 //      /static/ only — CSS/JS/images. Instant from cache, refresh
 //      in background. Cache-busting handled by VERSION constant.
@@ -78,13 +82,21 @@ self.addEventListener('fetch', (event) => {
 
   // ── Tier 1: NETWORK-ONLY. Do NOT call respondWith. ──
   if (url.origin !== self.location.origin) return;              // external
-  if (url.pathname.startsWith('/api/')) return;                  // data APIs
-  if (url.pathname.startsWith('/admin')) return;                 // Django admin
-  if (url.pathname.startsWith('/admin-workspace')) return;       // custom admin pages
-  if (url.pathname.startsWith('/accounts')) return;              // auth flows
-  if (url.pathname.startsWith('/update')) return;                // update page
-  if (url.pathname === '/service-worker.js') return;             // self
-  if (url.pathname.startsWith('/media/')) return;                // user uploads
+  if (url.pathname.startsWith('/api/')) return;                 // data APIs
+  if (url.pathname.startsWith('/admin')) return;                // Django admin
+  if (url.pathname.startsWith('/admin-workspace')) return;      // custom admin pages
+  if (url.pathname.startsWith('/accounts')) return;             // auth flows
+  if (url.pathname.startsWith('/update')) return;               // update page
+  if (url.pathname === '/service-worker.js') return;            // self
+  if (url.pathname.startsWith('/media/')) return;               // user uploads
+
+  // ── Tier 1b: NETWORK-ONLY auth & account routes (never cache) ──
+  if (url.pathname.startsWith('/register')) return;
+  if (url.pathname.startsWith('/login')) return;
+  if (url.pathname.startsWith('/logout')) return;
+  if (url.pathname.startsWith('/password')) return;
+  if (url.pathname.startsWith('/reset/')) return;
+  if (url.pathname.startsWith('/profile')) return;
 
   // ── Tier 2: STALE-WHILE-REVALIDATE for static assets ──
   if (url.pathname.startsWith('/static/')) {
@@ -124,24 +136,52 @@ async function staleWhileRevalidate(req, cacheName) {
 // Strategy B: network-first (HTML navigations)
 //   Fetch fresh HTML every time. Only cache successful,
 //   non-redirected responses (so we never cache a login
-//   redirect that later shows for a logged-in user). On
-//   network failure, fall back to cache, then to /offline/.
+//   redirect that later shows for a logged-in user).
+//
+//   Additionally, never cache responses that explicitly
+//   declare themselves private / non-storable via
+//   Cache-Control: no-store | private, or Vary: *.
+//   On network failure, fall back to cache, then to /offline/.
 // ─────────────────────────────────────────────────────────────
 async function networkFirst(req, cacheName, offlineUrl) {
   const cache = await caches.open(cacheName);
   try {
     const res = await fetch(req);
+
     if (res && res.ok && !res.redirected) {
-      cache.put(req, res.clone());
+      const cacheControl = (
+        res.headers.get('Cache-Control') || ''
+      ).toLowerCase();
+
+      const vary = (
+        res.headers.get('Vary') || ''
+      ).toLowerCase();
+
+      const doNotCache =
+        cacheControl.includes('no-store') ||
+        cacheControl.includes('private') ||
+        vary.includes('*');
+
+      if (!doNotCache) {
+        await cache.put(req, res.clone()).catch(() => {});
+      }
     }
+
     return res;
   } catch (err) {
     const cached = await cache.match(req);
     if (cached) return cached;
+
     const offline = await caches.match(offlineUrl);
-    return offline || new Response('Offline — please check your connection.', {
-      status: 503,
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-    });
+
+    return offline || new Response(
+      'Offline — please check your connection.',
+      {
+        status: 503,
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+        },
+      }
+    );
   }
 }

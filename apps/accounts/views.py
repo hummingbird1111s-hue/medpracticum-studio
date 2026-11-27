@@ -12,6 +12,8 @@ from django.urls import reverse
 from django.utils.encoding import force_bytes, force_str
 from django.utils.html import strip_tags
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+from django.views.decorators.cache import never_cache
+from django.views.decorators.csrf import ensure_csrf_cookie
 
 from .forms import (
     PasswordResetConfirmForm,
@@ -28,7 +30,15 @@ logger = logging.getLogger(__name__)
 # Registration
 # ============================================================
 
+@never_cache
+@ensure_csrf_cookie
 def register(request):
+    """Register a new student and sign them in.
+
+    never_cache prevents browsers and intermediary caches from reusing
+    an old registration form. ensure_csrf_cookie makes Django issue the
+    CSRF cookie when the form page is opened.
+    """
     if request.user.is_authenticated:
         return redirect('dashboard')
 
@@ -49,6 +59,8 @@ def register(request):
 # ============================================================
 
 @login_required
+@never_cache
+@ensure_csrf_cookie
 def profile(request):
     """View + edit your own profile.
 
@@ -71,6 +83,7 @@ def profile(request):
 # Contact provider page
 # ============================================================
 
+@never_cache
 def contact(request):
     """Contact page with Call + WhatsApp buttons for support staff."""
     return render(request, 'accounts/contact.html')
@@ -107,7 +120,7 @@ def _send_email_reset(request, user):
         return False
 
     # Django's default_token_generator: single-use, auto-invalidated after
-    # password change, expires based on PASSWORD_RESET_TIMEOUT setting (3 days).
+    # password change, expires based on PASSWORD_RESET_TIMEOUT setting.
     uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
     token = default_token_generator.make_token(user)
     path = reverse('password_reset_confirm', kwargs={'uidb64': uidb64, 'token': token})
@@ -132,6 +145,8 @@ def _send_email_reset(request, user):
         return False
 
 
+@never_cache
+@ensure_csrf_cookie
 def password_reset_request(request):
     """Step 1 — user enters their email; we email a branded reset link."""
     SAME_MESSAGE = (
@@ -155,6 +170,8 @@ def password_reset_request(request):
     return render(request, 'accounts/password_reset_request.html', {'form': form})
 
 
+@never_cache
+@ensure_csrf_cookie
 def password_reset_confirm(request, uidb64, token):
     """Step 2 — user arrives from the emailed link; sets a new password."""
     try:

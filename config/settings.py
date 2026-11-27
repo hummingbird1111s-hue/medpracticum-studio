@@ -145,12 +145,25 @@ _extra_hosts = os.environ.get('ALLOWED_HOSTS_EXTRA', '').strip()
 if _extra_hosts:
     ALLOWED_HOSTS.extend(h.strip() for h in _extra_hosts.split(',') if h.strip())
 
-# Trusted origins for CSRF POSTs (Django 4+ requires this for HTTPS domains)
+# Trusted origins for CSRF POSTs.
+# Include the canonical Render URL explicitly, then add the hostname
+# supplied by Render and any additional domains configured by the owner.
 CSRF_TRUSTED_ORIGINS = [
-    f'https://{host}'
-    for host in ALLOWED_HOSTS
-    if host not in ('localhost', '127.0.0.1')
+    'https://medpracticum-studio.onrender.com',
 ]
+
+if RENDER_EXTERNAL_HOSTNAME:
+    _render_origin = f'https://{RENDER_EXTERNAL_HOSTNAME}'
+    if _render_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(_render_origin)
+
+# Add any explicitly configured HTTPS domains.
+for _host in _extra_hosts.split(','):
+    _host = _host.strip()
+    if _host:
+        _origin = _host if _host.startswith('https://') else f'https://{_host}'
+        if _origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_origin)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -179,14 +192,25 @@ if not DEBUG:
     # Force all HTTP → HTTPS
     SECURE_SSL_REDIRECT = True
 
-    # Required on Render / any proxy that terminates SSL. Without this,
-    # `request.is_secure()` returns False on HTTPS requests → SSL redirect
-    # goes into an infinite loop.
-    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-
-    # Cookies only over HTTPS
+    # Cookies only over HTTPS in production.
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+
+# ===== CSRF and session cookie settings =====
+# Lax allows normal same-site navigation while protecting against many
+# cross-site request scenarios. Do not set a CSRF_COOKIE_DOMAIN unless
+# you intentionally serve the app across multiple subdomains.
+CSRF_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_SAMESITE = 'Lax'
+
+# Keep the CSRF token in the normal CSRF cookie. Django's csrf_token
+# template tag (and ensure_csrf_cookie on form views) can then set it.
+CSRF_USE_SESSIONS = False
+
+# The Render proxy terminates HTTPS before forwarding requests to Django.
+# This header lets Django correctly recognize the original HTTPS request.
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 
 # ===== Application definition =====
