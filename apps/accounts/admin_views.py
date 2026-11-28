@@ -2,34 +2,18 @@
 Staff-only admin views: User Logs + All Users + Send Message.
 
 Wired into config/urls.py as:
-    /admin-workspace/user-logs/     → admin_user_logs     (name='admin_user_logs')
-    /admin-workspace/all-users/     → admin_all_users     (name='admin_all_users')
-    /admin-workspace/send-message/  → admin_send_message  (name='admin_send_message')
-
-All three views use @staff_member_required so a non-staff user is bounced
-to the admin login page.
-
-All Users page extras
----------------------
-Every user row carries live counts: attachments, notifications, logs,
-presentations (generated / regenerated), reports (generated / regenerated),
-competencies and workshops.
-
-The counts are built from the user's *reverse relations*. Because this file
-cannot know your exact `related_name`s, each count lists a few likely names in
-COUNT_SOURCES below and the first one that exists on the User model is used.
-If none exists, that column shows 0 and a warning is written to the log, so
-the page never crashes. To pin a count to a specific relation, put its name
-FIRST in the matching tuple.
-
-Messages can be sent as Normal / Important / Urgent. Urgent messages pop up
-for the recipient as a full-screen alert they must acknowledge.
+    /admin-workspace/user-logs/     → admin_user_logs
+    /admin-workspace/all-users/     → admin_all_users
+    /admin-workspace/send-message/  → admin_send_message
 """
 import logging
+from importlib import import_module
 
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
+from django.core.exceptions import FieldDoesNotExist
 from django.core.paginator import Paginator
+from django.db import models as django_models
 from django.db.models import (
     Count, F, IntegerField, OuterRef, Q, Subquery, Sum, Value,
 )
@@ -43,76 +27,38 @@ logger = logging.getLogger(__name__)
 
 
 # ──────────────────────────────────────────────────────────────────────
-# Preset drafts shown in the "Send message" modal on the All Users page.
-# Edit this list to change what staff can quick-pick from.
+# Presets — unchanged
 # ──────────────────────────────────────────────────────────────────────
 MESSAGE_PRESETS = [
-    {
-        'label': 'Reminder — update daily logs',
-        'text': (
-            'Reminder: please make sure your daily logs for this week are up to date. '
-            'The bell icon (top-right) shows anything you may have missed.'
-        ),
-    },
-    {
-        'label': 'Welcome message',
-        'text': (
-            'Welcome to MedPracticum Studio! If you need help getting started, '
-            'check the "How to use" page in the menu.'
-        ),
-    },
-    {
-        'label': 'Weekly report due',
-        'text': (
-            'This is a reminder that your weekly report is due. '
-            'Please generate and submit it before the end of the day.'
-        ),
-    },
-    {
-        'label': 'Profile check',
-        'text': (
-            'Please review your profile and make sure your department, level, '
-            'and contact details are correct.'
-        ),
-    },
-    {
-        'label': 'Attachment ending soon',
-        'text': (
-            'Your current attachment period is nearing its end. '
-            'Please make sure all logs and workshops are complete.'
-        ),
-    },
-    {
-        'label': '🚨 Urgent — contact admin now',
-        'text': (
-            'URGENT: please contact the administrator immediately. '
-            'Action is required on your account today.'
-        ),
-    },
+    {'label': 'Reminder — update daily logs',
+     'text': ('Reminder: please make sure your daily logs for this week are up to date. '
+              'The bell icon (top-right) shows anything you may have missed.')},
+    {'label': 'Welcome message',
+     'text': ('Welcome to MedPracticum Studio! If you need help getting started, '
+              'check the "How to use" page in the menu.')},
+    {'label': 'Weekly report due',
+     'text': ('This is a reminder that your weekly report is due. '
+              'Please generate and submit it before the end of the day.')},
+    {'label': 'Profile check',
+     'text': ('Please review your profile and make sure your department, level, '
+              'and contact details are correct.')},
+    {'label': 'Attachment ending soon',
+     'text': ('Your current attachment period is nearing its end. '
+              'Please make sure all logs and workshops are complete.')},
+    {'label': '🚨 Urgent — contact admin now',
+     'text': ('URGENT: please contact the administrator immediately. '
+              'Action is required on your account today.')},
 ]
 
 
 # ──────────────────────────────────────────────────────────────────────
-# Where each per-user count comes from.
-# Each tuple = candidate reverse-relation names on User (first match wins).
+# Direct reverse relations on User (still work without joins)
 # ──────────────────────────────────────────────────────────────────────
 COUNT_SOURCES = {
     'attachments':   ('attachments', 'attachment_set', 'attachment'),
-    'notifications': ('notifications',),
-    'logs':          ('logs', 'daily_logs', 'dailylogs', 'log_entries', 'log_set', 'log'),
-    'presentations': ('presentations', 'pptx_decks', 'pptx', 'presentation_set', 'presentation',
-                      'generated_presentations'),
-    'reports':       ('reports', 'generated_reports', 'report_set', 'report'),
-    'competencies':  ('competencies', 'competency_set', 'competency'),
-    'workshops':     ('workshops', 'workshop_set', 'workshop'),
+    'notifications': ('notifications', 'sent_notifications'),
 }
 
-# How "regenerated" is recorded on a presentation / report row.
-# A boolean field (True = regenerated) is checked first, then a counter field
-# (number of regenerations). If neither exists, everything counts as generated
-# and regenerated shows 0.
-REGEN_BOOLEAN_FIELDS = ('is_regenerated', 'regenerated', 'is_regeneration', 'is_regen')
-REGEN_COUNTER_FIELDS = ('regeneration_count', 'regen_count', 'regenerations', 'times_regenerated')
 
 SORT_OPTIONS = {
     '-attachments_count', '-notifications_count', '-logs_count',
@@ -123,8 +69,73 @@ SORT_OPTIONS = {
 ALLOWED_PRIORITIES = ('normal', 'important', 'urgent')
 
 
+# ──────────────────────────────────────────────────────────────────────
+# Resolve AttachmentSession + its FK to User once at import time
+# ──────────────────────────────────────────────────────────────────────
+def _get_attachment_model():
+    try:
+        return User._meta.get_field('attachments').related_model
+    except (FieldDoesNotExist, AttributeError):
+        return None
+
+
+AttachmentSession = _get_attachment_model()
+
+
+def _attachment_user_fk():
+    """Field on AttachmentSession that points at User (e.g. 'user')."""
+    if AttachmentSession is None:
+        return None
+    for f in AttachmentSession._meta.get_fields():
+        if f.is_relation and (f.many_to_one or f.one_to_one) and f.related_model is User:
+            return f.name
+    return None
+
+
+def _zero():
+    return Value(0, output_field=IntegerField())
+
+
+def _has_field(model, field_name):
+    """
+    True only for CONCRETE model fields — excludes reverse relations and M2M.
+    This prevents the class of bug where _has_field returns True for a reverse
+    FK and then the code tries to filter on it as if it were a JSON/scalar field.
+    """
+    try:
+        field = model._meta.get_field(field_name)
+        return bool(getattr(field, 'concrete', False))
+    except (FieldDoesNotExist, AttributeError):
+        return False
+
+
+def _try_import_models(module_path, names):
+    """Return the first model that exists in module_path, or None."""
+    try:
+        mod = import_module(module_path)
+    except ImportError:
+        return None
+    for name in names:
+        model = getattr(mod, name, None)
+        if model is not None and hasattr(model, '_meta'):
+            return model
+    return None
+
+
+def _find_fk_to_attachment(model):
+    """FK or OneToOne field on model that points at AttachmentSession."""
+    if AttachmentSession is None:
+        return None
+    for f in model._meta.get_fields():
+        if f.is_relation and (f.many_to_one or f.one_to_one) and f.related_model is AttachmentSession:
+            return f.name
+    return None
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Direct counts (user.attachments, user.notifications)
+# ──────────────────────────────────────────────────────────────────────
 def _reverse_relations():
-    """Map {query_name: reverse-relation field} for every reverse FK/M2M on User."""
     return {
         f.name: f
         for f in User._meta.get_fields()
@@ -133,103 +144,169 @@ def _reverse_relations():
 
 
 def _find_relation(key, relations):
-    for candidate in COUNT_SOURCES[key]:
+    for candidate in COUNT_SOURCES.get(key, ()):
         if candidate in relations:
             return relations[candidate]
-    logger.warning('admin_all_users: no relation found for "%s" (tried %s) — column will show 0',
-                   key, ', '.join(COUNT_SOURCES[key]))
     return None
 
 
-def _zero():
-    return Value(0, output_field=IntegerField())
-
-
-def _subquery_agg(rel, aggregate, **filters):
-    """
-    Correlated subquery: aggregate over the related rows of the outer user.
-    Subqueries (instead of joining every relation at once) keep the query fast
-    — joining 8 relations together multiplies rows and gets very slow.
-    """
+def _count_direct(rel):
+    if rel is None:
+        return _zero()
     model = rel.related_model
     fk = rel.field.name
     sub = (
         model.objects
-        .filter(**{fk: OuterRef('pk')}, **filters)
+        .filter(**{fk: OuterRef('pk')})
         .order_by()
         .values(fk)
-        .annotate(_agg=aggregate)
+        .annotate(_agg=Count('pk'))
         .values('_agg')
     )
     return Coalesce(Subquery(sub, output_field=IntegerField()), Value(0))
 
 
-def _count(rel, **filters):
-    if rel is None:
+# ──────────────────────────────────────────────────────────────────────
+# Transitive counts (via AttachmentSession)
+# ──────────────────────────────────────────────────────────────────────
+def _count_via_attachment(model, attachment_fk_name, *, non_empty_fields=None):
+    user_fk = _attachment_user_fk()
+    if not user_fk or not attachment_fk_name:
         return _zero()
-    if rel.one_to_many:
-        return _subquery_agg(rel, Count('pk'), **filters)
-    # many-to-many fallback
-    cond = Q(**{f'{rel.name}__{k}': v for k, v in filters.items()}) if filters else None
-    return Count(rel.name, filter=cond, distinct=True)
+
+    qs = model.objects.filter(**{f'{attachment_fk_name}__{user_fk}': OuterRef('pk')})
+
+    for field_name in (non_empty_fields or ()):
+        if not _has_field(model, field_name):
+            continue
+        field = model._meta.get_field(field_name)
+        if isinstance(field, django_models.JSONField):
+            qs = qs.exclude(**{f'{field_name}__isnull': True}).exclude(**{field_name: {}})
+        else:
+            qs = qs.exclude(**{f'{field_name}__isnull': True}).exclude(**{field_name: ''})
+
+    sub = (
+        qs.order_by()
+        .values(f'{attachment_fk_name}__{user_fk}')
+        .annotate(_agg=Count('pk'))
+        .values('_agg')
+    )
+    return Coalesce(Subquery(sub, output_field=IntegerField()), Value(0))
 
 
-def _first_field(model, candidates):
-    names = {f.name for f in model._meta.get_fields()}
-    return next((c for c in candidates if c in names), None)
+def _count_logs():
+    DailyLog = _try_import_models('apps.logs.models', ('DailyLog', 'LogEntry', 'Log'))
+    if DailyLog is None:
+        return _zero()
+    return _count_via_attachment(DailyLog, _find_fk_to_attachment(DailyLog))
 
 
-def _generated_and_regenerated(rel):
-    """Return (generated_expr, regenerated_expr) for presentations / reports."""
-    if rel is None:
-        return _zero(), _zero()
-
-    model = rel.related_model
-
-    flag = _first_field(model, REGEN_BOOLEAN_FIELDS)
-    if flag:
-        return _count(rel, **{flag: False}), _count(rel, **{flag: True})
-
-    counter = _first_field(model, REGEN_COUNTER_FIELDS)
-    if counter and rel.one_to_many:
-        return _count(rel), _subquery_agg(rel, Sum(counter))
-
-    return _count(rel), _zero()
+def _count_workshops():
+    Workshop = _try_import_models('apps.logs.models', ('Workshop',))
+    if Workshop is None:
+        return _zero()
+    return _count_via_attachment(Workshop, _find_fk_to_attachment(Workshop))
 
 
+def _count_competencies():
+    """
+    ✅ FIXED: AttachmentSession.competencies is a reverse FK to
+    AttachmentCompetency — NOT a JSON field. Count the rows of that model
+    that belong to the user's attachments.
+    """
+    Competency = _try_import_models(
+        'apps.logs.models',
+        ('AttachmentCompetency', 'Competency', 'CompetencyArea', 'AttachmentCompetencyArea'),
+    )
+    if Competency is None:
+        logger.warning(
+            'admin_all_users: cannot find AttachmentCompetency model in apps.logs.models '
+            '— competencies column will show 0'
+        )
+        return _zero()
+
+    fk = _find_fk_to_attachment(Competency)
+    if not fk:
+        logger.warning(
+            'admin_all_users: %s has no FK to AttachmentSession — competencies column will show 0',
+            Competency.__name__,
+        )
+        return _zero()
+
+    return _count_via_attachment(Competency, fk)
+
+
+def _count_reports_generated():
+    Gen = _try_import_models('apps.reports.models', ('GeneratedReport',))
+    if Gen is None:
+        return _zero()
+    fk = _find_fk_to_attachment(Gen)
+    return _count_via_attachment(Gen, fk, non_empty_fields=('content',))
+
+
+def _count_presentations_generated():
+    Gen = _try_import_models('apps.reports.models', ('GeneratedReport',))
+    if Gen is None:
+        return _zero()
+    fk = _find_fk_to_attachment(Gen)
+    return _count_via_attachment(Gen, fk, non_empty_fields=('pptx_content',))
+
+
+def _sum_regenerations(counter_field):
+    """
+    Sum `counter_field` on every GeneratedReport whose attachment belongs to
+    the outer user. Returns 0 if the field doesn't exist yet (pre-migration).
+    """
+    Gen = _try_import_models('apps.reports.models', ('GeneratedReport',))
+    if Gen is None or not _has_field(Gen, counter_field):
+        return _zero()
+
+    user_fk = _attachment_user_fk()
+    if not user_fk:
+        return _zero()
+
+    fk = _find_fk_to_attachment(Gen)
+    if not fk:
+        return _zero()
+
+    sub = (
+        Gen.objects
+        .filter(**{f'{fk}__{user_fk}': OuterRef('pk')})
+        .order_by()
+        .values(f'{fk}__{user_fk}')
+        .annotate(_agg=Sum(counter_field))
+        .values('_agg')
+    )
+    return Coalesce(Subquery(sub, output_field=IntegerField()), Value(0))
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Main annotation
+# ──────────────────────────────────────────────────────────────────────
 def _annotate_counts(qs):
     relations = _reverse_relations()
 
-    attachments   = _find_relation('attachments', relations)
-    notifications = _find_relation('notifications', relations)
-    logs          = _find_relation('logs', relations)
-    presentations = _find_relation('presentations', relations)
-    reports       = _find_relation('reports', relations)
-    competencies  = _find_relation('competencies', relations)
-    workshops     = _find_relation('workshops', relations)
-
-    pres_gen, pres_regen = _generated_and_regenerated(presentations)
-    rep_gen, rep_regen   = _generated_and_regenerated(reports)
-
     return qs.annotate(
-        attachments_count=_count(attachments),
-        notifications_count=_count(notifications),
-        logs_count=_count(logs),
-        presentations_generated=pres_gen,
-        presentations_regenerated=pres_regen,
-        reports_generated=rep_gen,
-        reports_regenerated=rep_regen,
-        competencies_count=_count(competencies),
-        workshops_count=_count(workshops),
+        attachments_count=_count_direct(_find_relation('attachments', relations)),
+        notifications_count=_count_direct(_find_relation('notifications', relations)),
+        logs_count=_count_logs(),
+        presentations_generated=_count_presentations_generated(),
+        presentations_regenerated=_sum_regenerations('pptx_regeneration_count'),
+        reports_generated=_count_reports_generated(),
+        reports_regenerated=_sum_regenerations('regeneration_count'),
+        competencies_count=_count_competencies(),
+        workshops_count=_count_workshops(),
     ).annotate(
         presentations_total=F('presentations_generated') + F('presentations_regenerated'),
         reports_total=F('reports_generated') + F('reports_regenerated'),
     )
 
 
+# ──────────────────────────────────────────────────────────────────────
+# Views
+# ──────────────────────────────────────────────────────────────────────
 @staff_member_required
 def admin_user_logs(request):
-    """Show every login / logout / failed-login attempt across the platform."""
     qs = UserActivityLog.objects.select_related('user').order_by('-created_at')
 
     action = request.GET.get('action', '').strip()
@@ -261,7 +338,6 @@ def admin_user_logs(request):
 
 @staff_member_required
 def admin_all_users(request):
-    """Every registered user with profile info, activity counts and filters."""
     qs = _annotate_counts(User.objects.all())
 
     dept = request.GET.get('department', '').strip()
@@ -286,7 +362,6 @@ def admin_all_users(request):
             | Q(index_number__icontains=q)
         )
 
-    # Sorting: only whitelisted keys; default is alphabetical by username.
     sort = request.GET.get('sort', '').strip()
     if sort in SORT_OPTIONS:
         qs = qs.order_by(sort, 'username')
@@ -313,21 +388,7 @@ def admin_all_users(request):
 @staff_member_required
 @require_POST
 def admin_send_message(request):
-    """
-    Send an admin message to one or more users.
-
-    Each recipient gets a Notification row so the bell icon lights up
-    immediately. The message can be Normal, Important or Urgent:
-
-      normal     → kind='admin_message'   (💬, regular toast)
-      important  → kind='admin_important' (⚠️, highlighted in the bell panel)
-      urgent     → kind='admin_urgent'    (🚨, full-screen alert that must be
-                                           acknowledged before it goes away)
-
-    If `notify()` throws for a single user, we log it and keep going for the
-    rest — one broken user should never block the whole send.
-    """
-    from apps.notifications.models import notify  # lazy import — avoid circular
+    from apps.notifications.models import notify
 
     user_ids = request.POST.getlist('user_ids')
     message_text = (request.POST.get('message') or '').strip()
@@ -344,7 +405,6 @@ def admin_send_message(request):
         messages.error(request, 'Message cannot be empty.')
         return redirect('admin_all_users')
 
-    # Cap length so a runaway paste can't fill the Notification table with 50KB rows
     if len(message_text) > 1000:
         message_text = message_text[:1000]
 
@@ -354,20 +414,13 @@ def admin_send_message(request):
         'urgent': 'admin_urgent',
     }[priority]
 
-    # Only active users — staff can't accidentally wake suspended accounts
     recipients = User.objects.filter(id__in=user_ids, is_active=True)
 
     sent = 0
     failed = 0
     for user in recipients:
         try:
-            notify(
-                user,
-                message_text,
-                kind=kind,
-                sent_by=request.user,
-                priority=priority,
-            )
+            notify(user, message_text, kind=kind, sent_by=request.user, priority=priority)
             sent += 1
         except Exception:
             logger.exception('Failed to send admin message to %s', user.username)

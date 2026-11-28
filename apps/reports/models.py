@@ -109,6 +109,18 @@ class GeneratedReport(models.Model):
     is_signed_off = models.BooleanField(default=False)
     supervisor_signature_date = models.DateTimeField(null=True, blank=True)
 
+    # ----- ✅ Regeneration tracking (shown on the admin All Users table) -----
+    # Both counters increment only when the corresponding content field is
+    # rewritten after it was already populated. First-time builds leave them at 0.
+    regeneration_count = models.PositiveIntegerField(
+        default=0,
+        help_text='How many times this report was rebuilt after its first build.',
+    )
+    pptx_regeneration_count = models.PositiveIntegerField(
+        default=0,
+        help_text='How many times this presentation was rebuilt after its first build.',
+    )
+
     def __str__(self):
         return f"Report for {self.attachment}"
 

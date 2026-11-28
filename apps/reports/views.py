@@ -111,6 +111,33 @@ def _ppt_is_real_pptx(path):
 
 
 # ============================================================
+# ✅ Regeneration tracking helper
+# ============================================================
+
+def _save_content_with_regen_tracking(report, field_name, new_value, *, is_regeneration):
+    """
+    Save report.content or report.pptx_content, incrementing the matching
+    regeneration counter when is_regeneration=True.
+
+    Rules of engagement at every call site:
+      • First ever write (content was empty) → is_regeneration=False
+      • Any AI draft that replaces existing content → is_regeneration=True
+      • User-initiated edits with no AI → is_regeneration=False
+      • AI refinement / retry / explicit "Reset & Rebuild" → is_regeneration=True
+    """
+    regen_field = (
+        'regeneration_count' if field_name == 'content'
+        else 'pptx_regeneration_count'
+    )
+    setattr(report, field_name, new_value)
+    update_fields = [field_name]
+    if is_regeneration:
+        setattr(report, regen_field, (getattr(report, regen_field) or 0) + 1)
+        update_fields.append(regen_field)
+    report.save(update_fields=update_fields)
+
+
+# ============================================================
 # Rebuild-from-saved-content (no AI)
 # ============================================================
 
@@ -134,9 +161,12 @@ def _rebuild_report_files(request, session):
 def _build(request, session, use_ai=True, force_ai=False):
     report, _ = GeneratedReport.objects.get_or_create(attachment=session)
 
+    # ✅ Capture BEFORE force_ai blanks the field, so the regen counter fires
+    # correctly on a rebuild of content that already existed.
+    had_real_content = _has_real_sections(report.content)
+
     if force_ai:
-        report.content = {}
-        report.save(update_fields=['content'])
+        _save_content_with_regen_tracking(report, 'content', {}, is_regeneration=False)
 
     if use_ai:
         from .ai_drafting import draft_sections_with_ai, source_fingerprint
@@ -161,11 +191,14 @@ def _build(request, session, use_ai=True, force_ai=False):
                     # Phase B3: keep _ai_note / _section_status / _failed_keys
                     # inside content so the options template can render the
                     # persistent AI-status banner + retry button on reload.
-                    report.content = drafts
-                    report.save(update_fields=['content'])
+                    _save_content_with_regen_tracking(
+                        report, 'content', drafts,
+                        is_regeneration=had_real_content,
+                    )
                     logger.info(
-                        'AI drafted %d sections for report %s (fingerprint=%s)',
+                        'AI drafted %d sections for report %s (fingerprint=%s, regen=%s)',
                         _count_real_sections(drafts), report.pk, current_fp[:8],
+                        had_real_content,
                     )
             except Exception:
                 logger.exception('AI drafting failed; continuing with template defaults')
@@ -306,9 +339,6 @@ def report_options(request):
 
     if request.method == 'POST':
         # ---- Phase 3 gate ----
-        # Logo management is NOT subscription-gated (users can update cover art
-        # anytime). Every other POST on this page triggers AI generation and
-        # must be blocked for partial / pending / unsubscribed users.
         if 'update_logo' not in request.POST and 'remove_logo' not in request.POST:
             allowed, _status, gate_msg = subscription_gate(request.user)
             if not allowed:
@@ -443,11 +473,6 @@ def report_content(request):
             return redirect(f"{reverse('report_options')}?attachment_id={session.id}")
 
         # ---- Phase 3 gate ----
-        # Both reset_ai and regenerate trigger AI work (reset wipes content and
-        # forces a fresh draft; regenerate calls refine_user_content()). The
-        # plain "save" path rebuilds the PDF from the user's own edits with no
-        # AI and stays ungated so a partial / pending / unsubscribed user can
-        # still update their already-generated report.
         if action in ('reset_ai', 'regenerate'):
             allowed, _status, gate_msg = subscription_gate(request.user)
             if not allowed:
@@ -456,8 +481,8 @@ def report_content(request):
         # ---- end gate ----
 
         if action == 'reset_ai':
-            report.content = {}
-            report.save(update_fields=['content'])
+            # _build(force_ai=True) captures had_real_content before clearing,
+            # clears content, re-drafts, and increments the regen counter.
             _build(request, session, use_ai=True, force_ai=True)
             messages.success(request, 'Report reset to a fresh AI draft.')
             return _redirect_after_generation(request, 'report_options', session)
@@ -486,8 +511,10 @@ def report_content(request):
                 elif section_key in merged:
                     merged.pop(section_key, None)
 
-            report.content = merged
-            report.save(update_fields=['content'])
+            # Plain user edits — NOT a regeneration
+            _save_content_with_regen_tracking(
+                report, 'content', merged, is_regeneration=False,
+            )
 
             if action == 'regenerate':
                 try:
@@ -495,8 +522,10 @@ def report_content(request):
                     refined = refine_user_content(session, merged)
 
                     if refined and refined != merged:
-                        report.content = refined
-                        report.save(update_fields=['content'])
+                        # AI actually produced new text — this IS a regeneration
+                        _save_content_with_regen_tracking(
+                            report, 'content', refined, is_regeneration=True,
+                        )
                         messages.success(
                             request,
                             '✨ Your edits were refined into academic English '
@@ -701,9 +730,11 @@ def preview_report(request):
 def _ensure_ai_content(request, session, force_ai=False):
     report, _ = GeneratedReport.objects.get_or_create(attachment=session)
 
+    # ✅ Capture BEFORE force_ai blanks the field
+    had_real_content = _has_real_sections(report.content)
+
     if force_ai:
-        report.content = {}
-        report.save(update_fields=['content'])
+        _save_content_with_regen_tracking(report, 'content', {}, is_regeneration=False)
 
     from .ai_drafting import draft_sections_with_ai, source_fingerprint
 
@@ -726,8 +757,10 @@ def _ensure_ai_content(request, session, force_ai=False):
         drafts = draft_sections_with_ai(session, samples, target_pages=target_pages)
         if drafts:
             # Phase B3: keep the metadata keys — the template needs them.
-            report.content = drafts
-            report.save(update_fields=['content'])
+            _save_content_with_regen_tracking(
+                report, 'content', drafts,
+                is_regeneration=had_real_content,
+            )
             return True
     except Exception:
         logger.exception('AI drafting failed during PPTX generation')
@@ -737,9 +770,11 @@ def _ensure_ai_content(request, session, force_ai=False):
 def _ensure_pptx_content(request, session, force_ai=False):
     report, _ = GeneratedReport.objects.get_or_create(attachment=session)
 
+    # ✅ Capture BEFORE force_ai blanks the field
+    had_pptx_content = _has_real_sections(report.pptx_content)
+
     if force_ai:
-        report.pptx_content = {}
-        report.save(update_fields=['pptx_content'])
+        _save_content_with_regen_tracking(report, 'pptx_content', {}, is_regeneration=False)
 
     from .ai_drafting import draft_presentation_with_ai, source_fingerprint
 
@@ -757,11 +792,14 @@ def _ensure_pptx_content(request, session, force_ai=False):
     try:
         drafts = draft_presentation_with_ai(session)
         if drafts:
-            report.pptx_content = drafts
-            report.save(update_fields=['pptx_content'])
+            _save_content_with_regen_tracking(
+                report, 'pptx_content', drafts,
+                is_regeneration=had_pptx_content,
+            )
             logger.info(
-                'PPTX AI drafted %d sections for report %s (fingerprint=%s)',
+                'PPTX AI drafted %d sections for report %s (fingerprint=%s, regen=%s)',
                 _count_real_sections(drafts), report.pk, current_fp[:8],
+                had_pptx_content,
             )
             return True
     except Exception:
@@ -858,8 +896,8 @@ def retry_report_sections(request):
     merged['_ai_note'] = _recompute_ai_note_from_status(old_status, 'section')
     merged['_source_hash'] = source_fingerprint(session)
 
-    report.content = merged
-    report.save(update_fields=['content'])
+    # ✅ A retry is always a regeneration action
+    _save_content_with_regen_tracking(report, 'content', merged, is_regeneration=True)
 
     # Rebuild the PDF from the new content
     try:
@@ -945,8 +983,8 @@ def retry_pptx_sections(request):
     merged['_pptx_ai_note'] = _recompute_ai_note_from_status(old_status, 'slide')
     merged['_source_hash'] = source_fingerprint(session)
 
-    report.pptx_content = merged
-    report.save(update_fields=['pptx_content'])
+    # ✅ A retry is always a regeneration action
+    _save_content_with_regen_tracking(report, 'pptx_content', merged, is_regeneration=True)
 
     # Rebuild the PPTX file
     template_key = report.pptx_template or 'cohy_classic'
@@ -1337,11 +1375,6 @@ def pptx_content(request):
             return redirect(f"{reverse('pptx_options')}?attachment_id={session.id}")
 
         # ---- Phase 3 gate ----
-        # Both reset_ai and regenerate trigger AI work (reset wipes slide
-        # content and forces a fresh draft; regenerate may call
-        # draft_presentation_with_ai() if the source fingerprint changed).
-        # The plain "save" path just persists the user's edited text with no
-        # rebuild and stays ungated.
         if action in ('reset_ai', 'regenerate'):
             allowed, _status, gate_msg = subscription_gate(request.user)
             if not allowed:
@@ -1350,8 +1383,8 @@ def pptx_content(request):
         # ---- end gate ----
 
         if action == 'reset_ai':
-            report.pptx_content = {}
-            report.save(update_fields=['pptx_content'])
+            # _build_pptx_from_scratch(force_ai=True) → _ensure_pptx_content
+            # captures had_content BEFORE clearing, then increments correctly.
             template_key = report.pptx_template or 'cohy_classic'
             _build_pptx_from_scratch(request, session, template_key, force_ai=True)
             messages.success(request, 'Presentation reset to a fresh AI draft.')
@@ -1366,8 +1399,10 @@ def pptx_content(request):
                     new_content[key] = v
                 elif key in new_content:
                     new_content.pop(key, None)
-            report.pptx_content = new_content
-            report.save(update_fields=['pptx_content'])
+            # Plain user edits — NOT a regeneration
+            _save_content_with_regen_tracking(
+                report, 'pptx_content', new_content, is_regeneration=False,
+            )
 
             if action == 'regenerate':
                 template_key = report.pptx_template or 'cohy_classic'
